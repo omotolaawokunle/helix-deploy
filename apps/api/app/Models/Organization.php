@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Modules\Organizations\Models\Organization as BaseOrganization;
 
-class Organization extends Model
+class Organization extends BaseOrganization
 {
-    protected $fillable = [
-        'name',
-        'owner_id',
-    ];
 }

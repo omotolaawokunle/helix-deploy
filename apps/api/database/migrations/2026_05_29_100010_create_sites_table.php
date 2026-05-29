@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Query\Expression;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -18,7 +17,7 @@ return new class extends Migration
             $table->foreignUuid('project_id')->nullable()->constrained('projects');
             $table->foreignUuid('environment_id')->nullable()->constrained('environments');
             $table->string('domain');
-            $table->jsonb('aliases')->default(new Expression("'[]'::jsonb"));
+            $table->jsonb('aliases')->default('[]');
             $table->string('webroot');
             $table->string('runtime');
             $table->string('deploy_mode')->default('git');
