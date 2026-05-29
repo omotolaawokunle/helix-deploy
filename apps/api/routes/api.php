@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Auth\Controllers\AuthController;
 use App\Modules\Organizations\Controllers\OrganizationController;
 use App\Modules\Organizations\Controllers\OrganizationMemberController;
+use App\Modules\Servers\Controllers\ServerController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/auth')->middleware('web')->group(function (): void {
@@ -32,6 +33,12 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::patch('/organizations/{org}/members/{user}', [OrganizationMemberController::class, 'update']);
     Route::delete('/organizations/{org}/members/{user}', [OrganizationMemberController::class, 'destroy']);
     Route::post('/organizations/{org}/switch', [OrganizationController::class, 'switchOrganization']);
+    Route::get('/organizations/{org}/servers', [ServerController::class, 'index']);
+    Route::post('/organizations/{org}/servers', [ServerController::class, 'store']);
+    Route::get('/servers/{server}', [ServerController::class, 'show']);
+    Route::patch('/servers/{server}', [ServerController::class, 'update']);
+    Route::delete('/servers/{server}', [ServerController::class, 'destroy']);
+    Route::post('/servers/{server}/test-connection', [ServerController::class, 'testConnection']);
 });
 
 Route::get('/v1/organizations/invitations/accept', function () {
