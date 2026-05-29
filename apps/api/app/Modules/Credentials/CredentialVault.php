@@ -84,7 +84,7 @@ class CredentialVault implements CredentialVaultInterface
             organization: $organization,
             owner: $owner,
             name: $name,
-            type: CredentialType::SECRET,
+            type: CredentialType::ENV_VAR,
             plaintext: $value,
             publicKey: null,
         );
@@ -121,7 +121,7 @@ class CredentialVault implements CredentialVaultInterface
     public function getSecret(string $credentialId, Organization $organization): string
     {
         $credential = $this->loadCredential($credentialId, $organization);
-        $this->assertCredentialType($credential, CredentialType::SECRET);
+        $this->assertCredentialType($credential, CredentialType::ENV_VAR);
 
         $plaintext = $this->decryptCredential($organization, $credential);
 

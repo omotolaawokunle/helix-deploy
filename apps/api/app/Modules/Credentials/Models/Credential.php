@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Credentials\Models;
 
-use App\Models\Organization;
+use App\Models\User;
 use App\Modules\Credentials\Enums\CredentialType;
-use Illuminate\Database\Eloquent\Builder;
+use App\Modules\Organizations\Models\Organization;
+use App\Modules\Shared\Concerns\OwnedByOrganization;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class Credential extends Model
 {
     use HasUuids;
+    use OwnedByOrganization;
 
     protected $table = 'credentials';
 
@@ -61,14 +63,20 @@ class Credential extends Model
         return $this->morphTo();
     }
 
-    public function scopeForOrganization(Builder $query, Organization $organization): Builder
+    public function createdBy(): BelongsTo
     {
-        return $query->where('organization_id', $organization->getKey());
+        return $this->belongsTo(User::class, 'created_by');
     }
 
-    public function scopeOfType(Builder $query, CredentialType $type): Builder
+    public function scopeForOrganization(\Illuminate\Database\Eloquent\Builder $query, Organization $organization): \Illuminate\Database\Eloquent\Builder
     {
-        return $query->where('type', $type->value);
+        return $query->withoutGlobalScope('owned_by_organization')
+            ->where('organization_id', $organization->getKey());
+    }
+
+    public function scopeOfType(\Illuminate\Database\Eloquent\Builder $query, CredentialType $type): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('type', $type);
     }
 
     /**

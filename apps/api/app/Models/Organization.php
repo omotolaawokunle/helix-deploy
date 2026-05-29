@@ -4,22 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\Model;
+use App\Modules\Organizations\Models\Organization as BaseOrganization;
 
-class Organization extends Model
+class Organization extends BaseOrganization
 {
-    use HasUuids;
-
-    public $incrementing = false;
-
-    protected $keyType = 'string';
-
-    protected $fillable = [
-        'name',
-        'slug',
-        'master_key_encrypted',
-        'settings',
-        'owner_id',
-    ];
 }
