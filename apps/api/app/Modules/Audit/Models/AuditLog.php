@@ -90,7 +90,7 @@ class AuditLog extends Model
     ): self {
         $request = request();
         $authUser = Auth::user();
-        $organizationId = method_exists($authUser, 'currentOrganization')
+        $organizationId = $authUser !== null && method_exists($authUser, 'currentOrganization')
             ? $authUser?->currentOrganization()?->getKey()
             : null;
 
@@ -99,9 +99,13 @@ class AuditLog extends Model
             $organizationId = is_string($resourceOrganizationId) ? $resourceOrganizationId : null;
         }
 
+        if ($organizationId === null && !empty($metadata['organization_id']) && is_string($metadata['organization_id'])) {
+            $organizationId = $metadata['organization_id'];
+        }
+
         $normalizedAfterState = $afterState ?? [];
 
-        if ($metadata !== []) {
+        if (!empty($metadata)) {
             $normalizedAfterState['_metadata'] = $metadata;
         }
 
@@ -112,7 +116,7 @@ class AuditLog extends Model
             'resource_type' => $resource?->getMorphClass(),
             'resource_id' => $resource?->getKey(),
             'before_state' => $beforeState,
-            'after_state' => $normalizedAfterState === [] ? null : $normalizedAfterState,
+            'after_state' => empty($normalizedAfterState) ? null : $normalizedAfterState,
             'ip_address' => $request?->ip(),
             'user_agent' => $request?->userAgent(),
             'request_id' => $request?->header('X-Request-ID') ?? (string) Str::uuid(),

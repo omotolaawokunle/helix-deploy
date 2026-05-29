@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Query\Expression;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -30,8 +29,8 @@ return new class extends Migration
             $table->string('management_mode')->default('managed');
             $table->text('fingerprint')->nullable();
             $table->uuid('credential_id')->nullable();
-            $table->jsonb('tags')->default(new Expression("'[]'::jsonb"));
-            $table->jsonb('installed_services')->default(new Expression("'{}'::jsonb"));
+            $table->jsonb('tags')->default('[]');
+            $table->jsonb('installed_services')->default('{}');
             $table->jsonb('health_status')->nullable();
             $table->foreignUuid('created_by')->constrained('users');
             $table->timestamps();

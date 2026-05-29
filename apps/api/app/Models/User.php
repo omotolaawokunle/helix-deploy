@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Modules\Deployments\Models\Deployment;
+use App\Modules\Auth\Notifications\QueuedVerifyEmail;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Teams\Enums\TeamRole;
 use App\Modules\Teams\Models\Team;
@@ -107,5 +108,10 @@ class User extends Authenticatable implements MustVerifyEmail
         $role = $organization->pivot?->role;
 
         return is_string($role) ? TeamRole::tryFrom($role) : null;
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new QueuedVerifyEmail());
     }
 }
