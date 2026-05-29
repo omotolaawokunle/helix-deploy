@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Auth\Controllers\AuthController;
 use App\Modules\Organizations\Controllers\OrganizationController;
 use App\Modules\Organizations\Controllers\OrganizationMemberController;
+use App\Modules\Provisioning\Controllers\ProvisioningController;
 use App\Modules\Servers\Controllers\ServerController;
 use Illuminate\Support\Facades\Route;
 
@@ -39,6 +40,7 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::patch('/servers/{server}', [ServerController::class, 'update']);
     Route::delete('/servers/{server}', [ServerController::class, 'destroy']);
     Route::post('/servers/{server}/test-connection', [ServerController::class, 'testConnection']);
+    Route::post('/servers/{server}/provision', [ProvisioningController::class, 'provision']);
 });
 
 Route::get('/v1/organizations/invitations/accept', function () {
