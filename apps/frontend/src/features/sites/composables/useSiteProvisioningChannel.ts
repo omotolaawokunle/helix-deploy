@@ -1,8 +1,8 @@
 import { onUnmounted } from 'vue'
+import { getEcho } from '@/lib/echo'
 import {
   SITE_BROADCAST_EVENTS,
   privateServerSitesChannel,
-  type SiteBroadcastEventName,
   type SiteCreatedPayload,
   type SiteProvisioningFailedPayload,
   type SiteProvisioningStartedPayload,
@@ -14,32 +14,12 @@ export interface SiteProvisioningChannelCallbacks {
   onProvisioningFailed?: (payload: SiteProvisioningFailedPayload) => void
 }
 
-type EchoChannel = {
-  listen: (event: SiteBroadcastEventName, callback: (payload: unknown) => void) => EchoChannel
-  stopListening: (event: SiteBroadcastEventName) => void
-}
-
-type EchoInstance = {
-  private: (channel: string) => EchoChannel
-  leave: (channel: string) => void
-}
-
-declare global {
-  interface Window {
-    Echo?: EchoInstance
-  }
-}
-
-/**
- * Subscribe to site provisioning broadcasts on the server sites channel.
- * Requires Laravel Echo + Reverb to be configured on window.Echo.
- */
 export function useSiteProvisioningChannel(
   serverId: string,
   callbacks: SiteProvisioningChannelCallbacks,
 ): { channelName: string; disconnect: () => void } {
   const channelName = privateServerSitesChannel(serverId)
-  const echo = window.Echo
+  const echo = getEcho()
 
   if (echo === undefined) {
     return {

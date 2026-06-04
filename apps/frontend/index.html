@@ -4,7 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + Vue + TS</title>
+    <title>HelixDeploy</title>
+    <script>
+      (function () {
+        var key = 'helix-deploy-theme';
+        var stored = localStorage.getItem(key);
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = stored === 'dark' || ((stored === 'system' || !stored) && prefersDark);
+        if (isDark) document.documentElement.classList.add('dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

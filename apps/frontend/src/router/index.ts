@@ -4,25 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 
 const guestRouteNames = new Set(['login', 'register', 'verify-email'])
 
-const routes: RouteRecordRaw[] = [
-  {
-    path: '/login',
-    name: 'login',
-    component: () => import('@/features/auth/views/LoginView.vue'),
-    meta: { requiresAuth: false },
-  },
-  {
-    path: '/register',
-    name: 'register',
-    component: () => import('@/features/auth/views/RegisterView.vue'),
-    meta: { requiresAuth: false },
-  },
-  {
-    path: '/verify-email',
-    name: 'verify-email',
-    component: () => import('@/features/auth/views/VerifyEmailView.vue'),
-    meta: { requiresAuth: false },
-  },
+const authenticatedRoutes: RouteRecordRaw[] = [
   {
     path: '/dashboard',
     name: 'dashboard',
@@ -32,13 +14,19 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/servers',
     name: 'servers',
-    component: () => import('@/features/servers/views/ServerListView.vue'),
+    component: () => import('@/features/servers/pages/ServersIndexPage.vue'),
     meta: { requiresAuth: true },
   },
   {
     path: '/servers/:id',
     name: 'server-detail',
-    component: () => import('@/features/servers/views/ServerDetailView.vue'),
+    component: () => import('@/features/servers/pages/ServerDetailPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/servers/:id/provisioning',
+    name: 'server-provisioning',
+    component: () => import('@/features/servers/pages/ProvisioningLogPage.vue'),
     meta: { requiresAuth: true },
   },
   {
@@ -94,6 +82,33 @@ const routes: RouteRecordRaw[] = [
     name: 'team-settings',
     component: () => import('@/features/organizations/views/TeamSettingsView.vue'),
     meta: { requiresAuth: true },
+  },
+]
+
+const routes: RouteRecordRaw[] = [
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/features/auth/pages/LoginPage.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/features/auth/pages/RegisterPage.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/verify-email',
+    name: 'verify-email',
+    component: () => import('@/features/auth/pages/EmailVerificationPage.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/',
+    component: () => import('@/layouts/AppLayout.vue'),
+    meta: { requiresAuth: true },
+    children: authenticatedRoutes,
   },
   {
     path: '/:pathMatch(.*)*',

@@ -1,21 +1,22 @@
 export enum ServerStatus {
-  Provisioning = 'provisioning',
+  Connecting = 'connecting',
   Active = 'active',
-  Inactive = 'inactive',
-  Failed = 'failed',
+  Disconnected = 'disconnected',
+  Maintenance = 'maintenance',
 }
 
 export enum ServerProvider {
   Aws = 'aws',
   Hetzner = 'hetzner',
   DigitalOcean = 'digitalocean',
+  Vultr = 'vultr',
   Linode = 'linode',
   Generic = 'generic',
 }
 
 export enum ManagementMode {
   Managed = 'managed',
-  Unmanaged = 'unmanaged',
+  Observe = 'observe',
 }
 
 export enum Runtime {
@@ -78,8 +79,10 @@ export interface User {
   email: string
   emailVerifiedAt: string | null
   currentOrganizationId: string | null
+  currentOrganization?: Organization | null
+  timezone?: string
   createdAt: string
-  updatedAt: string
+  updatedAt?: string
 }
 
 export interface Organization {
@@ -128,15 +131,45 @@ export interface Environment {
   updatedAt: string
 }
 
+export interface ServerEnvironmentSummary {
+  id: string
+  name: string
+  label: string | null
+  isProduction: boolean
+}
+
+export interface ServerProjectSummary {
+  id: string
+  name: string
+  description: string | null
+}
+
+export interface ServerHealthStatus {
+  diskUsedPercent?: number
+  diskTotalGb?: number
+  lastCheckedAt?: string
+  fingerprintVerified?: boolean
+}
+
 export interface Server {
   id: string
-  organizationId: string
-  serverGroupId: string | null
-  name: string
   hostname: string
+  ipAddress: string
+  sshPort: number
+  sshUser: string
   provider: ServerProvider
+  region: string | null
+  serverType: string | null
+  os: string | null
+  phpVersion: string | null
+  nodeVersion: string | null
   status: ServerStatus
   managementMode: ManagementMode
+  environment: ServerEnvironmentSummary | null
+  project: ServerProjectSummary | null
+  tags: string[]
+  installedServices: string[]
+  healthStatus: ServerHealthStatus | null
   createdAt: string
   updatedAt: string
 }

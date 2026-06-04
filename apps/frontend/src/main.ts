@@ -4,8 +4,11 @@ import App from './App.vue'
 import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
 import router from '@/router'
 import { setApiUnauthorizedHandler } from '@/lib/axios'
+import { initThemePreference } from '@/lib/theme'
 import { pinia } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
+
+initThemePreference()
 
 const app = createApp(App)
 const queryClient = new QueryClient()

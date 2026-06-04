@@ -1,0 +1,279 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { AlertTriangleIcon } from '@lucide/vue'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import PublicKeySuccessSheet from '@/features/servers/components/PublicKeySuccessSheet.vue'
+import ServerFormFields from '@/features/servers/components/ServerFormFields.vue'
+import {
+  fetchProjectEnvironments,
+  fetchProjects,
+  registerServer,
+} from '@/features/servers/api'
+import { useServersStore } from '@/features/servers/stores/useServersStore'
+import { useActiveOrg } from '@/composables/useActiveOrg'
+import { ManagementMode, ServerProvider } from '@/types'
+import { extractFieldErrors } from '@/lib/validation-errors'
+
+interface Props {
+  open: boolean
+}
+
+defineProps<Props>()
+
+const emit = defineEmits<{
+  'update:open': [value: boolean]
+}>()
+
+const serversStore = useServersStore()
+const { orgId } = useActiveOrg()
+
+const activeTab = ref('new')
+const isSubmitting = ref(false)
+const apiError = ref<string | null>(null)
+
+const hostname = ref('')
+const ipAddress = ref('')
+const sshPort = ref(22)
+const sshUser = ref('deploy')
+const provider = ref<ServerProvider>(ServerProvider.Generic)
+const projectId = ref<string | undefined>(undefined)
+const environmentId = ref<string | undefined>(undefined)
+const authMethod = ref<'generate' | 'import'>('generate')
+const privateKey = ref('')
+const managementMode = ref<ManagementMode>(ManagementMode.Managed)
+
+const projects = ref<Array<{ id: string; name: string }>>([])
+const environments = ref<Array<{ id: string; name: string }>>([])
+
+const showPublicKeySheet = ref(false)
+const registeredPublicKey = ref('')
+
+const providerOptions = [
+  { value: ServerProvider.Hetzner, label: 'Hetzner' },
+  { value: ServerProvider.DigitalOcean, label: 'DigitalOcean' },
+  { value: ServerProvider.Aws, label: 'AWS' },
+  { value: ServerProvider.Vultr, label: 'Vultr' },
+  { value: ServerProvider.Generic, label: 'Generic' },
+]
+
+const isImportTab = computed(() => activeTab.value === 'import')
+
+watch(
+  () => orgId.value,
+  async (id) => {
+    if (id === null) {
+      projects.value = []
+      return
+    }
+
+    projects.value = await fetchProjects(id)
+  },
+  { immediate: true },
+)
+
+watch(projectId, async (id) => {
+  environmentId.value = undefined
+  environments.value = id ? await fetchProjectEnvironments(id) : []
+})
+
+function resetForm(): void {
+  hostname.value = ''
+  ipAddress.value = ''
+  sshPort.value = 22
+  sshUser.value = 'deploy'
+  provider.value = ServerProvider.Generic
+  projectId.value = undefined
+  environmentId.value = undefined
+  authMethod.value = 'generate'
+  privateKey.value = ''
+  managementMode.value = ManagementMode.Managed
+  apiError.value = null
+}
+
+async function handleSubmit(): Promise<void> {
+  const activeOrgId = orgId.value
+
+  if (activeOrgId === null) {
+    return
+  }
+
+  isSubmitting.value = true
+  apiError.value = null
+
+  try {
+    const result = await registerServer(activeOrgId, {
+      name: hostname.value,
+      hostname: hostname.value,
+      ipAddress: ipAddress.value,
+      sshPort: sshPort.value,
+      sshUser: sshUser.value,
+      provider: provider.value,
+      managementMode: isImportTab.value ? managementMode.value : ManagementMode.Managed,
+      authMethod: authMethod.value,
+      privateKey: authMethod.value === 'import' ? privateKey.value : undefined,
+      projectId: projectId.value,
+      environmentId: environmentId.value,
+    })
+
+    await serversStore.fetch()
+    emit('update:open', false)
+    resetForm()
+
+    if (result.publicKey !== null && result.publicKey !== '') {
+      registeredPublicKey.value = result.publicKey
+      showPublicKeySheet.value = true
+    }
+  } catch (error: unknown) {
+    const fieldErrors = extractFieldErrors(error)
+
+    if (fieldErrors !== null) {
+      apiError.value = Object.values(fieldErrors).flat()[0] ?? 'Validation failed.'
+      return
+    }
+
+    apiError.value = 'Unable to register server. Please try again.'
+  } finally {
+    isSubmitting.value = false
+  }
+}
+</script>
+
+<template>
+  <Sheet :open="open" @update:open="emit('update:open', $event)">
+    <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-lg">
+      <SheetHeader>
+        <SheetTitle>Add server</SheetTitle>
+        <SheetDescription>
+          Register a new server or import an existing one into HelixDeploy.
+        </SheetDescription>
+      </SheetHeader>
+
+      <Tabs v-model="activeTab" class="mt-4">
+        <TabsList class="grid w-full grid-cols-2">
+          <TabsTrigger value="new">
+            New Server
+          </TabsTrigger>
+          <TabsTrigger value="import">
+            Import Existing
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="new" class="mt-4">
+          <ServerFormFields
+            v-model:hostname="hostname"
+            v-model:ip-address="ipAddress"
+            v-model:ssh-port="sshPort"
+            v-model:ssh-user="sshUser"
+            v-model:provider="provider"
+            v-model:project-id="projectId"
+            v-model:environment-id="environmentId"
+            v-model:auth-method="authMethod"
+            v-model:private-key="privateKey"
+            :projects="projects"
+            :environments="environments"
+            :provider-options="providerOptions"
+          />
+        </TabsContent>
+
+        <TabsContent value="import" class="mt-4 space-y-4">
+          <ServerFormFields
+            v-model:hostname="hostname"
+            v-model:ip-address="ipAddress"
+            v-model:ssh-port="sshPort"
+            v-model:ssh-user="sshUser"
+            v-model:provider="provider"
+            v-model:project-id="projectId"
+            v-model:environment-id="environmentId"
+            v-model:auth-method="authMethod"
+            v-model:private-key="privateKey"
+            :projects="projects"
+            :environments="environments"
+            :provider-options="providerOptions"
+          />
+
+          <div class="space-y-3">
+            <Label>Management mode</Label>
+            <div class="space-y-2">
+              <label class="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+                <input
+                  v-model="managementMode"
+                  type="radio"
+                  class="mt-1"
+                  :value="ManagementMode.Managed"
+                >
+                <span>
+                  <span class="block text-sm font-medium">Managed</span>
+                  <span class="text-xs text-muted-foreground">
+                    HelixDeploy controls deployments
+                  </span>
+                </span>
+              </label>
+              <label class="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+                <input
+                  v-model="managementMode"
+                  type="radio"
+                  class="mt-1"
+                  :value="ManagementMode.Observe"
+                >
+                <span>
+                  <span class="block text-sm font-medium">Observe</span>
+                  <span class="text-xs text-muted-foreground">
+                    Register for visibility only; keep existing workflow
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <Alert
+            v-if="managementMode === ManagementMode.Managed"
+            variant="destructive"
+          >
+            <AlertTriangleIcon class="size-4" />
+            <AlertTitle>Managed import</AlertTitle>
+            <AlertDescription>
+              Make sure to disable any existing GitHub Actions deploy workflows to avoid conflicts.
+            </AlertDescription>
+          </Alert>
+        </TabsContent>
+      </Tabs>
+
+      <p v-if="apiError" class="mt-4 text-sm text-destructive">
+        {{ apiError }}
+      </p>
+
+      <SheetFooter class="mt-6">
+        <Button
+          type="button"
+          variant="outline"
+          @click="emit('update:open', false)"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          :disabled="isSubmitting"
+          @click="handleSubmit"
+        >
+          {{ isSubmitting ? 'Registering…' : 'Register server' }}
+        </Button>
+      </SheetFooter>
+    </SheetContent>
+  </Sheet>
+
+  <PublicKeySuccessSheet
+    v-model:open="showPublicKeySheet"
+    :public-key="registeredPublicKey"
+  />
+</template>

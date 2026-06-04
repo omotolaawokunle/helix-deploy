@@ -1,14 +1,14 @@
 import { onUnmounted } from 'vue'
+import { getEcho } from '@/lib/echo'
 import {
   DEPLOYMENT_BROADCAST_EVENTS,
   privateDeploymentChannel,
-  type DeploymentBroadcastEventName,
   type DeploymentCompletedPayload,
   type DeploymentFailedPayload,
   type DeploymentLogLinePayload,
   type DeploymentStartedPayload,
-  type DeploymentStepFinishedPayload,
   type DeploymentStepEventPayload,
+  type DeploymentStepFinishedPayload,
 } from '@/features/deployments/types'
 
 export interface DeploymentChannelCallbacks {
@@ -20,28 +20,12 @@ export interface DeploymentChannelCallbacks {
   onFailed?: (payload: DeploymentFailedPayload) => void
 }
 
-type EchoChannel = {
-  listen: (event: DeploymentBroadcastEventName, callback: (payload: unknown) => void) => EchoChannel
-  stopListening: (event: DeploymentBroadcastEventName) => void
-}
-
-type EchoInstance = {
-  private: (channel: string) => EchoChannel
-  leave: (channel: string) => void
-}
-
-declare global {
-  interface Window {
-    Echo?: EchoInstance
-  }
-}
-
 export function useDeploymentChannel(
   deploymentId: string,
   callbacks: DeploymentChannelCallbacks,
 ): { channelName: string; disconnect: () => void } {
   const channelName = privateDeploymentChannel(deploymentId)
-  const echo = window.Echo
+  const echo = getEcho()
 
   if (echo === undefined) {
     return {
