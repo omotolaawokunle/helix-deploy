@@ -17,6 +17,9 @@ class DeploymentWithStepsResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $site = $this->relationLoaded('site') ? $this->site : null;
+        $activeRelease = $this->releases()->where('is_active', true)->first();
+
         return array_merge(
             (new DeploymentResource($this->resource))->toArray($request),
             [
@@ -24,6 +27,16 @@ class DeploymentWithStepsResource extends JsonResource
                     $this->whenLoaded('steps', $this->steps, collect()),
                 ),
                 'duration' => $this->duration(),
+                'activeReleaseId' => $activeRelease !== null ? (string) $activeRelease->getKey() : null,
+                'site' => $site !== null ? [
+                    'id' => (string) $site->getKey(),
+                    'domain' => $site->domain,
+                    'deployBranch' => $site->deploy_branch,
+                    'serverId' => $site->server_id,
+                    'isProduction' => $site->relationLoaded('environment')
+                        ? ($site->environment?->is_production ?? false)
+                        : false,
+                ] : null,
             ],
         );
     }

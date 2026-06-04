@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -17,9 +17,14 @@ interface Props {
   title: string
   description: string
   confirmText: string
+  confirmButtonLabel?: string
+  canConfirm?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  confirmButtonLabel: 'Confirm',
+  canConfirm: true,
+})
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
@@ -29,7 +34,18 @@ const emit = defineEmits<{
 const typedConfirmation = ref('')
 const isSubmitting = ref(false)
 
-const canConfirm = computed(() => typedConfirmation.value === props.confirmText)
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (!isOpen) {
+      typedConfirmation.value = ''
+    }
+  },
+)
+
+const isTypedMatch = computed(() => typedConfirmation.value === props.confirmText)
+
+const isConfirmEnabled = computed(() => isTypedMatch.value && props.canConfirm)
 
 function closeDialog(): void {
   typedConfirmation.value = ''
@@ -37,7 +53,7 @@ function closeDialog(): void {
 }
 
 async function handleConfirm(): Promise<void> {
-  if (!canConfirm.value) {
+  if (!isConfirmEnabled.value) {
     return
   }
 
@@ -60,6 +76,8 @@ async function handleConfirm(): Promise<void> {
         <DialogDescription>{{ description }}</DialogDescription>
       </DialogHeader>
 
+      <slot />
+
       <div class="space-y-2">
         <Label for="confirm-text">
           Type <span class="font-mono font-semibold">{{ confirmText }}</span> to confirm
@@ -80,10 +98,10 @@ async function handleConfirm(): Promise<void> {
           variant="destructive"
           type="button"
           data-testid="confirm-destructive-button"
-          :disabled="!canConfirm || isSubmitting"
+          :disabled="!isConfirmEnabled || isSubmitting"
           @click="handleConfirm"
         >
-          Confirm
+          {{ confirmButtonLabel }}
         </Button>
       </DialogFooter>
     </DialogContent>

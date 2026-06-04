@@ -151,6 +151,50 @@ it('returns unprocessable when server is in observe mode', function (): void {
         ->assertUnprocessable();
 });
 
+it('lists deployments for a site with cursor pagination', function (): void {
+    [$site, $owner] = deploymentSiteFixture();
+
+    Deployment::query()->withoutGlobalScope('owned_by_organization')->create([
+        'site_id' => (string) $site->getKey(),
+        'organization_id' => (string) $site->organization_id,
+        'type' => DeploymentType::DEPLOY,
+        'status' => DeploymentStatus::SUCCESS,
+        'trigger_type' => TriggerType::MANUAL,
+        'branch' => 'main',
+        'finished_at' => now(),
+    ]);
+
+    $this->actingAs($owner)
+        ->getJson("/api/v1/sites/{$site->id}/deployments")
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonStructure([
+            'data' => [['id', 'status', 'isRollbackable', 'duration']],
+            'meta' => ['next_cursor', 'prev_cursor', 'per_page', 'path'],
+        ]);
+});
+
+it('cancels a running deployment for admins', function (): void {
+    [$site, $owner] = deploymentSiteFixture();
+
+    $deployment = Deployment::query()->withoutGlobalScope('owned_by_organization')->create([
+        'site_id' => (string) $site->getKey(),
+        'organization_id' => (string) $site->organization_id,
+        'type' => DeploymentType::DEPLOY,
+        'status' => DeploymentStatus::RUNNING,
+        'trigger_type' => TriggerType::MANUAL,
+        'branch' => 'main',
+        'started_at' => now(),
+    ]);
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/deployments/{$deployment->id}/cancel")
+        ->assertOk()
+        ->assertJsonPath('data.status', DeploymentStatus::CANCELLED->value);
+
+    expect($deployment->refresh()->status)->toBe(DeploymentStatus::CANCELLED);
+});
+
 it('shows deployment for authorized org member', function (): void {
     [$site, $owner] = deploymentSiteFixture();
 

@@ -186,11 +186,14 @@ export interface ServerGroup {
 export interface Site {
   id: string
   organizationId: string
-  projectId: string
+  projectId: string | null
   serverId: string
-  name: string
+  environmentId: string | null
+  name?: string
   domain: string
+  deployBranch: string
   runtime: Runtime
+  status: string
   createdAt: string
   updatedAt: string
 }

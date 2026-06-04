@@ -23,4 +23,18 @@ describe('ProductionWarningBanner', () => {
     expect(visible.get('[data-testid="production-warning-banner"]').text()).toContain('api-server')
     expect(visible.text()).toContain('PRODUCTION')
   })
+
+  it('renders inline variant message for deploy flows', () => {
+    const inline = mount(ProductionWarningBanner, {
+      props: {
+        resourceName: 'app.example.test',
+        isProduction: true,
+        variant: 'inline',
+      },
+    })
+
+    expect(inline.get('[data-testid="production-warning-banner"]').text()).toContain(
+      'deploying to PRODUCTION',
+    )
+  })
 })

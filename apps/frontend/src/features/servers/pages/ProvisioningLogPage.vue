@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import BackLink from '@/components/layout/BackLink.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { Skeleton } from '@/components/ui/skeleton'
-import DeploymentLogViewer from '@/features/deployments/components/DeploymentLogViewer.vue'
+import ProvisioningLogViewer from '@/features/servers/components/ProvisioningLogViewer.vue'
 import { useProvisioningChannel } from '@/features/servers/composables/useProvisioningChannel'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
 import type { Server } from '@/types'
@@ -82,7 +82,7 @@ onMounted(() => {
         :description="pageDescription"
       />
 
-      <DeploymentLogViewer
+      <ProvisioningLogViewer
         :lines="logLines"
         title="Provisioning output"
         :is-complete="isComplete"

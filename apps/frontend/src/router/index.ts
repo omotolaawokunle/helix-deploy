@@ -32,13 +32,13 @@ const authenticatedRoutes: RouteRecordRaw[] = [
   {
     path: '/servers/:id/sites/:siteId',
     name: 'server-site-detail',
-    component: () => import('@/features/servers/views/ServerSiteView.vue'),
+    component: () => import('@/features/sites/pages/SiteDetailPage.vue'),
     meta: { requiresAuth: true },
   },
   {
     path: '/deployments/:id',
     name: 'deployment-detail',
-    component: () => import('@/features/deployments/views/DeploymentDetailView.vue'),
+    component: () => import('@/features/deployments/pages/DeploymentDetailPage.vue'),
     meta: { requiresAuth: true },
   },
   {
