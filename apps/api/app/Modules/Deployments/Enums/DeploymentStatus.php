@@ -25,6 +25,15 @@ enum DeploymentStatus: string
         };
     }
 
+    public function isTerminal(): bool
+    {
+        return in_array($this, [
+            self::SUCCESS,
+            self::FAILED,
+            self::CANCELLED,
+        ], true);
+    }
+
     public function color(): string
     {
         return match ($this) {

@@ -7,6 +7,7 @@ namespace App\Modules\Sites\Policies;
 use App\Models\User;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Deployments\Policies\DeploymentPolicy;
 use App\Modules\Teams\Enums\TeamRole;
 
 class SitePolicy
@@ -36,6 +37,16 @@ class SitePolicy
     public function delete(User $user, Site $site): bool
     {
         return in_array($this->roleInOrganization($user, $site->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
+    }
+
+    public function deploy(User $user, Site $site): bool
+    {
+        return $this->execute($user, $site);
+    }
+
+    public function execute(User $user, Site $site): bool
+    {
+        return app(DeploymentPolicy::class)->execute($user, $site);
     }
 
     public function updateNginxConfig(User $user, Site $site): bool

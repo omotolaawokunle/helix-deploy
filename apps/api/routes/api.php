@@ -7,6 +7,8 @@ use App\Modules\Organizations\Controllers\OrganizationController;
 use App\Modules\Organizations\Controllers\OrganizationMemberController;
 use App\Modules\Provisioning\Controllers\ProvisioningController;
 use App\Modules\Servers\Controllers\ServerController;
+use App\Modules\Deployments\Controllers\DeploymentController;
+use App\Modules\Deployments\Controllers\DeploymentStreamController;
 use App\Modules\Sites\Controllers\NginxConfigController;
 use App\Modules\Sites\Controllers\SiteController;
 use Illuminate\Support\Facades\Route;
@@ -50,6 +52,10 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::delete('/sites/{site}', [SiteController::class, 'destroy']);
     Route::get('/sites/{site}/nginx-config', [NginxConfigController::class, 'show']);
     Route::put('/sites/{site}/nginx-config', [NginxConfigController::class, 'update']);
+    Route::post('/sites/{site}/deployments', [DeploymentController::class, 'store']);
+    Route::get('/deployments/{deployment}', [DeploymentController::class, 'show']);
+    Route::post('/deployments/{deployment}/rollback', [DeploymentController::class, 'rollback']);
+    Route::get('/deployments/{deployment}/stream', [DeploymentStreamController::class, 'stream']);
 });
 
 Route::get('/v1/organizations/invitations/accept', function () {

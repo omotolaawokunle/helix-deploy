@@ -28,6 +28,21 @@ Broadcast::channel('server.{serverId}.provisioning', function ($user, $serverId)
         ->exists();
 });
 
+Broadcast::channel('deployment.{deploymentId}', function ($user, $deploymentId) {
+    $deployment = \App\Modules\Deployments\Models\Deployment::query()
+        ->withoutGlobalScope('owned_by_organization')
+        ->whereKey($deploymentId)
+        ->first();
+
+    if ($deployment === null) {
+        return false;
+    }
+
+    return $user->organizations()
+        ->whereKey($deployment->organization_id)
+        ->exists();
+});
+
 Broadcast::channel('server.{serverId}.sites', function ($user, $serverId) {
     $server = Server::query()
         ->withoutGlobalScope('owned_by_organization')
