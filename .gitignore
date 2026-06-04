@@ -1,3 +1,7 @@
 docs/
 .cursor/
 .env
+.agents/
+.cursorrules/
+.AGENTS.md
+.CLAUDE.md
