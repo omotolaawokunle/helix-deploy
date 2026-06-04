@@ -18,6 +18,7 @@ use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\NodePM;
 use App\Modules\Sites\Enums\PythonWSGI;
 use App\Modules\Sites\Enums\Runtime;
+use App\Modules\Sites\Enums\SiteStatus;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -59,6 +60,7 @@ class Site extends Model
         'python_wsgi',
         'go_binary_path',
         'go_service_name',
+        'app_port',
         'status',
         'pipeline_id',
     ];
@@ -74,8 +76,10 @@ class Site extends Model
             'docker_build_mode' => DockerBuildMode::class,
             'node_pm' => NodePM::class,
             'python_wsgi' => PythonWSGI::class,
+            'status' => SiteStatus::class,
             'aliases' => 'array',
             'run_migrations' => 'boolean',
+            'app_port' => 'integer',
         ];
     }
 

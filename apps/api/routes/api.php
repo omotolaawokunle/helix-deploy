@@ -7,6 +7,8 @@ use App\Modules\Organizations\Controllers\OrganizationController;
 use App\Modules\Organizations\Controllers\OrganizationMemberController;
 use App\Modules\Provisioning\Controllers\ProvisioningController;
 use App\Modules\Servers\Controllers\ServerController;
+use App\Modules\Sites\Controllers\NginxConfigController;
+use App\Modules\Sites\Controllers\SiteController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/auth')->middleware('web')->group(function (): void {
@@ -41,6 +43,13 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::delete('/servers/{server}', [ServerController::class, 'destroy']);
     Route::post('/servers/{server}/test-connection', [ServerController::class, 'testConnection']);
     Route::post('/servers/{server}/provision', [ProvisioningController::class, 'provision']);
+    Route::get('/organizations/{org}/sites', [SiteController::class, 'index']);
+    Route::get('/servers/{server}/sites', [SiteController::class, 'indexForServer']);
+    Route::post('/servers/{server}/sites', [SiteController::class, 'store']);
+    Route::get('/sites/{site}', [SiteController::class, 'show']);
+    Route::delete('/sites/{site}', [SiteController::class, 'destroy']);
+    Route::get('/sites/{site}/nginx-config', [NginxConfigController::class, 'show']);
+    Route::put('/sites/{site}/nginx-config', [NginxConfigController::class, 'update']);
 });
 
 Route::get('/v1/organizations/invitations/accept', function () {

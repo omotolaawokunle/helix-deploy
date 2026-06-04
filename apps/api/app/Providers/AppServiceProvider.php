@@ -8,6 +8,8 @@ use App\Modules\Auth\Contracts\AuthServiceInterface;
 use App\Modules\Auth\Services\AuthService;
 use App\Modules\Credentials\Contracts\CredentialVaultInterface;
 use App\Modules\Credentials\CredentialVault;
+use App\Modules\Sites\Contracts\NginxConfigGeneratorInterface;
+use App\Modules\Sites\Services\NginxConfigGenerator;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +21,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(AuthServiceInterface::class, AuthService::class);
         $this->app->singleton(CredentialVaultInterface::class, CredentialVault::class);
+        $this->app->singleton(NginxConfigGeneratorInterface::class, NginxConfigGenerator::class);
     }
 
     /**

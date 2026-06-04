@@ -27,3 +27,18 @@ Broadcast::channel('server.{serverId}.provisioning', function ($user, $serverId)
         ->whereKey($server->organization_id)
         ->exists();
 });
+
+Broadcast::channel('server.{serverId}.sites', function ($user, $serverId) {
+    $server = Server::query()
+        ->withoutGlobalScope('owned_by_organization')
+        ->whereKey($serverId)
+        ->first();
+
+    if ($server === null) {
+        return false;
+    }
+
+    return $user->organizations()
+        ->whereKey($server->organization_id)
+        ->exists();
+});
