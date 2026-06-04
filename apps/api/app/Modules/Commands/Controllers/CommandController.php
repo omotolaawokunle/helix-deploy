@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Commands\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Commands\Exceptions\DangerousCommandException;
 use App\Modules\Commands\Jobs\RunCommandJob;
 use App\Modules\Commands\Models\Command;
 use App\Modules\Commands\Requests\RunCommandRequest;
@@ -52,14 +51,7 @@ final class CommandController extends Controller
 
         $command = $request->command();
 
-        try {
-            $dangerousCommandGuard->check($command);
-        } catch (DangerousCommandException $exception) {
-            return response()->json([
-                'message' => $exception->getMessage(),
-                'code' => 'DANGEROUS_COMMAND_BLOCKED',
-            ], 422);
-        }
+        $dangerousCommandGuard->check($command);
 
         $warningType = $dangerousCommandGuard->warningType($command);
 

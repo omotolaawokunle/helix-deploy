@@ -6,6 +6,7 @@ namespace App\Modules\Audit\Models;
 
 use App\Models\User;
 use App\Modules\Organizations\Models\Organization;
+use App\Http\Middleware\AttachRequestId;
 use App\Modules\Shared\Concerns\OwnedByOrganization;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -119,12 +120,33 @@ class AuditLog extends Model
             'after_state' => empty($normalizedAfterState) ? null : $normalizedAfterState,
             'ip_address' => $request?->ip(),
             'user_agent' => $request?->userAgent(),
-            'request_id' => $request?->header('X-Request-ID') ?? (string) Str::uuid(),
+            'request_id' => self::resolveRequestId($request),
             'created_at' => now(),
         ]);
 
         $model->save();
 
         return $model;
+    }
+
+    private static function resolveRequestId(?\Illuminate\Http\Request $request): string
+    {
+        if ($request === null) {
+            return (string) Str::uuid();
+        }
+
+        $attributeId = $request->attributes->get(AttachRequestId::ATTRIBUTE_KEY);
+
+        if (is_string($attributeId) && $attributeId !== '') {
+            return $attributeId;
+        }
+
+        $headerId = $request->header('X-Request-ID');
+
+        if (is_string($headerId) && $headerId !== '') {
+            return $headerId;
+        }
+
+        return (string) Str::uuid();
     }
 }

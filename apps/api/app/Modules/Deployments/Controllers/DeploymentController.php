@@ -12,7 +12,6 @@ use App\Modules\Deployments\DTOs\TriggerDeploymentDTO;
 use App\Modules\Deployments\Exceptions\ConcurrentDeploymentException;
 use App\Modules\Deployments\Exceptions\ObserveModeServerException;
 use App\Modules\Deployments\Exceptions\ProductionRollbackReasonRequiredException;
-use App\Modules\Deployments\Exceptions\ReleaseNotFoundException;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Requests\RollbackDeploymentRequest;
 use App\Modules\Deployments\Requests\StoreDeploymentRequest;
@@ -131,8 +130,6 @@ class DeploymentController extends Controller
                 actor: $actor,
                 reason: $request->reason(),
             );
-        } catch (ReleaseNotFoundException $exception) {
-            return response()->json(['message' => $exception->getMessage()], 404);
         } catch (ConcurrentDeploymentException $exception) {
             return response()->json(['message' => $exception->getMessage()], 409);
         } catch (ObserveModeServerException|ProductionRollbackReasonRequiredException|InvalidArgumentException $exception) {

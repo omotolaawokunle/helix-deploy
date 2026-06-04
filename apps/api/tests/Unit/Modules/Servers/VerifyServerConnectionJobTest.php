@@ -39,7 +39,11 @@ it('verify job success updates status versions and broadcasts server connected',
     $manager = \Mockery::mock(SSHManager::class);
     $manager->shouldReceive('connectAndVerify')->once()->andReturn($connection);
 
-    $job->handle($manager, app(\App\Modules\Credentials\CredentialVault::class));
+    $job->handle(
+        $manager,
+        app(\App\Modules\Credentials\CredentialVault::class),
+        app(\App\Modules\Servers\Actions\ReportFingerprintMismatchAction::class),
+    );
 
     $server->refresh();
 
@@ -67,12 +71,20 @@ it('verify job fingerprint mismatch marks disconnected broadcasts mismatch and d
             receivedFingerprint: 'received',
         ));
 
-    $job->handle($manager, app(\App\Modules\Credentials\CredentialVault::class));
+    $job->handle(
+        $manager,
+        app(\App\Modules\Credentials\CredentialVault::class),
+        app(\App\Modules\Servers\Actions\ReportFingerprintMismatchAction::class),
+    );
 
     $server->refresh();
 
     expect($server->status)->toBe(ServerStatus::DISCONNECTED);
     Event::assertDispatched(ServerFingerprintMismatch::class);
+    expect(InfrastructureEvent::query()
+        ->where('event_type', 'server.fingerprint_mismatch')
+        ->where('server_id', $server->id)
+        ->exists())->toBeTrue();
 });
 
 it('verify job uses expected retry backoff for network failures', function (): void {
@@ -86,8 +98,11 @@ it('verify job uses expected retry backoff for network failures', function (): v
         ->once()
         ->andThrow(new \RuntimeException('network unreachable'));
 
-    expect(fn () => $job->handle($manager, app(\App\Modules\Credentials\CredentialVault::class)))
-        ->toThrow(\RuntimeException::class);
+    expect(fn () => $job->handle(
+        $manager,
+        app(\App\Modules\Credentials\CredentialVault::class),
+        app(\App\Modules\Servers\Actions\ReportFingerprintMismatchAction::class),
+    ))->toThrow(\RuntimeException::class);
     expect($job->tries)->toBe(5);
     expect($job->backoff())->toBe([30, 60, 120, 300, 600]);
 });

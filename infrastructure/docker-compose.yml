@@ -1,0 +1,150 @@
+services:
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: production
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - internal
+    restart: unless-stopped
+    volumes:
+      - api_storage:/var/www/html/storage
+
+  worker-deployments:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: >
+      php artisan queue:work redis
+      --queue=deployments
+      --sleep=3
+      --tries=1
+      --timeout=1800
+      --max-time=3600
+    env_file: .env
+    depends_on:
+      - api
+      - redis
+    networks:
+      - internal
+    restart: unless-stopped
+
+  worker-provisioning:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: >
+      php artisan queue:work redis
+      --queue=provisioning
+      --sleep=3
+      --tries=1
+      --timeout=1800
+      --max-time=3600
+    env_file: .env
+    depends_on:
+      - api
+      - redis
+    networks:
+      - internal
+    restart: unless-stopped
+
+  worker-default:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: >
+      php artisan queue:work redis
+      --queue=commands,monitoring,default
+      --sleep=3
+      --tries=3
+      --timeout=120
+      --max-time=3600
+    env_file: .env
+    depends_on:
+      - api
+      - redis
+    networks:
+      - internal
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: php artisan schedule:work
+    env_file: .env
+    depends_on:
+      - api
+      - redis
+    networks:
+      - internal
+    restart: unless-stopped
+
+  reverb:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    env_file: .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api
+      - redis
+    networks:
+      - internal
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../apps/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+        VITE_REVERB_HOST: localhost
+        VITE_REVERB_PORT: "8080"
+        VITE_REVERB_APP_KEY: ${REVERB_APP_KEY}
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
+      - reverb
+    networks:
+      - internal
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  api_storage:
+
+networks:
+  internal:
+    driver: bridge
