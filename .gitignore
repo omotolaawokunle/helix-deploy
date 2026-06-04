@@ -1,7 +1,9 @@
 docs/
 .cursor/
 .env
-.agents/
-.cursorrules/
-.AGENTS.md
-.CLAUDE.md
+.agent/
+.claude/
+/.cursorrules
+/AGENTS.md
+/CLAUDE.md
+.github/
