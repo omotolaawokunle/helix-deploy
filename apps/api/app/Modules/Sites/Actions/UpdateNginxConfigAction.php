@@ -17,7 +17,7 @@ class UpdateNginxConfigAction
     ) {
     }
 
-    public function execute(Site $site, User $actor): Site
+    public function execute(Site $site, User $actor, string $config): Site
     {
         $server = $site->server;
         abort_if($server === null, 404);
@@ -27,7 +27,6 @@ class UpdateNginxConfigAction
             'runtime' => $site->runtime->value,
         ];
 
-        $config = $this->nginxConfigGenerator->generate($site);
         $this->siteNginxProvisioner->apply($server, $site, $config);
 
         AuditLog::record(

@@ -45,6 +45,8 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::post('/organizations/{org}/switch', [OrganizationController::class, 'switchOrganization']);
     Route::get('/organizations/{org}/audit-logs', [AuditLogController::class, 'indexForOrganization']);
     Route::get('/organizations/{org}/audit-logs/export', [AuditLogController::class, 'export']);
+    Route::get('/cron-jobs/describe', [CronJobController::class, 'describe']);
+    Route::get('/organizations/{org}/deployments', [DeploymentController::class, 'indexForOrganization']);
     Route::get('/organizations/{org}/servers', [ServerController::class, 'index']);
     Route::post('/organizations/{org}/servers', [ServerController::class, 'store']);
     Route::get('/servers/{server}', [ServerController::class, 'show']);
@@ -59,6 +61,7 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::get('/servers/{server}/sites', [SiteController::class, 'indexForServer']);
     Route::post('/servers/{server}/sites', [SiteController::class, 'store']);
     Route::get('/sites/{site}', [SiteController::class, 'show']);
+    Route::patch('/sites/{site}', [SiteController::class, 'update']);
     Route::delete('/sites/{site}', [SiteController::class, 'destroy']);
     Route::get('/sites/{site}/nginx-config', [NginxConfigController::class, 'show']);
     Route::put('/sites/{site}/nginx-config', [NginxConfigController::class, 'update']);
@@ -80,6 +83,7 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::post('/servers/{server}/daemons/{daemon}/start', [DaemonController::class, 'start']);
     Route::post('/servers/{server}/daemons/{daemon}/stop', [DaemonController::class, 'stop']);
     Route::delete('/servers/{server}/daemons/{daemon}', [DaemonController::class, 'destroy']);
+    Route::get('/servers/{server}/daemons/{daemon}/logs', [DaemonController::class, 'logs']);
     Route::get('/sites/{site}/deployments', [DeploymentController::class, 'indexForSite']);
     Route::post('/sites/{site}/deployments', [DeploymentController::class, 'store']);
     Route::get('/deployments/{deployment}', [DeploymentController::class, 'show']);

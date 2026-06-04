@@ -85,6 +85,7 @@ export interface DeploymentDetail {
 export interface DeploymentListItem extends Omit<DeploymentDetail, 'steps' | 'site' | 'releasePath'> {
   releaseId: string | null
   isActiveRelease: boolean
+  site?: DeploymentSiteSummary | null
 }
 
 export interface DeploymentStartedPayload {

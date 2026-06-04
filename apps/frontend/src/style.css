@@ -103,4 +103,38 @@
   .panel {
     @apply rounded-lg border bg-card;
   }
+
+  .log-panel {
+    @apply rounded-lg bg-zinc-950 font-mono text-xs leading-relaxed text-zinc-100;
+  }
+
+  .log-panel-input {
+    @apply rounded-lg border border-zinc-800 bg-zinc-950 font-mono text-zinc-100 placeholder:text-zinc-500;
+  }
+
+  .feedback-success {
+    @apply text-primary;
+  }
+
+  .badge-op-destructive {
+    @apply border-transparent bg-destructive/10 text-destructive;
+  }
+
+  .badge-op-primary {
+    @apply border-transparent bg-primary/10 text-primary;
+  }
+
+  .badge-op-muted {
+    @apply border-transparent bg-muted text-muted-foreground;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

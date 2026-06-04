@@ -10,6 +10,9 @@ import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchCurrentMemberRole } from '@/features/organizations/api'
 import { fetchServer } from '@/features/servers/api'
 import DeploymentsTab from '@/features/sites/components/DeploymentsTab.vue'
+import EnvVarsTab from '@/features/sites/components/EnvVarsTab.vue'
+import NginxConfigTab from '@/features/sites/components/NginxConfigTab.vue'
+import SiteSettingsTab from '@/features/sites/components/SiteSettingsTab.vue'
 import { fetchSite } from '@/features/sites/api'
 import { TeamRole, type Server, type Site } from '@/types'
 
@@ -52,6 +55,10 @@ async function loadPage(): Promise<void> {
   } finally {
     isLoading.value = false
   }
+}
+
+function handleSiteUpdated(updated: Site): void {
+  site.value = updated
 }
 
 onMounted(() => {
@@ -98,8 +105,14 @@ onMounted(() => {
           <TabsTrigger value="deployments">
             Deployments
           </TabsTrigger>
-          <TabsTrigger value="overview">
-            Overview
+          <TabsTrigger value="env-vars">
+            Environment Variables
+          </TabsTrigger>
+          <TabsTrigger value="nginx">
+            Nginx Config
+          </TabsTrigger>
+          <TabsTrigger value="settings">
+            Settings
           </TabsTrigger>
         </TabsList>
         <TabsContent value="deployments" class="mt-6">
@@ -109,10 +122,14 @@ onMounted(() => {
             :member-role="memberRole"
           />
         </TabsContent>
-        <TabsContent value="overview" class="mt-6">
-          <p class="text-sm text-muted-foreground">
-            Site overview settings will appear here.
-          </p>
+        <TabsContent value="env-vars" class="mt-6">
+          <EnvVarsTab :site-id="site.id" />
+        </TabsContent>
+        <TabsContent value="nginx" class="mt-6">
+          <NginxConfigTab :site-id="site.id" />
+        </TabsContent>
+        <TabsContent value="settings" class="mt-6">
+          <SiteSettingsTab :site="site" @updated="handleSiteUpdated" />
         </TabsContent>
       </Tabs>
     </template>

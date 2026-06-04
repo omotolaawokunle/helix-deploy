@@ -23,7 +23,7 @@ import {
   formatRelativeTime,
   shortCommitHash,
 } from '@/lib/format'
-import { DeploymentStatus, DeploymentType, TeamRole, type Site } from '@/types'
+import { DeploymentType, TeamRole, type Site } from '@/types'
 
 interface Props {
   site: Site

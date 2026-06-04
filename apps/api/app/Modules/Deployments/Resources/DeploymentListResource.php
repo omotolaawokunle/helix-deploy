@@ -38,6 +38,13 @@ class DeploymentListResource extends JsonResource
                 'activeReleaseId' => $activeReleaseId,
                 'releaseId' => $releaseId,
                 'isActiveRelease' => $releaseId !== null && $releaseId === $activeReleaseId,
+                'site' => $this->whenLoaded('site', fn () => [
+                    'id' => (string) $this->site?->getKey(),
+                    'domain' => $this->site?->domain,
+                    'deployBranch' => $this->site?->deploy_branch,
+                    'serverId' => $this->site?->server_id,
+                    'isProduction' => (bool) ($this->site?->environment?->is_production ?? false),
+                ]),
             ],
         );
     }

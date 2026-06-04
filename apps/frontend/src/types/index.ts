@@ -192,10 +192,98 @@ export interface Site {
   name?: string
   domain: string
   deployBranch: string
+  deployScript: string | null
+  runMigrations: boolean
+  dockerImage: string | null
+  dockerRegistry: string | null
+  dockerComposePath: string | null
   runtime: Runtime
   status: string
   createdAt: string
   updatedAt: string
+}
+
+export interface EnvVarListItem {
+  id: string
+  key: string
+  maskedValue: string
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface NginxConfig {
+  siteId: string
+  domain: string
+  config: string
+  updatedAt: string | null
+}
+
+export interface CronJobRecord {
+  id: string
+  serverId: string
+  organizationId: string
+  expression: string
+  command: string
+  user: string
+  active: boolean
+  description: string
+  lastRunAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DaemonRecord {
+  id: string
+  serverId: string
+  organizationId: string
+  name: string
+  command: string
+  directory: string | null
+  user: string
+  processes: number
+  status: DaemonStatus | string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CommandRecord {
+  id: string
+  serverId: string
+  userId: string
+  command: string
+  output: string | null
+  exitCode: number | null
+  executedAt: string | null
+  user?: {
+    id: string
+    name: string
+    email: string
+  }
+}
+
+export interface AuditLogEntry {
+  id: string
+  operation: string
+  actor: {
+    id: string
+    name: string
+    email: string
+  } | null
+  resourceType: string
+  resourceId: string
+  ipAddress: string | null
+  requestId: string | null
+  createdAt: string
+  beforeState?: Record<string, unknown> | null
+  afterState?: Record<string, unknown> | null
+}
+
+export interface OrganizationMemberRecord {
+  id: string
+  name: string
+  email: string
+  role: TeamRole
+  joinedAt: string | null
 }
 
 export interface DeploymentStep {
@@ -261,17 +349,6 @@ export interface CronJob {
   command: string
   expression: string
   enabled: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export interface SupervisorProcess {
-  id: string
-  organizationId: string
-  siteId: string
-  name: string
-  command: string
-  status: DaemonStatus
   createdAt: string
   updatedAt: string
 }

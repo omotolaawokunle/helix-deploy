@@ -81,6 +81,10 @@ const daemonStatusMap: Record<string, StatusConfig> = {
     label: 'Crashed',
     className: 'bg-destructive/10 text-destructive',
   },
+  error: {
+    label: 'Error',
+    className: 'bg-destructive/10 text-destructive',
+  },
 }
 
 const config = computed<StatusConfig>(() => {

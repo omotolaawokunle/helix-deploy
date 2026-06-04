@@ -21,6 +21,7 @@ class NginxConfigResource extends JsonResource
             'siteId' => $payload['siteId'],
             'domain' => $payload['domain'],
             'config' => $payload['config'],
+            'updatedAt' => $payload['updatedAt'] ?? null,
         ];
     }
 }

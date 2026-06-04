@@ -20,6 +20,7 @@ use App\Modules\Deployments\Resources\DeploymentListResource;
 use App\Modules\Deployments\Resources\DeploymentResource;
 use App\Modules\Deployments\Resources\DeploymentWithStepsResource;
 use App\Modules\Deployments\Services\DeploymentQueryService;
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Sites\Models\Site;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
@@ -57,6 +58,18 @@ class DeploymentController extends Controller
             ])
             ->response()
             ->setStatusCode(202);
+    }
+
+    public function indexForOrganization(
+        Organization $org,
+        Request $request,
+        DeploymentQueryService $queryService,
+    ): \Illuminate\Http\Resources\Json\AnonymousResourceCollection {
+        $this->authorize('viewAny', [Deployment::class, $org]);
+
+        return DeploymentListResource::collection(
+            $queryService->cursorPaginateForOrganization($org, $request),
+        );
     }
 
     public function indexForSite(

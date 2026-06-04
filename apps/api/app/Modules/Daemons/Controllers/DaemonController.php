@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Daemons\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Daemons\Jobs\FetchDaemonLogsJob;
 use App\Modules\Daemons\Jobs\RunDaemonOperationJob;
+use Illuminate\Support\Facades\Cache;
 use App\Modules\Daemons\Models\SupervisorProcess;
 use App\Modules\Daemons\Requests\StoreDaemonRequest;
 use App\Modules\Daemons\Resources\DaemonResource;
@@ -89,6 +91,35 @@ class DaemonController extends Controller
         RunDaemonOperationJob::dispatch(operation: 'delete', daemonId: (string) $daemonModel->getKey());
 
         return response()->json(['message' => 'Daemon deletion has been queued.'], 202);
+    }
+
+    public function logs(string $server, string $daemon, Request $request): JsonResponse
+    {
+        $daemonModel = $this->resolveDaemon($server, $daemon);
+        $this->authorize('view', $daemonModel);
+
+        $cacheKey = FetchDaemonLogsJob::cacheKey((string) $daemonModel->getKey());
+        /** @var array{status: string, lines: list<string>, message?: string}|null $cached */
+        $cached = Cache::get($cacheKey);
+
+        if ($cached === null) {
+            FetchDaemonLogsJob::dispatch((string) $daemonModel->getKey());
+
+            return response()->json([
+                'data' => [
+                    'status' => 'loading',
+                    'lines' => [],
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'data' => [
+                'status' => $cached['status'],
+                'lines' => $cached['lines'] ?? [],
+                'message' => $cached['message'] ?? null,
+            ],
+        ]);
     }
 
     private function resolveServer(string $serverId): Server

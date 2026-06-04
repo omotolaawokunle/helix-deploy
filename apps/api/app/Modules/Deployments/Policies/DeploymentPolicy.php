@@ -6,11 +6,17 @@ namespace App\Modules\Deployments\Policies;
 
 use App\Models\User;
 use App\Modules\Deployments\Models\Deployment;
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Teams\Enums\TeamRole;
 
 class DeploymentPolicy
 {
+    public function viewAny(User $user, Organization $organization): bool
+    {
+        return $this->roleInOrganization($user, (string) $organization->getKey()) !== null;
+    }
+
     public function view(User $user, Deployment $deployment): bool
     {
         return $this->roleInOrganization($user, $deployment->organization_id) !== null;

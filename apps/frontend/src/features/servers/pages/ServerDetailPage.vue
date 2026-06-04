@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import {
   CheckIcon,
   PlugIcon,
@@ -16,7 +16,11 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ProviderIcon from '@/features/servers/components/ProviderIcon.vue'
+import CommandRunnerTab from '@/features/commands/components/CommandRunnerTab.vue'
+import CronJobsTab from '@/features/cron-jobs/components/CronJobsTab.vue'
+import DaemonsTab from '@/features/daemons/components/DaemonsTab.vue'
 import ProvisionServerDrawer from '@/features/servers/components/ProvisionServerDrawer.vue'
+import ServerSitesTab from '@/features/servers/components/ServerSitesTab.vue'
 import { testServerConnection } from '@/features/servers/api'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
 import { ManagementMode, type Server } from '@/types'
@@ -280,7 +284,7 @@ onMounted(() => {
                   :key="service"
                   class="flex items-center gap-2 text-sm capitalize"
                 >
-                  <CheckIcon class="size-4 text-green-600" />
+                  <CheckIcon class="size-4 text-primary" />
                   {{ service }}
                 </li>
               </ul>
@@ -306,32 +310,26 @@ onMounted(() => {
         </TabsContent>
 
         <TabsContent value="sites" class="mt-6">
-          <p class="text-sm text-muted-foreground">
-            Site management for this server will appear here.
-          </p>
+          <ServerSitesTab :server-id="server.id" />
         </TabsContent>
 
         <TabsContent value="cron" class="mt-6">
-          <p class="text-sm text-muted-foreground">
-            Cron jobs for this server will appear here.
-          </p>
+          <CronJobsTab :server-id="server.id" />
         </TabsContent>
 
         <TabsContent value="daemons" class="mt-6">
-          <p class="text-sm text-muted-foreground">
-            Supervisor daemons for this server will appear here.
-          </p>
+          <DaemonsTab :server-id="server.id" />
         </TabsContent>
 
         <TabsContent value="commands" class="mt-6">
-          <p class="text-sm text-muted-foreground">
-            Remote commands for this server will appear here.
-          </p>
+          <CommandRunnerTab :server-id="server.id" :is-production="isProduction" />
         </TabsContent>
 
         <TabsContent value="audit" class="mt-6">
           <p class="text-sm text-muted-foreground">
-            Audit log entries for this server will appear here.
+            <RouterLink to="/audit" class="text-primary hover:underline">
+              View full organization audit log
+            </RouterLink>
           </p>
         </TabsContent>
       </Tabs>

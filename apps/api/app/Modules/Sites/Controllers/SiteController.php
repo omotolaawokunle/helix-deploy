@@ -13,6 +13,7 @@ use App\Modules\Sites\Events\SiteProvisioningStarted;
 use App\Modules\Sites\Jobs\CreateSiteJob;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Sites\Requests\StoreSiteRequest;
+use App\Modules\Sites\Requests\UpdateSiteRequest;
 use App\Modules\Sites\Resources\SiteResource;
 use App\Modules\Sites\Services\SiteTableFilterService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -99,6 +100,42 @@ class SiteController extends Controller
         $this->authorize('view', $siteModel);
 
         return SiteResource::make($siteModel);
+    }
+
+    public function update(string $site, UpdateSiteRequest $request): SiteResource
+    {
+        $siteModel = $this->resolveSite($site);
+        $this->authorize('update', $siteModel);
+
+        $validated = $request->validated();
+
+        if (array_key_exists('deployBranch', $validated)) {
+            $siteModel->deploy_branch = (string) $validated['deployBranch'];
+        }
+
+        if (array_key_exists('deployScript', $validated)) {
+            $siteModel->deploy_script = $validated['deployScript'];
+        }
+
+        if (array_key_exists('runMigrations', $validated)) {
+            $siteModel->run_migrations = (bool) $validated['runMigrations'];
+        }
+
+        if (array_key_exists('dockerImage', $validated)) {
+            $siteModel->docker_image = $validated['dockerImage'];
+        }
+
+        if (array_key_exists('dockerRegistry', $validated)) {
+            $siteModel->docker_registry = $validated['dockerRegistry'];
+        }
+
+        if (array_key_exists('dockerComposePath', $validated)) {
+            $siteModel->docker_compose_path = $validated['dockerComposePath'];
+        }
+
+        $siteModel->save();
+
+        return SiteResource::make($siteModel->refresh());
     }
 
     public function destroy(string $site, Request $request, DeleteSiteAction $deleteSiteAction): JsonResponse

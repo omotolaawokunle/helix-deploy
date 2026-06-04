@@ -6,6 +6,8 @@ namespace App\Modules\CronJobs\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\CronJobs\Actions\CreateCronJobAction;
+use App\Modules\CronJobs\Exceptions\InvalidCronExpressionException;
+use App\Modules\CronJobs\Services\CronService;
 use App\Modules\CronJobs\Actions\DeleteCronJobAction;
 use App\Modules\CronJobs\Actions\ToggleCronJobAction;
 use App\Modules\CronJobs\Actions\UpdateCronJobAction;
@@ -21,6 +23,25 @@ use Illuminate\Http\Request;
 
 class CronJobController extends Controller
 {
+    public function describe(Request $request, CronService $cronService): JsonResponse
+    {
+        $expression = (string) $request->query('expression', '');
+
+        try {
+            $description = $cronService->describe($expression);
+        } catch (InvalidCronExpressionException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'data' => [
+                'description' => $description,
+            ],
+        ]);
+    }
+
     public function index(string $server): \Illuminate\Http\Resources\Json\AnonymousResourceCollection
     {
         $serverModel = $this->resolveServer($server);
