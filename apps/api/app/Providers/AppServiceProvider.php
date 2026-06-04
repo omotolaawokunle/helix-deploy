@@ -12,7 +12,10 @@ use App\Modules\Sites\Contracts\NginxConfigGeneratorInterface;
 use App\Modules\Sites\Services\NginxConfigGenerator;
 use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
 use App\Packages\Execution\DeploymentRunner;
+use App\Modules\Daemons\Models\SupervisorProcess;
+use App\Modules\Daemons\Policies\DaemonPolicy;
 use App\Packages\Realtime\DeploymentStreamPublisher;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -34,6 +37,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Gate::policy(SupervisorProcess::class, DaemonPolicy::class);
     }
 }

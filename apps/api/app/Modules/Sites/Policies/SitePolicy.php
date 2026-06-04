@@ -54,6 +54,21 @@ class SitePolicy
         return $this->update($user, $site);
     }
 
+    public function manageEnvVars(User $user, Site $site): bool
+    {
+        return $this->update($user, $site);
+    }
+
+    public function revealEnvVar(User $user, Site $site): bool
+    {
+        return $this->update($user, $site);
+    }
+
+    public function syncEnvVars(User $user, Site $site): bool
+    {
+        return $this->update($user, $site);
+    }
+
     private function roleInOrganization(User $user, Organization $org): ?TeamRole
     {
         return $user->roleInOrganization($org);

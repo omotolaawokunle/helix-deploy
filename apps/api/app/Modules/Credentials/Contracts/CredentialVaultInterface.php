@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Credentials\Contracts;
 
-use App\Models\Organization;
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Credentials\DTOs\StoredKeyPair;
 use App\Modules\Credentials\Models\Credential;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +16,8 @@ interface CredentialVaultInterface
     public function storePrivateKey(Organization $organization, Model $owner, string $name, string $key): Credential;
 
     public function storeSecret(Organization $organization, Model $owner, string $name, string $value): Credential;
+
+    public function updateSecret(string $credentialId, Organization $organization, string $value): Credential;
 
     public function getPrivateKey(string $credentialId, Organization $organization): string;
 

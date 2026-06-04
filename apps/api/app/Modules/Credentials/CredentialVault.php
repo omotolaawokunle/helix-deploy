@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Credentials;
 
-use App\Models\Organization;
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Credentials\Contracts\CredentialVaultInterface;
 use App\Modules\Credentials\DTOs\StoredKeyPair;
@@ -16,6 +16,7 @@ use App\Packages\Encryption\EncryptedPayload;
 use App\Packages\Encryption\MasterKeyManager;
 use App\Packages\Encryption\SodiumEncryption;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use phpseclib3\Crypt\EC;
 
 class CredentialVault implements CredentialVaultInterface
@@ -93,6 +94,41 @@ class CredentialVault implements CredentialVaultInterface
             organization: $organization,
             operation: 'credential.created',
             resourceId: (string) $credential->getKey(),
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $credential;
+    }
+
+    public function updateSecret(string $credentialId, Organization $organization, string $value): Credential
+    {
+        $credential = $this->loadCredential($credentialId, $organization);
+        $this->assertCredentialType($credential, CredentialType::ENV_VAR);
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $masterKey = $this->getMasterKey($organization);
+
+        try {
+            $payload = $this->encryption->encrypt($value, $masterKey);
+        } finally {
+            sodium_memzero($masterKey);
+        }
+
+        $credential->forceFill([
+            'encrypted_value' => $payload->ciphertext,
+            'nonce' => $payload->nonce,
+            'last_used_at' => null,
+        ])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.updated',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
             afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
         );
 
@@ -253,6 +289,31 @@ class CredentialVault implements CredentialVaultInterface
         return $this->masterKeyManager->decryptMasterKey($encryptedMasterKey);
     }
 
+    private function resolveCreatorId(Organization $organization): string
+    {
+        if (Auth::getFacadeRoot() !== null) {
+            $authId = Auth::id();
+
+            if ($authId !== null) {
+                return (string) $authId;
+            }
+        }
+
+        $ownerId = $organization->getAttribute('owner_id');
+
+        if (is_string($ownerId) && $ownerId !== '') {
+            return $ownerId;
+        }
+
+        $memberId = $organization->users()->value('users.id');
+
+        if ($memberId !== null) {
+            return (string) $memberId;
+        }
+
+        throw new \RuntimeException('Unable to resolve credential creator.');
+    }
+
     private function storeEncrypted(
         Organization $organization,
         Model $owner,
@@ -278,7 +339,7 @@ class CredentialVault implements CredentialVaultInterface
             'encrypted_value' => $payload->ciphertext,
             'nonce' => $payload->nonce,
             'key_fingerprint' => $publicKey,
-            'created_by' => (string) $organization->owner_id,
+            'created_by' => $this->resolveCreatorId($organization),
             'last_used_at' => null,
         ]);
     }
