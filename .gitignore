@@ -3,7 +3,7 @@ docs/
 .env
 .agent/
 .claude/
-/.cursorrules
-/AGENTS.md
-/CLAUDE.md
+.cursorrules
+AGENTS.md
+CLAUDE.md
 .github/
