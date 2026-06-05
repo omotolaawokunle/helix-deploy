@@ -12,7 +12,9 @@ export const useServersStore = defineStore('servers', () => {
 
   const { orgId } = useActiveOrg()
 
-  async function fetch(): Promise<void> {
+  const activeTagFilters = ref<string[]>([])
+
+  async function fetch(tagFilters: string[] = activeTagFilters.value): Promise<void> {
     const activeOrgId = orgId.value
 
     if (activeOrgId === null) {
@@ -21,11 +23,14 @@ export const useServersStore = defineStore('servers', () => {
       return
     }
 
+    activeTagFilters.value = tagFilters
     isLoading.value = true
     fetchError.value = null
 
     try {
-      servers.value = await fetchServers(activeOrgId)
+      servers.value = await fetchServers(activeOrgId, {
+        tags: tagFilters.length > 0 ? tagFilters : undefined,
+      })
       hasFetched.value = true
     } catch {
       fetchError.value = 'Unable to load servers.'
@@ -70,6 +75,7 @@ export const useServersStore = defineStore('servers', () => {
     isLoading,
     hasFetched,
     fetchError,
+    activeTagFilters,
     fetch,
     getById,
     invalidateCache,

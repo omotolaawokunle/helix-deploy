@@ -52,6 +52,7 @@ const projectId = ref<string | undefined>(undefined)
 const environmentId = ref<string | undefined>(undefined)
 const authMethod = ref<'generate' | 'import'>('generate')
 const privateKey = ref('')
+const tagsInput = ref('')
 const managementMode = ref<ManagementMode>(ManagementMode.Managed)
 
 const projects = ref<Array<{ id: string; name: string }>>([])
@@ -98,8 +99,16 @@ function resetForm(): void {
   environmentId.value = undefined
   authMethod.value = 'generate'
   privateKey.value = ''
+  tagsInput.value = ''
   managementMode.value = ManagementMode.Managed
   apiError.value = null
+}
+
+function parseTags(value: string): string[] {
+  return value
+    .split(',')
+    .map(tag => tag.trim())
+    .filter(tag => tag !== '')
 }
 
 async function handleSubmit(): Promise<void> {
@@ -125,6 +134,7 @@ async function handleSubmit(): Promise<void> {
       privateKey: authMethod.value === 'import' ? privateKey.value : undefined,
       projectId: projectId.value,
       environmentId: environmentId.value,
+      tags: parseTags(tagsInput.value),
     })
 
     await serversStore.fetch()
@@ -182,6 +192,7 @@ async function handleSubmit(): Promise<void> {
               v-model:environment-id="environmentId"
               v-model:auth-method="authMethod"
               v-model:private-key="privateKey"
+              v-model:tags="tagsInput"
               :projects="projects"
               :environments="environments"
               :provider-options="providerOptions"
@@ -199,6 +210,7 @@ async function handleSubmit(): Promise<void> {
               v-model:environment-id="environmentId"
               v-model:auth-method="authMethod"
               v-model:private-key="privateKey"
+              v-model:tags="tagsInput"
               :projects="projects"
               :environments="environments"
               :provider-options="providerOptions"

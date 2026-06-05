@@ -1,23 +1,26 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   CheckIcon,
   PlugIcon,
   ServerCogIcon,
+  Trash2Icon,
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
+import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
 import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import BackLink from '@/components/layout/BackLink.vue'
+import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ProviderIcon from '@/features/servers/components/ProviderIcon.vue'
 
-import { testServerConnection } from '@/features/servers/api'
+import { deleteServer, fetchServer, testServerConnection } from '@/features/servers/api'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
 import { ManagementMode, type Server } from '@/types'
 
@@ -38,6 +41,8 @@ const ProvisionServerDrawer = defineAsyncComponent(
 )
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
 const serversStore = useServersStore()
 
 const server = ref<Server | null>(null)
@@ -45,7 +50,11 @@ const isLoading = ref(true)
 const loadError = ref<string | null>(null)
 const isProvisionDrawerOpen = ref(false)
 const isTestingConnection = ref(false)
+const isDeleteDialogOpen = ref(false)
+const isDeleting = ref(false)
+const isAwaitingDeletion = ref(false)
 const activeTab = ref('overview')
+let deletionPollTimer: ReturnType<typeof setInterval> | null = null
 
 const serverId = computed(() => String(route.params.id))
 
@@ -54,6 +63,8 @@ const environmentName = computed(
 )
 
 const isProduction = computed(() => server.value?.environment?.isProduction ?? false)
+
+const canDeleteServer = computed(() => authStore.isOwner)
 
 const installedServiceNames = computed((): string[] => {
   const services = server.value?.installedServices
@@ -154,6 +165,49 @@ async function loadServer(): Promise<void> {
   }
 }
 
+function stopDeletionPolling(): void {
+  if (deletionPollTimer !== null) {
+    clearInterval(deletionPollTimer)
+    deletionPollTimer = null
+  }
+}
+
+async function pollUntilDeleted(): Promise<void> {
+  stopDeletionPolling()
+
+  deletionPollTimer = setInterval(async () => {
+    try {
+      await fetchServer(serverId.value)
+    } catch {
+      stopDeletionPolling()
+      isAwaitingDeletion.value = false
+      serversStore.invalidateCache()
+      toast.success('Server deleted.')
+      await router.push('/servers')
+    }
+  }, 3000)
+}
+
+async function handleDeleteServer(): Promise<void> {
+  if (server.value === null) {
+    return
+  }
+
+  isDeleting.value = true
+
+  try {
+    await deleteServer(serverId.value)
+    isDeleteDialogOpen.value = false
+    isAwaitingDeletion.value = true
+    toast.message('Server deletion scheduled. It will be removed in about 30 seconds.')
+    await pollUntilDeleted()
+  } catch {
+    toast.error('Unable to delete server.')
+  } finally {
+    isDeleting.value = false
+  }
+}
+
 async function handleTestConnection(): Promise<void> {
   isTestingConnection.value = true
 
@@ -170,6 +224,10 @@ async function handleTestConnection(): Promise<void> {
 
 onMounted(() => {
   void loadServer()
+})
+
+onUnmounted(() => {
+  stopDeletionPolling()
 })
 </script>
 
@@ -229,17 +287,38 @@ onMounted(() => {
           <Button
             type="button"
             variant="outline"
-            :disabled="isTestingConnection"
+            :disabled="isTestingConnection || isAwaitingDeletion"
             @click="handleTestConnection"
           >
             <PlugIcon class="mr-2 size-4" />
             {{ isTestingConnection ? 'Testing…' : 'Test Connection' }}
           </Button>
-          <Button type="button" @click="isProvisionDrawerOpen = true">
+          <Button
+            type="button"
+            :disabled="isAwaitingDeletion"
+            @click="isProvisionDrawerOpen = true"
+          >
             <ServerCogIcon class="mr-2 size-4" />
             Provision Server
           </Button>
+          <Button
+            v-if="canDeleteServer"
+            type="button"
+            variant="destructive"
+            :disabled="isAwaitingDeletion || isDeleting"
+            @click="isDeleteDialogOpen = true"
+          >
+            <Trash2Icon class="mr-2 size-4" />
+            Delete Server
+          </Button>
         </div>
+      </div>
+
+      <div
+        v-if="isAwaitingDeletion"
+        class="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+      >
+        Server deletion is in progress. Credentials will be removed after a short grace period.
       </div>
 
       <Tabs v-model="activeTab">
@@ -354,6 +433,16 @@ onMounted(() => {
         v-if="isProvisionDrawerOpen"
         v-model:open="isProvisionDrawerOpen"
         :server-id="server.id"
+      />
+
+      <ConfirmDestructiveDialog
+        v-model:open="isDeleteDialogOpen"
+        title="Delete server"
+        :description="`This permanently removes ${server.hostname} and its stored credentials after a 30-second grace period.`"
+        :confirm-text="server.hostname"
+        confirm-button-label="Delete server"
+        :can-confirm="!isDeleting"
+        @confirm="handleDeleteServer"
       />
     </template>
   </div>

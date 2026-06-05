@@ -45,7 +45,7 @@ const members = ref<OrganizationMemberRecord[]>([])
 const isLoading = ref(true)
 const orgName = ref('')
 const inviteEmail = ref('')
-const inviteRole = ref<TeamRole>(TeamRole.Member)
+const inviteRole = ref<TeamRole>(TeamRole.Developer)
 const isDeleteOrgOpen = ref(false)
 const isDeletingOrg = ref(false)
 
@@ -53,11 +53,16 @@ const canDeleteOrganization = computed(
   () => authStore.organizations.length > 1,
 )
 
-const roleOptions = [
+const inviteRoleOptions = [
+  TeamRole.Admin,
+  TeamRole.Developer,
+  TeamRole.Viewer,
+]
+
+const memberRoleOptions = [
   TeamRole.Owner,
   TeamRole.Admin,
-  TeamRole.Maintainer,
-  TeamRole.Member,
+  TeamRole.Developer,
   TeamRole.Viewer,
 ]
 
@@ -117,6 +122,7 @@ async function sendInvite(): Promise<void> {
   try {
     const url = await inviteOrganizationMember(orgId, {
       email: inviteEmail.value.trim(),
+      role: inviteRole.value,
     })
     inviteEmail.value = ''
     await load()
@@ -248,7 +254,7 @@ onMounted(() => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem
-                      v-for="role in roleOptions"
+                      v-for="role in memberRoleOptions"
                       :key="role"
                       :value="role"
                     >
@@ -284,7 +290,7 @@ onMounted(() => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem
-                v-for="role in roleOptions"
+                v-for="role in inviteRoleOptions"
                 :key="role"
                 :value="role"
               >

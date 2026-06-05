@@ -5,7 +5,9 @@ declare(strict_types=1);
 use App\Modules\Audit\Controllers\AuditLogController;
 use App\Modules\Auth\Controllers\AuthController;
 use App\Modules\Commands\Controllers\CommandController;
+use App\Modules\Organizations\Controllers\InvitationAcceptRedirectController;
 use App\Modules\Organizations\Controllers\OrganizationController;
+use App\Modules\Organizations\Controllers\OrganizationInvitationController;
 use App\Modules\Organizations\Controllers\OrganizationMemberController;
 use App\Modules\Projects\Controllers\EnvironmentController;
 use App\Modules\Projects\Controllers\ProjectController;
@@ -32,7 +34,12 @@ Route::prefix('v1/auth')->middleware('web')->group(function (): void {
     });
 });
 
+Route::get('/v1/organizations/invitations/accept', InvitationAcceptRedirectController::class)
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('organizations.invitations.accept');
+
 Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(function (): void {
+    Route::post('/organizations/invitations/accept', [OrganizationInvitationController::class, 'accept']);
     Route::get('/organizations', [OrganizationController::class, 'index']);
     Route::post('/organizations', [OrganizationController::class, 'store']);
     Route::get('/organizations/{org}', [OrganizationController::class, 'show']);
@@ -102,8 +109,3 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::get('/deployments/{deployment}/stream', [DeploymentStreamController::class, 'stream']);
 });
 
-Route::get('/v1/organizations/invitations/accept', function () {
-    return response()->json([
-        'message' => 'Invitation acceptance flow is not implemented yet.',
-    ], 501);
-})->name('organizations.invitations.accept');

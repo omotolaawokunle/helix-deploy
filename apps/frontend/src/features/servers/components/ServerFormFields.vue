@@ -27,6 +27,7 @@ interface Props {
   environmentId?: string
   authMethod: 'generate' | 'import'
   privateKey: string
+  tags: string
   projects: Array<{ id: string; name: string }>
   environments: Array<{ id: string; name: string }>
   providerOptions: ProviderOption[]
@@ -44,6 +45,7 @@ const emit = defineEmits<{
   'update:environmentId': [value: string | undefined]
   'update:authMethod': [value: 'generate' | 'import']
   'update:privateKey': [value: string]
+  'update:tags': [value: string]
 }>()
 </script>
 
@@ -132,6 +134,19 @@ const emit = defineEmits<{
           </SelectItem>
         </SelectContent>
       </Select>
+    </div>
+
+    <div class="space-y-2">
+      <Label for="server-tags">Tags (optional)</Label>
+      <Input
+        id="server-tags"
+        :model-value="tags"
+        placeholder="production, web, eu-west"
+        @update:model-value="emit('update:tags', String($event))"
+      />
+      <p class="text-xs text-muted-foreground">
+        Comma-separated labels for filtering servers.
+      </p>
     </div>
 
     <div v-if="environments.length > 0" class="space-y-2">

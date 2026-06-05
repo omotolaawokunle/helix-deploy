@@ -62,8 +62,7 @@ export enum CredentialType {
 export enum TeamRole {
   Owner = 'owner',
   Admin = 'admin',
-  Maintainer = 'maintainer',
-  Member = 'member',
+  Developer = 'developer',
   Viewer = 'viewer',
 }
 

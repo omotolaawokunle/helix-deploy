@@ -56,6 +56,7 @@ class OrganizationMemberController extends Controller
             organization: $org,
             actor: $user,
             email: (string) $request->input('email'),
+            role: TeamRole::from((string) $request->input('role')),
         );
 
         return response()->json([

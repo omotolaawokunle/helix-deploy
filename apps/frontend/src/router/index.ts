@@ -6,7 +6,12 @@ import {
   type RouteRecordRaw,
 } from "vue-router";
 
-const guestRouteNames = new Set(["login", "register", "verify-email"]);
+const guestRouteNames = new Set([
+  "login",
+  "register",
+  "verify-email",
+  "accept-invitation",
+]);
 
 const authenticatedRoutes: RouteRecordRaw[] = [
   {
@@ -113,6 +118,13 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
+    path: "/accept-invitation",
+    name: "accept-invitation",
+    component: () =>
+      import("@/features/organizations/pages/AcceptInvitationPage.vue"),
+    meta: { requiresAuth: false },
+  },
+  {
     path: "/",
     component: () => import("@/layouts/AppLayout.vue"),
     meta: { requiresAuth: true },
@@ -154,8 +166,14 @@ router.beforeEach(async (to, _from, next) => {
     guestRouteNames.has(String(to.name)) &&
     authStore.isAuthenticated
   ) {
-    if (String(to.name) === "verify-email") {
-      if (authStore.isEmailVerified) {
+    if (
+      String(to.name) === "verify-email" ||
+      String(to.name) === "accept-invitation"
+    ) {
+      if (
+        String(to.name) === "verify-email" &&
+        authStore.isEmailVerified
+      ) {
         next("/dashboard");
         return;
       }

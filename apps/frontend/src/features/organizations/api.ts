@@ -76,14 +76,37 @@ export async function fetchOrganizationMembers(
 
 export async function inviteOrganizationMember(
   organizationId: string,
-  payload: { email: string },
+  payload: { email: string; role: TeamRole },
 ): Promise<string> {
   const response = await api.post<{ data: { invitationUrl: string } }>(
     `/api/v1/organizations/${organizationId}/invitations`,
-    { email: payload.email },
+    payload,
   )
 
   return response.data.data.invitationUrl
+}
+
+export interface AcceptInvitationResult {
+  organizationId: string
+  organizationName: string
+}
+
+export interface AcceptInvitationParams {
+  token: string
+  expires: string
+  signature: string
+}
+
+export async function acceptOrganizationInvitation(
+  params: AcceptInvitationParams,
+): Promise<AcceptInvitationResult> {
+  const response = await api.post<{ data: AcceptInvitationResult }>(
+    '/api/v1/organizations/invitations/accept',
+    undefined,
+    { params },
+  )
+
+  return response.data.data
 }
 
 export async function updateMemberRole(

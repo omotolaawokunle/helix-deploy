@@ -39,11 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
       return false
     }
 
-    return (
-      currentRole.value === TeamRole.Maintainer
-      || currentRole.value === TeamRole.Member
-      || isAdmin.value
-    )
+    return currentRole.value === TeamRole.Developer || isAdmin.value
   })
 
   const canViewAuditLog = computed(() => isAdmin.value)

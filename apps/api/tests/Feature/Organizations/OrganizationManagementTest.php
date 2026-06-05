@@ -34,6 +34,7 @@ it('owner can invite change role and remove member', function (): void {
     $this->actingAs($owner)
         ->postJson("/api/v1/organizations/{$organization->id}/invitations", [
             'email' => 'invited@example.test',
+            'role' => TeamRole::DEVELOPER->value,
         ])
         ->assertCreated();
 
@@ -82,6 +83,7 @@ it('non owner gets forbidden on member management actions', function (): void {
     $this->actingAs($member)
         ->postJson("/api/v1/organizations/{$organization->id}/invitations", [
             'email' => 'blocked@example.test',
+            'role' => TeamRole::DEVELOPER->value,
         ])
         ->assertForbidden();
 

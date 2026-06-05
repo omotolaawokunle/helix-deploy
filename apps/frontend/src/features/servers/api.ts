@@ -13,13 +13,30 @@ interface PaginatedResponse<T> {
   data: T[]
 }
 
-export async function fetchServers(organizationId: string): Promise<Server[]> {
+export interface FetchServersOptions {
+  tags?: string[]
+}
+
+export async function fetchServers(
+  organizationId: string,
+  options: FetchServersOptions = {},
+): Promise<Server[]> {
+  const params: Record<string, string | number | string[]> = { per_page: 100 }
+
+  if (options.tags !== undefined && options.tags.length > 0) {
+    params['filter[tags]'] = options.tags.join(',')
+  }
+
   const response = await api.get<PaginatedResponse<Server>>(
     `/api/v1/organizations/${organizationId}/servers`,
-    { params: { per_page: 100 } },
+    { params },
   )
 
   return response.data.data
+}
+
+export async function deleteServer(serverId: string): Promise<void> {
+  await api.delete(`/api/v1/servers/${serverId}`)
 }
 
 export async function fetchServer(serverId: string): Promise<Server> {

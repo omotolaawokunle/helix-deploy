@@ -4,7 +4,7 @@ import { extractFieldErrors } from "@/lib/validation-errors";
 import { toTypedSchema } from "@vee-validate/zod";
 import { useForm } from "vee-validate";
 import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { z } from "zod";
 
 const loginSchema = toTypedSchema(
@@ -17,6 +17,7 @@ const loginSchema = toTypedSchema(
 export function useLoginForm() {
   const authStore = useAuthStore();
   const router = useRouter();
+  const route = useRoute();
   const apiError = ref<string | null>(null);
 
   const form = useForm({
@@ -38,7 +39,10 @@ export function useLoginForm() {
         return;
       }
 
-      await router.push("/dashboard");
+      const redirect =
+        typeof route.query.redirect === "string" ? route.query.redirect : null;
+
+      await router.push(redirect ?? "/dashboard");
     } catch (error: unknown) {
       const fieldErrors = extractFieldErrors(error);
 

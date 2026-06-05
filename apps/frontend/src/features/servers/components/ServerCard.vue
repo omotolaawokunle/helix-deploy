@@ -50,9 +50,20 @@ const isProduction = computed(() => props.server.environment?.isProduction ?? fa
         </div>
       </div>
 
-      <div v-if="server.project" class="mt-3">
-        <Badge variant="secondary" class="text-xs font-normal">
+      <div
+        v-if="server.project || (server.tags?.length ?? 0) > 0"
+        class="mt-3 flex flex-wrap gap-2"
+      >
+        <Badge v-if="server.project" variant="secondary" class="text-xs font-normal">
           {{ server.project.name }}
+        </Badge>
+        <Badge
+          v-for="tag in server.tags ?? []"
+          :key="tag"
+          variant="outline"
+          class="text-xs font-normal"
+        >
+          {{ tag }}
         </Badge>
       </div>
 
