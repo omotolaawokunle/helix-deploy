@@ -103,7 +103,7 @@ describe('useDeploymentStream', () => {
 
     const source = MockEventSource.instances[0]
     const payload = {
-      status: 'succeeded',
+      status: 'success',
       duration: 42,
       releaseId: 'rel-1',
       commitHash: 'abc123',

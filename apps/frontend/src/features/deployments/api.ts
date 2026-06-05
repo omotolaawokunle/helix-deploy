@@ -67,3 +67,14 @@ export async function cancelDeployment(deploymentId: string): Promise<Deployment
 
   return response.data.data
 }
+
+export async function approvePipelineRun(pipelineRunId: string): Promise<void> {
+  await api.post(`/api/v1/pipeline-runs/${pipelineRunId}/approve`)
+}
+
+export async function rejectPipelineRun(
+  pipelineRunId: string,
+  payload?: { reason?: string | null },
+): Promise<void> {
+  await api.post(`/api/v1/pipeline-runs/${pipelineRunId}/reject`, payload ?? {})
+}

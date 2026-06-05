@@ -33,6 +33,7 @@ class DeploymentResource extends JsonResource
             'commitHash' => $this->commit_hash,
             'commitMessage' => $this->commit_message,
             'releasePath' => $this->release_path,
+            'pipelineRunId' => $this->pipeline_run_id,
             'isRollbackable' => $this->isRollbackable(),
             'triggeredBy' => $this->whenLoaded('triggeredBy', fn () => [
                 'id' => (string) $this->triggeredBy?->getKey(),

@@ -16,6 +16,7 @@ use App\Modules\Servers\Controllers\ServerController;
 use App\Modules\Teams\Controllers\TeamController;
 use App\Modules\Teams\Controllers\TeamMemberController;
 use App\Modules\Pipelines\Controllers\PipelineController;
+use App\Modules\Pipelines\Controllers\PipelineRunController;
 use App\Modules\Deployments\Controllers\DeploymentController;
 use App\Modules\Deployments\Controllers\DeploymentStreamController;
 use App\Modules\CronJobs\Controllers\CronJobController;
@@ -72,6 +73,8 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::get('/pipelines/{pipeline}', [PipelineController::class, 'show']);
     Route::patch('/pipelines/{pipeline}', [PipelineController::class, 'update']);
     Route::delete('/pipelines/{pipeline}', [PipelineController::class, 'destroy']);
+    Route::post('/pipeline-runs/{pipelineRun}/approve', [PipelineRunController::class, 'approve']);
+    Route::post('/pipeline-runs/{pipelineRun}/reject', [PipelineRunController::class, 'reject']);
     Route::get('/organizations/{org}/projects', [ProjectController::class, 'index']);
     Route::post('/organizations/{org}/projects', [ProjectController::class, 'store']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);

@@ -71,6 +71,7 @@ export interface DeploymentDetail {
   commitHash: string | null
   commitMessage: string | null
   releasePath: string | null
+  pipelineRunId: string | null
   isRollbackable: boolean
   triggeredBy: DeploymentTriggeredBy | null
   startedAt: string | null

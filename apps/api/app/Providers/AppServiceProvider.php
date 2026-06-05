@@ -14,6 +14,14 @@ use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
 use App\Packages\Execution\DeploymentRunner;
 use App\Modules\Daemons\Models\SupervisorProcess;
 use App\Modules\Daemons\Policies\DaemonPolicy;
+use App\Modules\Pipelines\Contracts\PipelineStageHandlerInterface;
+use App\Modules\Pipelines\Services\PipelineStageHandlerRegistry;
+use App\Modules\Pipelines\StageHandlers\ApproveStageHandler;
+use App\Modules\Pipelines\StageHandlers\DeployStageHandler;
+use App\Modules\Pipelines\StageHandlers\HealthCheckStageHandler;
+use App\Modules\Pipelines\StageHandlers\MigrateStageHandler;
+use App\Modules\Pipelines\StageHandlers\NotifyStageHandler;
+use App\Modules\Pipelines\StageHandlers\ScriptStageHandler;
 use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use App\Modules\Teams\Services\TeamProjectVisibilityService;
 use App\Packages\Realtime\DeploymentStreamPublisher;
@@ -33,6 +41,19 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ExecutionRunnerInterface::class, DeploymentRunner::class);
         $this->app->singleton(DeploymentStreamPublisher::class);
         $this->app->singleton(TeamProjectVisibilityServiceInterface::class, TeamProjectVisibilityService::class);
+        $this->app->singleton(PipelineStageHandlerRegistry::class, function (): PipelineStageHandlerRegistry {
+            /** @var list<PipelineStageHandlerInterface> $handlers */
+            $handlers = [
+                new DeployStageHandler(),
+                new MigrateStageHandler(),
+                new HealthCheckStageHandler(),
+                new ScriptStageHandler(),
+                new ApproveStageHandler(),
+                new NotifyStageHandler(),
+            ];
+
+            return new PipelineStageHandlerRegistry($handlers);
+        });
     }
 
     /**

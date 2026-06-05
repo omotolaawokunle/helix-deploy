@@ -30,6 +30,8 @@ vi.mock('@/features/deployments/api', () => ({
   fetchDeployment: (...args: unknown[]) => fetchDeploymentMock(...args),
   rollbackDeployment: (...args: unknown[]) => rollbackDeploymentMock(...args),
   cancelDeployment: (...args: unknown[]) => cancelDeploymentMock(...args),
+  approvePipelineRun: vi.fn(),
+  rejectPipelineRun: vi.fn(),
 }))
 
 vi.mock('@/features/deployments/components/DeploymentLogViewer.vue', () => ({
@@ -52,6 +54,7 @@ function buildDeployment(overrides: Partial<DeploymentDetail> = {}): DeploymentD
     commitHash: 'abcdef1234567890',
     commitMessage: 'Ship feature',
     releasePath: '/var/www/example/releases/1',
+    pipelineRunId: null,
     isRollbackable: true,
     triggeredBy: { id: 'user-1', name: 'Alex' },
     startedAt: '2026-06-04T10:00:00Z',

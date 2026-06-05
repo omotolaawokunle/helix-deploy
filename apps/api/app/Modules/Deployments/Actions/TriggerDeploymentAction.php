@@ -13,6 +13,7 @@ use App\Modules\Deployments\Enums\TriggerType;
 use App\Modules\Deployments\Exceptions\ConcurrentDeploymentException;
 use App\Modules\Deployments\Jobs\RunDeploymentJob;
 use App\Modules\Deployments\Models\Deployment;
+use App\Modules\Pipelines\Actions\StartPipelineRunAction;
 use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Enums\SiteStatus;
 use App\Modules\Sites\Models\Site;
@@ -21,6 +22,11 @@ use InvalidArgumentException;
 
 class TriggerDeploymentAction
 {
+    public function __construct(
+        private readonly StartPipelineRunAction $startPipelineRunAction,
+    ) {
+    }
+
     public function execute(Site $site, User $actor, TriggerDeploymentDTO $dto): Deployment
     {
         if ($site->status !== SiteStatus::ACTIVE) {
@@ -34,6 +40,10 @@ class TriggerDeploymentAction
 
         if ($this->hasActiveDeployment((string) $site->getKey())) {
             throw new ConcurrentDeploymentException('A deployment is already in progress for this site.');
+        }
+
+        if ($site->pipeline_id !== null) {
+            return $this->startPipelineRunAction->execute($site, $actor, $dto);
         }
 
         if ($site->deploy_mode === DeployMode::GIT && ($site->repository_url === null || $site->repository_url === '')) {
@@ -78,6 +88,7 @@ class TriggerDeploymentAction
             ->whereIn('status', [
                 DeploymentStatus::PENDING->value,
                 DeploymentStatus::RUNNING->value,
+                DeploymentStatus::AWAITING_APPROVAL->value,
             ])
             ->exists();
     }

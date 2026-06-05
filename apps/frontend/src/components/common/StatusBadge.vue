@@ -65,6 +65,11 @@ const deploymentStatusMap: Record<string, StatusConfig> = {
     label: 'Cancelled',
     className: 'bg-muted text-muted-foreground',
   },
+  [DeploymentStatus.AwaitingApproval]: {
+    label: 'Awaiting approval',
+    className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200',
+    pulse: true,
+  },
 }
 
 const daemonStatusMap: Record<string, StatusConfig> = {

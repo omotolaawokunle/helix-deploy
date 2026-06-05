@@ -34,9 +34,10 @@ export enum DeployMode {
 export enum DeploymentStatus {
   Pending = 'pending',
   Running = 'running',
-  Succeeded = 'succeeded',
+  Succeeded = 'success',
   Failed = 'failed',
   Cancelled = 'cancelled',
+  AwaitingApproval = 'awaiting_approval',
 }
 
 export enum DeploymentType {

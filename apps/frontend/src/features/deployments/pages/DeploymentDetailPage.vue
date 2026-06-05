@@ -10,10 +10,13 @@ import BackLink from '@/components/layout/BackLink.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+  approvePipelineRun,
   cancelDeployment,
   fetchDeployment,
+  rejectPipelineRun,
   rollbackDeployment,
 } from '@/features/deployments/api'
+import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import DeploymentLogViewer from '@/features/deployments/components/DeploymentLogViewer.vue'
 import RollbackDialog from '@/features/deployments/components/RollbackDialog.vue'
 import type { DeploymentCompletedPayload, DeploymentDetail } from '@/features/deployments/types'
@@ -26,6 +29,7 @@ import { DeploymentStatus } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const deployment = ref<DeploymentDetail | null>(null)
 const isLoading = ref(true)
@@ -33,6 +37,8 @@ const loadError = ref<string | null>(null)
 const isRollbackDialogOpen = ref(false)
 const isSubmittingRollback = ref(false)
 const isCancelling = ref(false)
+const isApproving = ref(false)
+const isRejecting = ref(false)
 
 const deploymentId = computed(() => String(route.params.id))
 
@@ -60,6 +66,17 @@ const isProduction = computed(() => deployment.value?.site?.isProduction ?? fals
 
 const environmentName = computed(
   () => (isProduction.value ? 'production' : 'development'),
+)
+
+const isAwaitingApproval = computed(
+  () => deployment.value?.status === DeploymentStatus.AwaitingApproval,
+)
+
+const canApprove = computed(
+  () => isAwaitingApproval.value
+    && deployment.value?.pipelineRunId !== null
+    && deployment.value?.pipelineRunId !== undefined
+    && authStore.isAdmin,
 )
 
 async function loadDeployment(): Promise<void> {
@@ -116,6 +133,46 @@ async function handleCancel(): Promise<void> {
   }
 }
 
+async function handleApprove(): Promise<void> {
+  const pipelineRunId = deployment.value?.pipelineRunId
+
+  if (pipelineRunId === null || pipelineRunId === undefined) {
+    return
+  }
+
+  isApproving.value = true
+
+  try {
+    await approvePipelineRun(pipelineRunId)
+    await loadDeployment()
+    toast.success('Pipeline approved. Execution resumed.')
+  } catch {
+    toast.error('Unable to approve pipeline.')
+  } finally {
+    isApproving.value = false
+  }
+}
+
+async function handleReject(): Promise<void> {
+  const pipelineRunId = deployment.value?.pipelineRunId
+
+  if (pipelineRunId === null || pipelineRunId === undefined) {
+    return
+  }
+
+  isRejecting.value = true
+
+  try {
+    await rejectPipelineRun(pipelineRunId, { reason: 'Rejected from deployment detail.' })
+    await loadDeployment()
+    toast.success('Pipeline rejected.')
+  } catch {
+    toast.error('Unable to reject pipeline.')
+  } finally {
+    isRejecting.value = false
+  }
+}
+
 async function handleDeploymentCompleted(payload: DeploymentCompletedPayload): Promise<void> {
   if (deployment.value !== null) {
     deployment.value = {
@@ -156,6 +213,40 @@ onMounted(() => {
           :resource-name="deployment.site?.domain ?? 'site'"
           :is-production="true"
         />
+      </div>
+
+      <div
+        v-if="isAwaitingApproval"
+        class="panel flex flex-col gap-4 border-yellow-500/40 bg-yellow-500/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+        data-testid="approval-banner"
+      >
+        <div>
+          <p class="text-sm font-semibold text-foreground">
+            Approval required
+          </p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            This deployment is paused at a pipeline approval gate. An authorized approver must continue or reject it.
+          </p>
+        </div>
+        <div v-if="canApprove" class="flex shrink-0 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="reject-pipeline-button"
+            :disabled="isRejecting || isApproving"
+            @click="handleReject"
+          >
+            Reject
+          </Button>
+          <Button
+            type="button"
+            data-testid="approve-pipeline-button"
+            :disabled="isApproving || isRejecting"
+            @click="handleApprove"
+          >
+            Approve &amp; continue
+          </Button>
+        </div>
       </div>
 
       <div class="flex flex-col gap-4 border-b pb-8 lg:flex-row lg:items-start lg:justify-between">

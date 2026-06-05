@@ -38,6 +38,7 @@ function buildDeployment(overrides: Partial<DeploymentDetail> = {}): DeploymentD
     commitHash: 'abcdef123456',
     commitMessage: 'Fix deploy viewer',
     releasePath: null,
+    pipelineRunId: null,
     isRollbackable: false,
     triggeredBy: { id: 'user-1', name: 'Alex' },
     startedAt: '2026-06-04T10:00:00Z',
