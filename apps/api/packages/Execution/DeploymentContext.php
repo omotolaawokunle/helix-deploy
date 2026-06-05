@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Packages\Execution;
 
 use App\Modules\Deployments\Events\DeploymentLogLine;
+use App\Modules\BuildRunners\Models\BuildArtifact;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\DeploymentStep as DeploymentStepRecord;
 use App\Modules\Servers\Models\Server;
@@ -46,6 +47,8 @@ class DeploymentContext
     public ?string $executingStepName = null;
 
     public ?DeploymentCancellationService $cancellation = null;
+
+    public ?BuildArtifact $artifact = null;
 
     public function __construct(
         Deployment $deployment,

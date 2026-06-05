@@ -6,11 +6,15 @@ namespace App\Modules\Deployments\Actions;
 
 use App\Models\User;
 use App\Modules\Audit\Models\AuditLog;
+use App\Modules\BuildRunners\Enums\BuildStrategy;
+use App\Modules\BuildRunners\Services\BuildRunnerPool;
 use App\Modules\Deployments\DTOs\TriggerDeploymentDTO;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentType;
 use App\Modules\Deployments\Enums\TriggerType;
 use App\Modules\Deployments\Exceptions\ConcurrentDeploymentException;
+use App\Modules\Deployments\Exceptions\NoBuildRunnerAvailableException;
+use App\Modules\Deployments\Jobs\RunBuildJob;
 use App\Modules\Deployments\Jobs\RunDeploymentJob;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Pipelines\Actions\StartPipelineRunAction;
@@ -24,6 +28,7 @@ class TriggerDeploymentAction
 {
     public function __construct(
         private readonly StartPipelineRunAction $startPipelineRunAction,
+        private readonly BuildRunnerPool $buildRunnerPool,
     ) {
     }
 
@@ -50,6 +55,23 @@ class TriggerDeploymentAction
             throw new InvalidArgumentException('Site repository URL is required for git deployments.');
         }
 
+        $buildStrategy = $site->build_strategy ?? BuildStrategy::ON_SERVER;
+        $buildRunnerId = null;
+
+        if ($buildStrategy === BuildStrategy::RUNNER) {
+            $organization = $site->organization;
+            if ($organization === null) {
+                throw new InvalidArgumentException('Site organization is required for runner builds.');
+            }
+
+            $runner = $this->buildRunnerPool->acquire($site, $organization);
+            if ($runner === null) {
+                throw new NoBuildRunnerAvailableException();
+            }
+
+            $buildRunnerId = (string) $runner->getKey();
+        }
+
         $deployment = Deployment::query()->create([
             'id' => (string) Str::uuid(),
             'site_id' => (string) $site->getKey(),
@@ -59,12 +81,21 @@ class TriggerDeploymentAction
             'triggered_by' => (string) $actor->getKey(),
             'trigger_type' => TriggerType::MANUAL,
             'branch' => $dto->branch ?? $site->deploy_branch,
+            'build_strategy' => $buildStrategy->value,
+            'build_runner_id' => $buildRunnerId,
         ]);
 
-        RunDeploymentJob::dispatch(
-            deploymentId: (string) $deployment->getKey(),
-            actorId: (string) $actor->getKey(),
-        );
+        if ($buildStrategy === BuildStrategy::RUNNER) {
+            RunBuildJob::dispatch(
+                deploymentId: (string) $deployment->getKey(),
+                actorId: (string) $actor->getKey(),
+            );
+        } else {
+            RunDeploymentJob::dispatch(
+                deploymentId: (string) $deployment->getKey(),
+                actorId: (string) $actor->getKey(),
+            );
+        }
 
         AuditLog::record(
             operation: 'deployment.triggered',
@@ -74,6 +105,8 @@ class TriggerDeploymentAction
                 'siteId' => $site->getKey(),
                 'branch' => $deployment->branch,
                 'status' => DeploymentStatus::PENDING->value,
+                'buildStrategy' => $buildStrategy->value,
+                'buildRunnerId' => $buildRunnerId,
             ],
         );
 
@@ -87,6 +120,8 @@ class TriggerDeploymentAction
             ->where('site_id', $siteId)
             ->whereIn('status', [
                 DeploymentStatus::PENDING->value,
+                DeploymentStatus::BUILDING->value,
+                DeploymentStatus::BUILT->value,
                 DeploymentStatus::RUNNING->value,
                 DeploymentStatus::AWAITING_APPROVAL->value,
             ])

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Packages\Execution;
 
+use App\Modules\BuildRunners\Models\BuildArtifact;
 use App\Modules\BuildRunners\Models\BuildRunner;
 use App\Modules\Deployments\Events\DeploymentLogLine;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\DeploymentStep as DeploymentStepRecord;
 use App\Modules\Deployments\Services\DeploymentCancellationService;
+use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Models\Site;
 use App\Packages\Execution\Exceptions\DeploymentCancelledException;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
@@ -41,6 +43,14 @@ final class BuildContext
 
     public ?DeploymentCancellationService $cancellation = null;
 
+    public ?string $repositoryCloneUrl = null;
+
+    public ?SSHConnectionInterface $targetSsh = null;
+
+    public ?Server $targetServer = null;
+
+    public ?BuildArtifact $artifact = null;
+
     public function __construct(
         Deployment $deployment,
         Site $site,
@@ -62,10 +72,11 @@ final class BuildContext
         Site $site,
         BuildRunner $runner,
         SSHConnectionInterface $ssh,
+        ?string $repositoryCloneUrl = null,
     ): self {
         $deploymentId = (string) $deployment->getKey();
 
-        return new self(
+        $context = new self(
             deployment: $deployment,
             site: $site,
             runner: $runner,
@@ -73,6 +84,9 @@ final class BuildContext
             buildPath: '/builds/'.$deploymentId.'/',
             artifactPath: '/tmp/'.$deploymentId.'.tar.gz',
         );
+        $context->repositoryCloneUrl = $repositoryCloneUrl;
+
+        return $context;
     }
 
     public function log(string $line): void

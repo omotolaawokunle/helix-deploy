@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Deployments\Models;
 
+use App\Modules\Deployments\Enums\DeploymentStepPhase;
 use App\Modules\Deployments\Enums\DeploymentStepStatus;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -25,6 +26,7 @@ class DeploymentStep extends Model
     protected $fillable = [
         'deployment_id',
         'name',
+        'phase',
         'status',
         'output',
         'exit_code',
@@ -39,6 +41,7 @@ class DeploymentStep extends Model
     protected function casts(): array
     {
         return [
+            'phase' => DeploymentStepPhase::class,
             'status' => DeploymentStepStatus::class,
             'order' => 'integer',
             'exit_code' => 'integer',

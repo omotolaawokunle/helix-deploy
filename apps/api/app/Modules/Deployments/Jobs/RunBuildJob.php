@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Deployments\Jobs;
 
 use App\Modules\Audit\Models\AuditLog;
+use App\Modules\BuildRunners\Models\BuildRunner;
+use App\Modules\BuildRunners\Services\RunnerSlotManager;
 use App\Modules\Credentials\CredentialVault;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentStepPhase;
@@ -12,14 +14,16 @@ use App\Modules\Deployments\Enums\DeploymentStepStatus;
 use App\Modules\Deployments\Events\DeploymentCompleted;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\DeploymentStep;
-use App\Modules\Deployments\Models\Release;
-use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
-use App\Packages\Execution\DeploymentContext;
 use App\Modules\Deployments\Services\DeploymentCancellationService;
+use App\Modules\Sites\Services\Git\AuthenticatedGitCloneUrlResolver;
+use App\Packages\Artifacts\Exceptions\ArtifactCorruptedException;
+use App\Packages\Artifacts\Exceptions\ArtifactTransferFailedException;
+use App\Packages\Execution\BuildContext;
+use App\Packages\Execution\BuildStepRunner;
 use App\Packages\Execution\Exceptions\DeploymentCancelledException;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
-use App\Modules\Sites\Services\Git\AuthenticatedGitCloneUrlResolver;
 use App\Packages\Execution\PipelineBuilder;
+use App\Packages\SSH\BuildRunnerSSHManager;
 use App\Packages\SSH\SSHManager;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -28,7 +32,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Throwable;
 
-class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
+class RunBuildJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
 
@@ -40,8 +44,8 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
         public readonly string $deploymentId,
         public readonly string $actorId,
     ) {
-        $this->onQueue('deployments');
-        $this->timeout = (int) config('helixdeploy.deployment_timeout_minutes', 30) * 60;
+        $this->onQueue('builds');
+        $this->timeout = (int) config('helixdeploy.build_timeout_minutes', 30) * 60;
     }
 
     public function uniqueId(): string
@@ -58,165 +62,154 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
     public function handle(
         PipelineBuilder $pipelineBuilder,
-        ExecutionRunnerInterface $runner,
+        BuildStepRunner $buildStepRunner,
+        BuildRunnerSSHManager $buildRunnerSshManager,
         SSHManager $sshManager,
         CredentialVault $credentialVault,
         AuthenticatedGitCloneUrlResolver $cloneUrlResolver,
         DeploymentCancellationService $cancellationService,
+        RunnerSlotManager $slotManager,
     ): void {
         $deployment = Deployment::query()
             ->withoutGlobalScope('owned_by_organization')
-            ->with(['site.server', 'site.environment', 'buildArtifact'])
+            ->with(['site.server', 'site.organization', 'buildRunner'])
             ->whereKey($this->deploymentId)
             ->firstOrFail();
 
-        $allowedStatuses = $deployment->isRunnerBuild()
-            ? [DeploymentStatus::BUILT]
-            : [DeploymentStatus::PENDING];
-
-        if (! in_array($deployment->status, $allowedStatuses, true)) {
+        if ($deployment->status !== DeploymentStatus::PENDING || ! $deployment->isRunnerBuild()) {
             return;
         }
+
+        $runner = $deployment->buildRunner;
+        abort_if($runner === null, 422, 'Build runner is required for runner strategy deployments.');
+        abort_if($runner->credential_id === null, 422, 'Build runner SSH credential is required.');
 
         $site = $deployment->site;
         abort_if($site === null, 404, 'Deployment site not found.');
 
         $server = $site->server;
         abort_if($server === null, 404, 'Deployment server not found.');
-        abort_if($server->credential_id === null, 422, 'Server SSH credential is required for deployment.');
+        abort_if($server->credential_id === null, 422, 'Server SSH credential is required for artifact transfer.');
+
+        $slot = $slotManager->acquire($runner, (string) $deployment->getKey());
+        if ($slot === null) {
+            $this->release(30);
+
+            return;
+        }
 
         Auth::loginUsingId($this->actorId);
 
         $beforeState = $this->deploymentAuditState($deployment);
 
         $deployment->forceFill([
-            'status' => DeploymentStatus::RUNNING,
+            'status' => DeploymentStatus::BUILDING,
             'started_at' => now(),
         ])->save();
 
-        $deployment = $deployment->refresh();
-
         AuditLog::record(
-            operation: 'deployment.started',
-            resource: $deployment,
+            operation: 'deployment.build_started',
+            resource: $deployment->refresh(),
             beforeState: $beforeState,
             afterState: $this->deploymentAuditState($deployment),
         );
 
         $plan = $pipelineBuilder->buildPlan($site, $deployment);
-        $pipelineSteps = $plan->deploySteps;
 
-        foreach ($pipelineSteps as $order => $step) {
+        foreach ($plan->buildSteps as $order => $step) {
             DeploymentStep::query()->create([
                 'id' => (string) Str::uuid(),
                 'deployment_id' => (string) $deployment->getKey(),
                 'name' => $step->name(),
-                'phase' => DeploymentStepPhase::DEPLOY->value,
+                'phase' => DeploymentStepPhase::BUILD->value,
                 'status' => DeploymentStepStatus::PENDING,
                 'order' => $order,
             ]);
         }
 
-        $connection = $sshManager->connect($server, $credentialVault);
-        $connection->connect();
+        $runnerConnection = $buildRunnerSshManager->connect($runner, $credentialVault);
+        $runnerConnection->connect();
+
+        $targetConnection = $sshManager->connect($server, $credentialVault);
+        $targetConnection->connect();
 
         try {
             $organization = $site->organization;
             abort_if($organization === null, 404, 'Deployment organization not found.');
 
-            $repositoryCloneUrl = $cloneUrlResolver->resolve($site, $organization);
-
-            $ctx = DeploymentContext::forDeployment(
-                $deployment,
-                $site,
-                $server,
-                $connection,
-                repositoryCloneUrl: $repositoryCloneUrl,
+            $ctx = BuildContext::forDeployment(
+                deployment: $deployment,
+                site: $site,
+                runner: $runner,
+                ssh: $runnerConnection,
+                repositoryCloneUrl: $cloneUrlResolver->resolve($site, $organization),
             );
             $ctx->cancellation = $cancellationService;
-            $ctx->artifact = $deployment->buildArtifact;
+            $ctx->targetSsh = $targetConnection;
+            $ctx->targetServer = $server;
 
-            $runner->run($ctx, $pipelineSteps);
+            $buildStepRunner->run($ctx, $plan->buildSteps);
 
             $deployment->forceFill([
-                'status' => DeploymentStatus::SUCCESS,
-                'finished_at' => now(),
-                'release_path' => $ctx->releasePath,
-                'commit_hash' => $deployment->commit_hash ?? $ctx->deployment->commit_hash,
-                'commit_message' => $deployment->commit_message ?? $ctx->deployment->commit_message,
+                'status' => DeploymentStatus::BUILT,
+                'build_artifact_id' => $ctx->artifact !== null ? (string) $ctx->artifact->getKey() : $deployment->build_artifact_id,
             ])->save();
 
-            $deployment = $deployment->refresh();
-            $activeRelease = Release::query()
-                ->where('deployment_id', (string) $deployment->getKey())
-                ->where('is_active', true)
-                ->first();
-
             AuditLog::record(
-                operation: 'deployment.completed',
-                resource: $deployment,
+                operation: 'deployment.build_completed',
+                resource: $deployment->refresh(),
                 beforeState: $beforeState,
                 afterState: array_merge($this->deploymentAuditState($deployment), [
-                    'duration' => $deployment->duration(),
-                    'releasePath' => $deployment->release_path,
-                    'commitHash' => $deployment->commit_hash,
+                    'buildArtifactId' => $deployment->build_artifact_id,
                 ]),
             );
 
-            event(new DeploymentCompleted(
-                $deployment,
-                $activeRelease !== null ? (string) $activeRelease->getKey() : null,
-            ));
+            RunDeploymentJob::dispatch(
+                deploymentId: (string) $deployment->getKey(),
+                actorId: $this->actorId,
+            );
         } catch (DeploymentCancelledException) {
             if (isset($ctx)) {
                 $ctx->flushLog();
             }
 
-            $this->markRunningStepCancelled($deployment);
+            $this->markBuildFailed($deployment, 'Build cancelled.', $beforeState);
             event(new DeploymentCompleted($deployment->refresh()));
-        } catch (DeploymentStepFailedException $exception) {
+        } catch (DeploymentStepFailedException|ArtifactCorruptedException|ArtifactTransferFailedException $exception) {
             if (isset($ctx)) {
                 $ctx->flushLog();
             }
 
-            $this->markDeploymentFailed(
-                $deployment,
-                $exception->stepName,
-                $exception->result->exitCode,
-                $beforeState,
-            );
+            $this->markBuildFailed($deployment, $exception->getMessage(), $beforeState);
             event(new DeploymentCompleted($deployment->refresh()));
         } catch (Throwable $exception) {
-            $this->markDeploymentFailed($deployment, null, null, $beforeState, $exception->getMessage());
+            $this->markBuildFailed($deployment, $exception->getMessage(), $beforeState);
             event(new DeploymentCompleted($deployment->refresh()));
 
             throw $exception;
         } finally {
+            $slotManager->release($runner, $slot);
             $cancellationService->clear((string) $deployment->getKey());
-            $connection->disconnect();
+            $runnerConnection->disconnect();
+            $targetConnection->disconnect();
         }
-    }
-
-    private function markRunningStepCancelled(Deployment $deployment): void
-    {
-        DeploymentStep::query()
-            ->where('deployment_id', (string) $deployment->getKey())
-            ->where('status', DeploymentStepStatus::RUNNING->value)
-            ->update([
-                'status' => DeploymentStepStatus::FAILED->value,
-                'finished_at' => now(),
-            ]);
     }
 
     public function failed(Throwable $exception): void
     {
         $deployment = Deployment::query()
             ->withoutGlobalScope('owned_by_organization')
+            ->with('buildRunner')
             ->whereKey($this->deploymentId)
             ->first();
 
-        if ($deployment === null || $deployment->status !== DeploymentStatus::RUNNING) {
+        if ($deployment === null || ! in_array($deployment->status, [DeploymentStatus::BUILDING, DeploymentStatus::PENDING], true)) {
             return;
+        }
+
+        $runner = $deployment->buildRunner;
+        if ($runner instanceof BuildRunner) {
+            app(RunnerSlotManager::class)->releaseByBuildId($runner, (string) $deployment->getKey());
         }
 
         $beforeState = $this->deploymentAuditState($deployment);
@@ -226,17 +219,8 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
             'finished_at' => now(),
         ])->save();
 
-        DeploymentStep::query()
-            ->where('deployment_id', (string) $deployment->getKey())
-            ->where('status', DeploymentStepStatus::RUNNING->value)
-            ->update([
-                'status' => DeploymentStepStatus::FAILED->value,
-                'finished_at' => now(),
-                'output' => 'Job process failed: '.$exception->getMessage(),
-            ]);
-
         AuditLog::record(
-            operation: 'deployment.failed_unexpectedly',
+            operation: 'deployment.build_failed',
             resource: $deployment->refresh(),
             beforeState: $beforeState,
             afterState: array_merge($this->deploymentAuditState($deployment), [
@@ -250,27 +234,20 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
     /**
      * @param array<string, mixed> $beforeState
      */
-    private function markDeploymentFailed(
-        Deployment $deployment,
-        ?string $failedStepName,
-        ?int $exitCode,
-        array $beforeState,
-        ?string $errorMessage = null,
-    ): void {
+    private function markBuildFailed(Deployment $deployment, string $message, array $beforeState): void
+    {
         $deployment->forceFill([
             'status' => DeploymentStatus::FAILED,
             'finished_at' => now(),
         ])->save();
 
         AuditLog::record(
-            operation: 'deployment.failed',
+            operation: 'deployment.build_failed',
             resource: $deployment->refresh(),
             beforeState: $beforeState,
-            afterState: array_merge($this->deploymentAuditState($deployment), array_filter([
-                'step' => $failedStepName,
-                'exitCode' => $exitCode,
-                'error' => $errorMessage,
-            ])),
+            afterState: array_merge($this->deploymentAuditState($deployment), [
+                'error' => $message,
+            ]),
         );
     }
 
@@ -284,7 +261,8 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
             'siteId' => $deployment->site_id,
             'status' => $deployment->status->value,
             'branch' => $deployment->branch,
-            'commitHash' => $deployment->commit_hash,
+            'buildStrategy' => $deployment->build_strategy?->value,
+            'buildRunnerId' => $deployment->build_runner_id,
         ];
     }
 }

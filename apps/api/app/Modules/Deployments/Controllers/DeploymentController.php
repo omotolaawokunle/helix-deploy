@@ -10,6 +10,7 @@ use App\Modules\Deployments\Actions\RollbackDeploymentAction;
 use App\Modules\Deployments\Actions\TriggerDeploymentAction;
 use App\Modules\Deployments\DTOs\TriggerDeploymentDTO;
 use App\Modules\Deployments\Exceptions\ConcurrentDeploymentException;
+use App\Modules\Deployments\Exceptions\NoBuildRunnerAvailableException;
 use App\Modules\Deployments\Exceptions\ObserveModeServerException;
 use App\Modules\Deployments\Exceptions\ProductionRollbackReasonRequiredException;
 use App\Modules\Deployments\Models\Deployment;
@@ -47,6 +48,9 @@ class DeploymentController extends Controller
             );
         } catch (ConcurrentDeploymentException $exception) {
             return response()->json(['message' => $exception->getMessage()], 409);
+        } catch (NoBuildRunnerAvailableException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 503)
+                ->header('Retry-After', (string) $exception->retryAfterSeconds());
         } catch (InvalidArgumentException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         }

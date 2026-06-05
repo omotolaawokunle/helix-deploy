@@ -4,12 +4,23 @@ declare(strict_types=1);
 
 namespace App\Packages\Execution;
 
+use App\Modules\BuildRunners\Enums\BuildStrategy;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Models\Site;
 use App\Packages\Execution\Contracts\DeploymentStepInterface;
+use App\Packages\Execution\Steps\Build\BuildAssetsBuildStep;
+use App\Packages\Execution\Steps\Build\CleanupRunnerArtifactStep;
+use App\Packages\Execution\Steps\Build\CloneRepositoryBuildStep;
+use App\Packages\Execution\Steps\Build\CreateArtifactStep;
+use App\Packages\Execution\Steps\Build\InstallComposerDepsBuildStep;
+use App\Packages\Execution\Steps\Build\InstallNpmDepsBuildStep;
+use App\Packages\Execution\Steps\Build\PrepareBuildDirectoryStep;
+use App\Packages\Execution\Steps\Build\RunPreBuildScriptStep;
+use App\Packages\Execution\Steps\Build\TransferArtifactStep;
+use App\Packages\Execution\Steps\Build\VerifyBuildRunnerStep;
 use App\Packages\Execution\Steps\Docker\DockerBuildStep;
 use App\Packages\Execution\Steps\Docker\DockerCleanupStep;
 use App\Packages\Execution\Steps\Docker\DockerComposeUpStep;
@@ -43,6 +54,9 @@ use App\Packages\Execution\Steps\Shared\ReloadNginxStep;
 use App\Packages\Execution\Steps\Shared\SyncEnvVarsStep;
 use App\Packages\Execution\Steps\Shared\VerifyConnectionStep;
 use App\Packages\Execution\Steps\Static\BuildStaticAssetsStep;
+use App\Packages\Execution\Steps\RunnerDeploy\CleanupTargetArtifactStep;
+use App\Packages\Execution\Steps\RunnerDeploy\ExtractArtifactStep;
+use App\Packages\Execution\Steps\RunnerDeploy\VerifyTargetArtifactChecksumStep;
 use App\Packages\Execution\Steps\Shared\VerifyReleaseExistsStep;
 use InvalidArgumentException;
 
@@ -65,6 +79,136 @@ final class PipelineBuilder
      * @return list<DeploymentStepInterface>
      */
     public function build(Site $site, Deployment $deployment): array
+    {
+        return $this->buildPlan($site, $deployment)->deploySteps;
+    }
+
+    public function buildPlan(Site $site, Deployment $deployment): BuildPlan
+    {
+        $strategy = $deployment->build_strategy ?? $site->build_strategy;
+
+        if ($strategy === BuildStrategy::RUNNER) {
+            return new BuildPlan(
+                buildSteps: $this->buildRunnerBuildSteps($site),
+                deploySteps: $this->buildRunnerDeploySteps($site),
+            );
+        }
+
+        return new BuildPlan(
+            buildSteps: [],
+            deploySteps: $this->buildOnServerDeploySteps($site, $deployment),
+        );
+    }
+
+    /**
+     * @return list<\App\Packages\Execution\Contracts\BuildStepInterface>
+     */
+    private function buildRunnerBuildSteps(Site $site): array
+    {
+        if ($site->deploy_mode !== DeployMode::GIT) {
+            throw new InvalidArgumentException('Runner builds require git deploy mode.');
+        }
+
+        $shared = [
+            new VerifyBuildRunnerStep(),
+            new PrepareBuildDirectoryStep(),
+            new CloneRepositoryBuildStep(),
+        ];
+
+        $runtimeSteps = match ($site->runtime) {
+            Runtime::PHP => [
+                new InstallComposerDepsBuildStep(),
+                new InstallNpmDepsBuildStep(),
+                new BuildAssetsBuildStep(),
+            ],
+            Runtime::NODEJS => [
+                new InstallNpmDepsBuildStep(),
+                new BuildAssetsBuildStep(),
+            ],
+            Runtime::STATIC => [
+                new BuildAssetsBuildStep(),
+            ],
+            default => throw new InvalidArgumentException('Runner build is not supported for runtime: '.$site->runtime->value),
+        };
+
+        return array_merge($shared, $runtimeSteps, [
+            new RunPreBuildScriptStep(),
+            new CreateArtifactStep(),
+            new TransferArtifactStep(),
+            new CleanupRunnerArtifactStep(),
+        ]);
+    }
+
+    /**
+     * @return list<DeploymentStepInterface>
+     */
+    private function buildRunnerDeploySteps(Site $site): array
+    {
+        if ($site->runtime === Runtime::DOCKER) {
+            throw new InvalidArgumentException('Runner deploy pipeline is not supported for docker runtime.');
+        }
+
+        if ($site->deploy_mode !== DeployMode::GIT) {
+            throw new InvalidArgumentException('Runner deploy requires git deploy mode.');
+        }
+
+        $prefix = [
+            new VerifyConnectionStep(),
+            new CreateReleaseDirectoryStep(),
+            new VerifyTargetArtifactChecksumStep(),
+            new ExtractArtifactStep(),
+            new SyncEnvVarsStep(),
+            new LinkSharedDirectoriesStep(),
+        ];
+
+        $runtimeSteps = match ($site->runtime) {
+            Runtime::PHP => [
+                new RunMigrationsStep(),
+                new ClearCacheStep(),
+                new RunPreDeployScriptStep(),
+                new ActivateReleaseStep(),
+                new ReloadPHPFPMStep(),
+                new RestartWorkersStep(),
+                new RunPostDeployScriptStep(),
+            ],
+            Runtime::NODEJS => [
+                new RunPreDeployScriptStep(),
+                new ActivateReleaseStep(),
+                new ReloadPM2Step(),
+                new RunPostDeployScriptStep(),
+            ],
+            Runtime::PYTHON => [
+                new RunPreDeployScriptStep(),
+                new ActivateReleaseStep(),
+                new ReloadPythonProcessStep(),
+                new RunPostDeployScriptStep(),
+            ],
+            Runtime::GO => [
+                new RunPreDeployScriptStep(),
+                new ActivateReleaseStep(),
+                new ReplaceBinaryStep(),
+                new RestartGoServiceStep(),
+                new RunPostDeployScriptStep(),
+            ],
+            Runtime::STATIC => [
+                new RunPreDeployScriptStep(),
+                new ActivateReleaseStep(),
+                new ReloadNginxStep(),
+                new RunPostDeployScriptStep(),
+            ],
+            default => throw new InvalidArgumentException('Unsupported runtime for runner deploy: '.$site->runtime->value),
+        };
+
+        return array_merge($prefix, $runtimeSteps, [
+            new CleanupTargetArtifactStep(),
+            new CleanupOldReleasesStep(),
+        ]);
+    }
+
+    /**
+     * @return list<DeploymentStepInterface>
+     */
+    private function buildOnServerDeploySteps(Site $site, Deployment $deployment): array
     {
         if ($site->runtime === Runtime::DOCKER) {
             return $this->buildDockerPipeline($site);

@@ -6,15 +6,14 @@ namespace App\Packages\Execution;
 
 use App\Modules\Deployments\Enums\DeploymentStepPhase;
 use App\Modules\Deployments\Enums\DeploymentStepStatus;
-use App\Modules\Deployments\Services\DeploymentCancellationService;
 use App\Modules\Deployments\Events\DeploymentStepUpdated;
 use App\Modules\Deployments\Models\DeploymentStep as DeploymentStepRecord;
-use App\Packages\Execution\Contracts\DeploymentStepInterface;
-use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
+use App\Modules\Deployments\Services\DeploymentCancellationService;
+use App\Packages\Execution\Contracts\BuildStepInterface;
 use App\Packages\Execution\Exceptions\DeploymentCancelledException;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
 
-class DeploymentRunner implements ExecutionRunnerInterface
+final class BuildStepRunner
 {
     public function __construct(
         private readonly ?DeploymentCancellationService $cancellation = null,
@@ -22,35 +21,27 @@ class DeploymentRunner implements ExecutionRunnerInterface
     }
 
     /**
-     * @param list<DeploymentStepInterface> $steps
+     * @param list<BuildStepInterface> $steps
      */
-    public function run(DeploymentContext $ctx, array $steps, ?DeploymentRunCallbacks $callbacks = null): void
+    public function run(BuildContext $ctx, array $steps): void
     {
-        /** @var list<DeploymentStepInterface> $completed */
-        $completed = [];
-
         try {
             foreach ($steps as $index => $step) {
                 $this->assertNotCancelled($ctx);
 
                 if ($step->isSkippable($ctx)) {
                     $this->markStepSkipped($ctx, $step, $index);
-                    $callbacks?->stepSkipped($step, $index);
 
                     continue;
                 }
 
-                $callbacks?->stepStarting($step, $index);
                 $this->runStep($ctx, $step, $index);
-                $callbacks?->stepFinished($step, $index);
-                $completed[] = $step;
             }
         } catch (DeploymentCancelledException $exception) {
             $ctx->flushLog();
 
             throw $exception;
         } catch (DeploymentStepFailedException $exception) {
-            $this->rollbackCompleted($ctx, $completed);
             $ctx->flushLog();
 
             throw $exception;
@@ -59,7 +50,7 @@ class DeploymentRunner implements ExecutionRunnerInterface
         $ctx->flushLog();
     }
 
-    private function runStep(DeploymentContext $ctx, DeploymentStepInterface $step, int $order): void
+    private function runStep(BuildContext $ctx, BuildStepInterface $step, int $order): void
     {
         $record = $this->resolveStepRecord($ctx, $step, $order);
 
@@ -100,7 +91,7 @@ class DeploymentRunner implements ExecutionRunnerInterface
         }
     }
 
-    private function markStepSkipped(DeploymentContext $ctx, DeploymentStepInterface $step, int $order): void
+    private function markStepSkipped(BuildContext $ctx, BuildStepInterface $step, int $order): void
     {
         $record = $this->resolveStepRecord($ctx, $step, $order);
 
@@ -120,33 +111,23 @@ class DeploymentRunner implements ExecutionRunnerInterface
     }
 
     private function resolveStepRecord(
-        DeploymentContext $ctx,
-        DeploymentStepInterface $step,
+        BuildContext $ctx,
+        BuildStepInterface $step,
         int $order,
     ): ?DeploymentStepRecord {
         return $ctx->deployment->steps()
             ->where('name', $step->name())
-            ->where('phase', DeploymentStepPhase::DEPLOY->value)
+            ->where('phase', DeploymentStepPhase::BUILD->value)
             ->where('order', $order)
             ->first();
     }
 
-    private function emitStepUpdated(DeploymentContext $ctx, DeploymentStepRecord $record): void
+    private function emitStepUpdated(BuildContext $ctx, DeploymentStepRecord $record): void
     {
         event(new DeploymentStepUpdated($ctx->deployment, $record->refresh()));
     }
 
-    /**
-     * @param list<DeploymentStepInterface> $completed
-     */
-    private function rollbackCompleted(DeploymentContext $ctx, array $completed): void
-    {
-        foreach (array_reverse($completed) as $step) {
-            $step->rollback($ctx);
-        }
-    }
-
-    private function assertNotCancelled(DeploymentContext $ctx): void
+    private function assertNotCancelled(BuildContext $ctx): void
     {
         if ($this->cancellation === null) {
             return;
