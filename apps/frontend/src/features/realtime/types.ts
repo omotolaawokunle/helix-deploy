@@ -3,6 +3,7 @@ export const ORGANIZATION_BROADCAST_EVENTS = {
   serverConnectionFailed: 'server.connection_failed',
   serverHealthChanged: 'server.health_changed',
   serverDeleted: 'server.deleted',
+  serverInventoryDiscovered: 'server.inventory_discovered',
   deploymentStarted: 'deployment.started',
   deploymentCompleted: 'deployment.completed',
   deploymentFailed: 'deployment.failed',
@@ -25,6 +26,14 @@ export interface ServerConnectedPayload {
   os: string | null
   phpVersion: string | null
   nodeVersion: string | null
+}
+
+export interface ServerInventoryDiscoveredPayload {
+  serverId: string
+  installedServices: Record<string, { installed?: boolean }>
+  sitesCreated: number
+  sitesUpdated: number
+  discoveredSiteCount: number
 }
 
 export interface ServerConnectionFailedPayload {

@@ -78,6 +78,14 @@ const environmentSheetTitle = computed(
   () => (editingEnvironmentId.value === null ? 'Add environment' : 'Edit environment'),
 )
 
+const isProjectNameEmpty = computed(
+  () => (projectName.value ?? '').trim() === '',
+)
+
+const isEnvNameEmpty = computed(
+  () => (envName.value ?? '').trim() === '',
+)
+
 function environmentDisplayName(environment: EnvironmentRecord): string {
   return environment.label ?? environment.name
 }
@@ -94,7 +102,7 @@ async function load(): Promise<void> {
 
     project.value = projectData
     environments.value = environmentData
-    projectName.value = projectData.name
+    projectName.value = projectData.name ?? ''
     projectDescription.value = projectData.description ?? ''
   } catch {
     loadError.value = 'Unable to load this project.'
@@ -104,7 +112,9 @@ async function load(): Promise<void> {
 }
 
 async function saveProject(): Promise<void> {
-  if (project.value === null || projectName.value.trim() === '') {
+  const name = (projectName.value ?? '').trim()
+
+  if (project.value === null || name === '') {
     return
   }
 
@@ -112,11 +122,12 @@ async function saveProject(): Promise<void> {
 
   try {
     project.value = await updateProject(projectId.value, {
-      name: projectName.value.trim(),
-      description: projectDescription.value.trim() === ''
+      name,
+      description: (projectDescription.value ?? '').trim() === ''
         ? null
-        : projectDescription.value.trim(),
+        : (projectDescription.value ?? '').trim(),
     })
+    projectName.value = project.value.name ?? name
     toast.success('Project updated.')
   } catch {
     toast.error('Unable to update project.')
@@ -148,15 +159,17 @@ function applyEnvironmentPreset(name: string, label: string, isProduction: boole
 }
 
 async function saveEnvironment(): Promise<void> {
-  if (envName.value.trim() === '') {
+  const name = (envName.value ?? '').trim()
+
+  if (name === '') {
     return
   }
 
   isSavingEnvironment.value = true
 
   const payload = {
-    name: envName.value.trim().toLowerCase(),
-    label: envLabel.value.trim() === '' ? null : envLabel.value.trim(),
+    name: name.toLowerCase(),
+    label: (envLabel.value ?? '').trim() === '' ? null : (envLabel.value ?? '').trim(),
     isProduction: envIsProduction.value,
   }
 
@@ -318,7 +331,7 @@ onMounted(() => {
         <div class="flex justify-end">
           <Button
             type="button"
-            :disabled="isSavingProject || projectName.trim() === ''"
+            :disabled="isSavingProject || isProjectNameEmpty"
             @click="saveProject"
           >
             Save changes
@@ -499,7 +512,7 @@ onMounted(() => {
         <SheetFooter>
           <Button
             type="button"
-            :disabled="isSavingEnvironment || envName.trim() === ''"
+            :disabled="isSavingEnvironment || isEnvNameEmpty"
             @click="saveEnvironment"
           >
             Save environment

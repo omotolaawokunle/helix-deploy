@@ -54,7 +54,6 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     organizations.value = []
     currentRole.value = null
-    isInitialized.value = false
   }
 
   function markAuthInitialized(): void {
@@ -88,22 +87,35 @@ export const useAuthStore = defineStore('auth', () => {
     await resolveCurrentRole()
   }
 
+  let initPromise: Promise<void> | null = null
+
   async function init(): Promise<void> {
     if (isInitialized.value) {
       return
     }
 
-    isLoading.value = true
+    if (initPromise !== null) {
+      await initPromise
 
-    try {
-      const authUser = await fetchAuthUser()
-      await hydrateAuthenticatedUser(authUser)
-    } catch {
-      clearAuth()
-    } finally {
-      isLoading.value = false
-      isInitialized.value = true
+      return
     }
+
+    initPromise = (async (): Promise<void> => {
+      isLoading.value = true
+
+      try {
+        const authUser = await fetchAuthUser()
+        await hydrateAuthenticatedUser(authUser)
+      } catch {
+        clearAuth()
+      } finally {
+        isLoading.value = false
+        isInitialized.value = true
+        initPromise = null
+      }
+    })()
+
+    await initPromise
   }
 
   async function login(payload: LoginPayload): Promise<AuthUser> {

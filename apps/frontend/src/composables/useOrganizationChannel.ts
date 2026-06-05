@@ -9,6 +9,7 @@ import {
   type ServerConnectionFailedPayload,
   type ServerDeletedPayload,
   type ServerHealthChangedPayload,
+  type ServerInventoryDiscoveredPayload,
 } from '@/features/realtime/types'
 import { getEcho, initEcho } from '@/lib/echo'
 
@@ -17,6 +18,7 @@ export interface OrganizationChannelCallbacks {
   onServerConnectionFailed?: (payload: ServerConnectionFailedPayload) => void
   onServerHealthChanged?: (payload: ServerHealthChangedPayload) => void
   onServerDeleted?: (payload: ServerDeletedPayload) => void
+  onServerInventoryDiscovered?: (payload: ServerInventoryDiscoveredPayload) => void
   onDeploymentActivity?: () => void
   onBuildRunnerStatus?: (payload: BuildRunnerStatusPayload) => void
   onDaemonChanged?: (payload: DaemonChangedPayload) => void
@@ -87,6 +89,12 @@ export function useOrganizationChannel(
     if (callbacks.onServerDeleted !== undefined) {
       channel.listen(`.${ORGANIZATION_BROADCAST_EVENTS.serverDeleted}`, (payload: unknown) => {
         callbacks.onServerDeleted?.(payload as ServerDeletedPayload)
+      })
+    }
+
+    if (callbacks.onServerInventoryDiscovered !== undefined) {
+      channel.listen(`.${ORGANIZATION_BROADCAST_EVENTS.serverInventoryDiscovered}`, (payload: unknown) => {
+        callbacks.onServerInventoryDiscovered?.(payload as ServerInventoryDiscoveredPayload)
       })
     }
 

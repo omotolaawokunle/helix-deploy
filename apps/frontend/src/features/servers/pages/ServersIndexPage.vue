@@ -10,6 +10,7 @@ import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchServerGroups } from '@/features/servers/api'
 import ServerCard from '@/features/servers/components/ServerCard.vue'
+import PublicKeySuccessSheet from '@/features/servers/components/PublicKeySuccessSheet.vue'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
 import type { Server, ServerGroup } from '@/types'
 
@@ -26,6 +27,9 @@ const authStore = useAuthStore()
 const { orgId } = useActiveOrg()
 const isAddModalOpen = ref(false)
 const isGroupsSheetOpen = ref(false)
+const showPublicKeySheet = ref(false)
+const registeredPublicKey = ref('')
+const registeredSshUser = ref('deploy')
 const tagCatalog = ref<Server[]>([])
 const serverGroups = ref<ServerGroup[]>([])
 
@@ -105,6 +109,18 @@ const isEmpty = computed(
 
 async function handleGroupsChanged(): Promise<void> {
   await loadServerGroups()
+}
+
+function handleServerRegistered(payload: { publicKey: string | null; sshUser: string }): void {
+  const publicKey = payload.publicKey?.trim() ?? ''
+
+  if (publicKey === '') {
+    return
+  }
+
+  registeredPublicKey.value = publicKey
+  registeredSshUser.value = payload.sshUser
+  showPublicKeySheet.value = true
 }
 </script>
 
@@ -251,7 +267,17 @@ async function handleGroupsChanged(): Promise<void> {
       />
     </div>
 
-    <AddServerModal v-if="isAddModalOpen" v-model:open="isAddModalOpen" />
+    <AddServerModal
+      v-if="isAddModalOpen"
+      v-model:open="isAddModalOpen"
+      @registered="handleServerRegistered"
+    />
+
+    <PublicKeySuccessSheet
+      v-model:open="showPublicKeySheet"
+      :public-key="registeredPublicKey"
+      :ssh-user="registeredSshUser"
+    />
 
     <ManageServerGroupsSheet
       v-if="isGroupsSheetOpen"

@@ -186,7 +186,12 @@ const emit = defineEmits<{
           :variant="authMethod === 'generate' ? 'default' : 'outline'"
           @click="emit('update:authMethod', 'generate')"
         >
-          Generate SSH key pair
+          <span>
+            <span class="block font-medium">Generate SSH key pair</span>
+            <span class="mt-0.5 block text-xs font-normal opacity-80">
+              HelixDeploy creates the key; you add the public key to the server after registering
+            </span>
+          </span>
         </Button>
         <Button
           type="button"
@@ -194,9 +199,22 @@ const emit = defineEmits<{
           :variant="authMethod === 'import' ? 'default' : 'outline'"
           @click="emit('update:authMethod', 'import')"
         >
-          Use existing private key
+          <span>
+            <span class="block font-medium">Use existing private key</span>
+            <span class="mt-0.5 block text-xs font-normal opacity-80">
+              Paste a private key HelixDeploy already has access to on the server
+            </span>
+          </span>
         </Button>
       </div>
+      <p
+        v-if="authMethod === 'generate'"
+        class="text-xs text-muted-foreground"
+      >
+        After you register, a sheet will show the public key to add to
+        <span class="font-mono">{{ sshUser }}</span>@your-server:~/.ssh/authorized_keys.
+        The server stays in Connecting until the key is in place.
+      </p>
     </div>
 
     <div v-if="authMethod === 'import'" class="space-y-2">

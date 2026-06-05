@@ -13,6 +13,10 @@ interface PaginatedResponse<T> {
   data: T[]
 }
 
+interface ResourceResponse<T> {
+  data: T
+}
+
 export interface FetchServersOptions {
   tags?: string[]
   serverGroupId?: string
@@ -102,21 +106,21 @@ export async function deleteServer(serverId: string): Promise<void> {
 }
 
 export async function fetchServer(serverId: string): Promise<Server> {
-  const response = await api.get<Server>(`/api/v1/servers/${serverId}`)
+  const response = await api.get<ResourceResponse<Server>>(`/api/v1/servers/${serverId}`)
 
-  return response.data
+  return response.data.data
 }
 
 export async function registerServer(
   organizationId: string,
   payload: RegisterServerPayload,
 ): Promise<ServerRegistrationResponse> {
-  const response = await api.post<ServerRegistrationResponse>(
+  const response = await api.post<ResourceResponse<ServerRegistrationResponse>>(
     `/api/v1/organizations/${organizationId}/servers`,
     payload,
   )
 
-  return response.data
+  return response.data.data
 }
 
 export async function testServerConnection(serverId: string): Promise<void> {

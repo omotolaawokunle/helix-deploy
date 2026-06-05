@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { PlusIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import EmptyState from '@/components/common/EmptyState.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,6 +34,7 @@ import {
 } from '@/components/ui/table'
 import { createSite, fetchServerSites, type CreateSitePayload } from '@/features/sites/api'
 import { extractFieldErrors } from '@/lib/validation-errors'
+import { useRealtimeStore } from '@/stores/useRealtimeStore'
 import type { Site } from '@/types'
 
 interface Props {
@@ -40,6 +42,8 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const realtimeStore = useRealtimeStore()
 
 const sites = ref<Site[]>([])
 const isLoading = ref(true)
@@ -140,6 +144,16 @@ watch(isAddOpen, (open) => {
   }
 })
 
+watch(
+  () => realtimeStore.serverInventoryRefreshId,
+  (serverId) => {
+    if (serverId === props.serverId) {
+      void loadSites()
+      realtimeStore.consumeServerInventoryRefresh(props.serverId)
+    }
+  },
+)
+
 onMounted(() => {
   void loadSites()
 })
@@ -160,7 +174,7 @@ onMounted(() => {
     <EmptyState
       v-if="!isLoading && sites.length === 0"
       title="No sites on this server"
-      description="Add a site to start deploying applications to this server."
+      description="HelixDeploy scans nginx after SSH connects. Add a site manually if nothing was detected."
       :icon="PlusIcon"
       @action="openAddSite"
     >
@@ -197,8 +211,8 @@ onMounted(() => {
             <TableCell class="capitalize">
               {{ site.runtime }}
             </TableCell>
-            <TableCell class="capitalize">
-              {{ site.status }}
+            <TableCell>
+              <StatusBadge :status="site.status" type="site" />
             </TableCell>
           </TableRow>
         </TableBody>

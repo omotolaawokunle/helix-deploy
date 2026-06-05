@@ -10,6 +10,7 @@ import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchBuildRunners } from '@/features/build-runners/api'
 import BuildRunnerCard from '@/features/build-runners/components/BuildRunnerCard.vue'
+import PublicKeySuccessSheet from '@/features/servers/components/PublicKeySuccessSheet.vue'
 import type { BuildRunner } from '@/features/build-runners/types'
 import { useRealtimeStore } from '@/stores/useRealtimeStore'
 
@@ -27,6 +28,9 @@ const hasFetched = ref(false)
 const loadError = ref<string | null>(null)
 const searchQuery = ref('')
 const isAddModalOpen = ref(false)
+const showPublicKeySheet = ref(false)
+const registeredPublicKey = ref('')
+const registeredSshUser = ref('deploy')
 
 const isSearchActive = computed(() => searchQuery.value.trim() !== '')
 
@@ -78,8 +82,18 @@ async function handleSearchSubmit(): Promise<void> {
   await loadRunners()
 }
 
-async function handleRegistered(): Promise<void> {
+async function handleRegistered(payload: { publicKey: string | null; sshUser: string }): Promise<void> {
   await loadRunners()
+
+  const publicKey = payload.publicKey?.trim() ?? ''
+
+  if (publicKey === '') {
+    return
+  }
+
+  registeredPublicKey.value = publicKey
+  registeredSshUser.value = payload.sshUser
+  showPublicKeySheet.value = true
 }
 </script>
 
@@ -172,6 +186,14 @@ async function handleRegistered(): Promise<void> {
       v-if="isAddModalOpen"
       v-model:open="isAddModalOpen"
       @registered="handleRegistered"
+    />
+
+    <PublicKeySuccessSheet
+      v-model:open="showPublicKeySheet"
+      :public-key="registeredPublicKey"
+      :ssh-user="registeredSshUser"
+      title="Build runner registered"
+      description="Add this public key to the build runner. HelixDeploy will verify the connection automatically once the key is in place."
     />
   </div>
 </template>

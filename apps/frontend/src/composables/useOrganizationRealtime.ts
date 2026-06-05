@@ -48,7 +48,32 @@ export function useOrganizationRealtime(): void {
       if (wasConnecting && onServerDetail) {
         const hostname = previous?.hostname ?? 'Server'
         toast.success(`${hostname} is online.`, {
-          description: 'SSH connection verified and server details updated.',
+          description: 'SSH verified. Scanning installed services and existing sites.',
+        })
+      }
+    },
+    onServerInventoryDiscovered: (payload) => {
+      serversStore.applyServerUpdate({
+        serverId: payload.serverId,
+        installedServices: payload.installedServices,
+      })
+      realtimeStore.signalServerInventoryRefresh(payload.serverId)
+
+      const onServerDetail = route.name === 'server-detail' && route.params.id === payload.serverId
+
+      if (!onServerDetail) {
+        return
+      }
+
+      const siteSummary = payload.sitesCreated + payload.sitesUpdated
+
+      if (siteSummary > 0) {
+        toast.success('Server inventory updated.', {
+          description: `${siteSummary} site${siteSummary === 1 ? '' : 's'} synced from the server.`,
+        })
+      } else if (payload.discoveredSiteCount === 0) {
+        toast.message('Server inventory updated.', {
+          description: 'Installed services detected. No nginx sites found to import.',
         })
       }
     },

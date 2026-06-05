@@ -39,10 +39,23 @@ it('verify job success updates status versions and broadcasts server connected',
     $manager = \Mockery::mock(SSHManager::class);
     $manager->shouldReceive('connectAndVerify')->once()->andReturn($connection);
 
+    $syncInventory = \Mockery::mock(\App\Modules\Servers\Actions\SyncServerInventoryAction::class);
+    $syncInventory->shouldReceive('execute')
+        ->once()
+        ->andReturn([
+            'installedServices' => [
+                'nginx' => ['installed' => true, 'source' => 'introspection'],
+            ],
+            'sitesCreated' => 1,
+            'sitesUpdated' => 0,
+            'discoveredSiteCount' => 1,
+        ]);
+
     $job->handle(
         $manager,
         app(\App\Modules\Credentials\CredentialVault::class),
         app(\App\Modules\Servers\Actions\ReportFingerprintMismatchAction::class),
+        $syncInventory,
     );
 
     $server->refresh();
@@ -75,6 +88,7 @@ it('verify job fingerprint mismatch marks disconnected broadcasts mismatch and d
         $manager,
         app(\App\Modules\Credentials\CredentialVault::class),
         app(\App\Modules\Servers\Actions\ReportFingerprintMismatchAction::class),
+        \Mockery::mock(\App\Modules\Servers\Actions\SyncServerInventoryAction::class),
     );
 
     $server->refresh();
@@ -98,10 +112,11 @@ it('verify job uses expected retry backoff for network failures', function (): v
         ->once()
         ->andThrow(new \RuntimeException('network unreachable'));
 
-    expect(fn () => $job->handle(
+    expect(fn () =>     $job->handle(
         $manager,
         app(\App\Modules\Credentials\CredentialVault::class),
         app(\App\Modules\Servers\Actions\ReportFingerprintMismatchAction::class),
+        app(\App\Modules\Servers\Actions\SyncServerInventoryAction::class),
     ))->toThrow(\RuntimeException::class);
     expect($job->tries)->toBe(5);
     expect($job->backoff())->toBe([30, 60, 120, 300, 600]);

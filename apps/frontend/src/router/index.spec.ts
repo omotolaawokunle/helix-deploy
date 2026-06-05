@@ -31,6 +31,16 @@ describe('router auth guards', () => {
   it('redirects unauthenticated user to /login', async () => {
     const authStore = useAuthStore(pinia)
     authStore.clearAuth()
+
+    await router.push('/')
+
+    expect(fetchAuthUser).toHaveBeenCalledTimes(1)
+    expect(router.currentRoute.value.path).toBe('/login')
+  })
+
+  it('redirects unauthenticated user to /login from dashboard', async () => {
+    const authStore = useAuthStore(pinia)
+    authStore.clearAuth()
     authStore.markAuthInitialized()
 
     await router.push('/dashboard')

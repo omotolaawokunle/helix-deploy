@@ -36,7 +36,12 @@ api.interceptors.response.use(
     }
 
     if (status === 401 && unauthorizedHandler) {
-      await unauthorizedHandler();
+      const requestUrl = config?.url ?? "";
+      const isAuthBootstrapRequest = requestUrl.includes("/api/v1/auth/user");
+
+      if (!isAuthBootstrapRequest) {
+        await unauthorizedHandler();
+      }
     }
 
     return Promise.reject(error);

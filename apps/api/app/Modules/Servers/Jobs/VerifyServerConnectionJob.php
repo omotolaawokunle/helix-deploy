@@ -6,6 +6,7 @@ namespace App\Modules\Servers\Jobs;
 
 use App\Modules\Monitoring\Models\InfrastructureEvent;
 use App\Modules\Servers\Actions\ReportFingerprintMismatchAction;
+use App\Modules\Servers\Actions\SyncServerInventoryAction;
 use App\Modules\Servers\Enums\ServerStatus;
 use App\Modules\Servers\Events\ServerConnected;
 use App\Modules\Servers\Events\ServerConnectionFailed;
@@ -42,6 +43,7 @@ class VerifyServerConnectionJob implements ShouldQueue
         SSHManager $sshManager,
         CredentialVault $vault,
         ReportFingerprintMismatchAction $reportFingerprintMismatch,
+        SyncServerInventoryAction $syncServerInventory,
     ): void
     {
         $server = $this->loadServer();
@@ -56,7 +58,9 @@ class VerifyServerConnectionJob implements ShouldQueue
             )->throw();
 
             $parsedOutput = $this->parseProbeOutput($probe->stdout);
+            $inventory = $syncServerInventory->execute($server, $connection);
 
+            $server->refresh();
             $server->forceFill([
                 'status' => ServerStatus::ACTIVE->value,
                 'os' => $parsedOutput['os'],
@@ -74,6 +78,9 @@ class VerifyServerConnectionJob implements ShouldQueue
                     'os' => $parsedOutput['os'],
                     'phpVersion' => $parsedOutput['phpVersion'],
                     'nodeVersion' => $parsedOutput['nodeVersion'],
+                    'discoveredSiteCount' => $inventory['discoveredSiteCount'],
+                    'sitesCreated' => $inventory['sitesCreated'],
+                    'sitesUpdated' => $inventory['sitesUpdated'],
                 ],
                 'created_at' => now(),
             ]);

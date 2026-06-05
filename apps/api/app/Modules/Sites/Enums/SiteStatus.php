@@ -8,5 +8,6 @@ enum SiteStatus: string
 {
     case PROVISIONING = 'provisioning';
     case ACTIVE = 'active';
+    case DISCOVERED = 'discovered';
     case FAILED = 'failed';
 }

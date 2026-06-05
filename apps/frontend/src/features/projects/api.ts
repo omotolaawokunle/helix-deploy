@@ -12,6 +12,10 @@ interface PaginatedResponse<T> {
   data: T[]
 }
 
+interface ResourceResponse<T> {
+  data: T
+}
+
 export async function fetchProjects(organizationId: string): Promise<ProjectRecord[]> {
   const response = await api.get<PaginatedResponse<ProjectRecord>>(
     `/api/v1/organizations/${organizationId}/projects`,
@@ -22,30 +26,33 @@ export async function fetchProjects(organizationId: string): Promise<ProjectReco
 }
 
 export async function fetchProject(projectId: string): Promise<ProjectRecord> {
-  const response = await api.get<ProjectRecord>(`/api/v1/projects/${projectId}`)
+  const response = await api.get<ResourceResponse<ProjectRecord>>(`/api/v1/projects/${projectId}`)
 
-  return response.data
+  return response.data.data
 }
 
 export async function createProject(
   organizationId: string,
   payload: CreateProjectPayload,
 ): Promise<ProjectRecord> {
-  const response = await api.post<ProjectRecord>(
+  const response = await api.post<ResourceResponse<ProjectRecord>>(
     `/api/v1/organizations/${organizationId}/projects`,
     payload,
   )
 
-  return response.data
+  return response.data.data
 }
 
 export async function updateProject(
   projectId: string,
   payload: UpdateProjectPayload,
 ): Promise<ProjectRecord> {
-  const response = await api.patch<ProjectRecord>(`/api/v1/projects/${projectId}`, payload)
+  const response = await api.patch<ResourceResponse<ProjectRecord>>(
+    `/api/v1/projects/${projectId}`,
+    payload,
+  )
 
-  return response.data
+  return response.data.data
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
@@ -65,12 +72,12 @@ export async function createEnvironment(
   projectId: string,
   payload: CreateEnvironmentPayload,
 ): Promise<EnvironmentRecord> {
-  const response = await api.post<EnvironmentRecord>(
+  const response = await api.post<ResourceResponse<EnvironmentRecord>>(
     `/api/v1/projects/${projectId}/environments`,
     payload,
   )
 
-  return response.data
+  return response.data.data
 }
 
 export async function updateEnvironment(
@@ -78,12 +85,12 @@ export async function updateEnvironment(
   environmentId: string,
   payload: UpdateEnvironmentPayload,
 ): Promise<EnvironmentRecord> {
-  const response = await api.patch<EnvironmentRecord>(
+  const response = await api.patch<ResourceResponse<EnvironmentRecord>>(
     `/api/v1/projects/${projectId}/environments/${environmentId}`,
     payload,
   )
 
-  return response.data
+  return response.data.data
 }
 
 export async function deleteEnvironment(projectId: string, environmentId: string): Promise<void> {

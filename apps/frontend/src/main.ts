@@ -11,11 +11,15 @@ initThemePreference()
 
 const app = createApp(App)
 
+const guestPaths = new Set(['/login', '/register', '/verify-email', '/accept-invitation'])
+
 setApiUnauthorizedHandler(async () => {
   const authStore = useAuthStore(pinia)
   authStore.clearAuth()
 
-  if (router.currentRoute.value.path !== '/login') {
+  const currentPath = router.currentRoute.value.path
+
+  if (!guestPaths.has(currentPath)) {
     await router.push('/login')
   }
 })

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
-import { AlertTriangleIcon } from '@lucide/vue'
+import { AlertTriangleIcon, ImportIcon, ServerIcon } from '@lucide/vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import {
   Sheet,
   SheetBody,
@@ -14,7 +13,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import PublicKeySuccessSheet from '@/features/servers/components/PublicKeySuccessSheet.vue'
 import ServerFormFields from '@/features/servers/components/ServerFormFields.vue'
 import type { CloudInstanceSelection } from '@/features/servers/components/CloudProviderImportPanel.vue'
 import {
@@ -39,6 +37,7 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
+  registered: [payload: { publicKey: string | null; sshUser: string }]
 }>()
 
 const serversStore = useServersStore()
@@ -67,9 +66,6 @@ const managementMode = ref<ManagementMode>(ManagementMode.Managed)
 const projects = ref<Array<{ id: string; name: string }>>([])
 const environments = ref<Array<{ id: string; name: string }>>([])
 
-const showPublicKeySheet = ref(false)
-const registeredPublicKey = ref('')
-
 const providerOptions = [
   { value: ServerProvider.Hetzner, label: 'Hetzner' },
   { value: ServerProvider.DigitalOcean, label: 'DigitalOcean' },
@@ -79,6 +75,13 @@ const providerOptions = [
 ]
 
 const isImportTab = computed(() => activeTab.value === 'import')
+const submitButtonLabel = computed((): string => {
+  if (isSubmitting.value) {
+    return isImportTab.value ? 'Importing…' : 'Registering…'
+  }
+
+  return isImportTab.value ? 'Import server' : 'Register server'
+})
 const isCloudProviderSelected = computed(() =>
   [ServerProvider.Hetzner, ServerProvider.DigitalOcean, ServerProvider.Aws].includes(provider.value),
 )
@@ -100,6 +103,20 @@ watch(projectId, async (id) => {
   environmentId.value = undefined
   environments.value = id ? await fetchProjectEnvironments(id) : []
 })
+
+watch(activeTab, (tab, previousTab) => {
+  if (tab === 'import' && previousTab === 'new') {
+    authMethod.value = 'import'
+  } else if (tab === 'new' && previousTab === 'import') {
+    authMethod.value = 'generate'
+  }
+})
+
+function managementModeCardClass(mode: ManagementMode): string {
+  return managementMode.value === mode
+    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+    : 'border-border'
+}
 
 function resetForm(): void {
   hostname.value = ''
@@ -167,13 +184,12 @@ async function handleSubmit(): Promise<void> {
     })
 
     await serversStore.fetch()
+    emit('registered', {
+      publicKey: result.publicKey,
+      sshUser: sshUser.value,
+    })
     emit('update:open', false)
     resetForm()
-
-    if (result.publicKey !== null && result.publicKey !== '') {
-      registeredPublicKey.value = result.publicKey
-      showPublicKeySheet.value = true
-    }
   } catch (error: unknown) {
     const fieldErrors = extractFieldErrors(error)
 
@@ -209,12 +225,20 @@ async function handleSubmit(): Promise<void> {
         />
 
         <Tabs v-model="activeTab" class="w-full">
-          <TabsList class="grid h-auto w-full grid-cols-2">
-            <TabsTrigger value="new" class="min-h-9">
-              New Server
+          <TabsList class="grid h-10 w-full grid-cols-2 gap-1 p-1">
+            <TabsTrigger
+              value="new"
+              class="min-h-8 gap-1.5 data-[state=active]:bg-popover data-[state=active]:shadow-sm"
+            >
+              <ServerIcon class="size-4 shrink-0" aria-hidden="true" />
+              New server
             </TabsTrigger>
-            <TabsTrigger value="import" class="min-h-9">
-              Import Existing
+            <TabsTrigger
+              value="import"
+              class="min-h-8 gap-1.5 data-[state=active]:bg-popover data-[state=active]:shadow-sm"
+            >
+              <ImportIcon class="size-4 shrink-0" aria-hidden="true" />
+              Import existing
             </TabsTrigger>
           </TabsList>
 
@@ -236,69 +260,68 @@ async function handleSubmit(): Promise<void> {
             />
           </TabsContent>
 
-          <TabsContent value="import" class="mt-4 space-y-4">
-            <ServerFormFields
-              v-model:hostname="hostname"
-              v-model:ip-address="ipAddress"
-              v-model:ssh-port="sshPort"
-              v-model:ssh-user="sshUser"
-              v-model:provider="provider"
-              v-model:project-id="projectId"
-              v-model:environment-id="environmentId"
-              v-model:auth-method="authMethod"
-              v-model:private-key="privateKey"
-              v-model:tags="tagsInput"
-              :projects="projects"
-              :environments="environments"
-              :provider-options="providerOptions"
-            />
+          <TabsContent value="import" class="mt-4 space-y-6">
+            <section class="space-y-3">
+              <div>
+                <h3 class="text-sm font-medium text-foreground">
+                  How should HelixDeploy use this server?
+                </h3>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  Choose a management mode before entering connection details.
+                </p>
+              </div>
 
-            <div class="space-y-3">
-              <Label>Management mode</Label>
-              <div class="space-y-2">
+              <div class="space-y-2" role="radiogroup" aria-label="Management mode">
                 <label
-                  class="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
+                  class="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                  :class="managementModeCardClass(ManagementMode.Managed)"
                 >
                   <input
                     v-model="managementMode"
                     type="radio"
+                    name="management-mode"
                     class="mt-1 border-input text-primary"
                     :value="ManagementMode.Managed"
                   >
                   <span>
                     <span class="block text-sm font-medium text-foreground">Managed</span>
                     <span class="text-xs text-muted-foreground">
-                      HelixDeploy controls deployments
+                      HelixDeploy runs deployments on this server
                     </span>
                   </span>
                 </label>
                 <label
-                  class="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
+                  class="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                  :class="managementModeCardClass(ManagementMode.Observe)"
                 >
                   <input
                     v-model="managementMode"
                     type="radio"
+                    name="management-mode"
                     class="mt-1 border-input text-primary"
                     :value="ManagementMode.Observe"
                   >
                   <span>
                     <span class="block text-sm font-medium text-foreground">Observe</span>
                     <span class="text-xs text-muted-foreground">
-                      Register for visibility only; keep existing workflow
+                      Monitor only — keep your existing deploy workflow
                     </span>
                   </span>
                 </label>
               </div>
-            </div>
+            </section>
 
             <Alert
               v-if="managementMode === ManagementMode.Managed"
-              variant="destructive"
+              class="border-amber-500/30 bg-amber-500/10 text-foreground *:data-[slot=alert-description]:text-muted-foreground"
+              data-testid="managed-import-warning"
             >
-              <AlertTriangleIcon class="size-4" />
-              <AlertTitle>Managed import</AlertTitle>
+              <AlertTriangleIcon class="text-amber-600 dark:text-amber-400" />
+              <AlertTitle>Disable existing deploy workflows</AlertTitle>
               <AlertDescription>
-                Make sure to disable any existing GitHub Actions deploy workflows to avoid conflicts.
+                If this server already deploys via GitHub Actions or another CI pipeline,
+                turn those workflows off before importing as Managed. Otherwise two systems
+                may deploy at the same time.
               </AlertDescription>
             </Alert>
 
@@ -308,18 +331,39 @@ async function handleSubmit(): Promise<void> {
               data-testid="observe-mode-guide"
             >
               <h3 class="text-sm font-medium text-foreground">
-                Observe-mode setup
+                Observe mode
               </h3>
               <p class="mt-1 text-xs text-muted-foreground">
-                HelixDeploy monitors this server without taking over deployments. Follow these steps:
+                HelixDeploy monitors health and inventory without running deploy commands.
               </p>
-              <ol class="mt-3 list-decimal space-y-2 pl-4 text-sm text-foreground">
-                <li>Register the server with SSH credentials HelixDeploy can use for health checks.</li>
-                <li>Keep your existing CI/CD pipeline — HelixDeploy will not run deploy commands.</li>
-                <li>Assign the server to a project and environment for dashboard visibility.</li>
-                <li>When ready to migrate, switch the server to Managed mode from server settings.</li>
+              <ol class="mt-3 list-decimal space-y-1.5 pl-4 text-sm text-foreground">
+                <li>Provide SSH credentials HelixDeploy can use for health checks.</li>
+                <li>Keep your existing CI/CD pipeline unchanged.</li>
+                <li>Assign a project and environment for dashboard visibility.</li>
+                <li>Switch to Managed mode later when you are ready to migrate.</li>
               </ol>
             </div>
+
+            <section class="space-y-4">
+              <h2 class="section-label">
+                Connection details
+              </h2>
+              <ServerFormFields
+                v-model:hostname="hostname"
+                v-model:ip-address="ipAddress"
+                v-model:ssh-port="sshPort"
+                v-model:ssh-user="sshUser"
+                v-model:provider="provider"
+                v-model:project-id="projectId"
+                v-model:environment-id="environmentId"
+                v-model:auth-method="authMethod"
+                v-model:private-key="privateKey"
+                v-model:tags="tagsInput"
+                :projects="projects"
+                :environments="environments"
+                :provider-options="providerOptions"
+              />
+            </section>
           </TabsContent>
         </Tabs>
 
@@ -341,14 +385,9 @@ async function handleSubmit(): Promise<void> {
           :disabled="isSubmitting"
           @click="handleSubmit"
         >
-          {{ isSubmitting ? 'Registering…' : 'Register server' }}
+          {{ submitButtonLabel }}
         </Button>
       </SheetFooter>
     </SheetContent>
   </Sheet>
-
-  <PublicKeySuccessSheet
-    v-model:open="showPublicKeySheet"
-    :public-key="registeredPublicKey"
-  />
 </template>

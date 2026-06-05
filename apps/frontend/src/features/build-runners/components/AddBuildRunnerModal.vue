@@ -20,7 +20,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
-import PublicKeySuccessSheet from '@/features/servers/components/PublicKeySuccessSheet.vue'
 import { registerBuildRunner } from '@/features/build-runners/api'
 import type { BuildRunnerRuntime } from '@/features/build-runners/types'
 import { fetchProjects } from '@/features/servers/api'
@@ -35,7 +34,7 @@ defineProps<Props>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  registered: []
+  registered: [payload: { publicKey: string | null; sshUser: string }]
 }>()
 
 const { orgId } = useActiveOrg()
@@ -54,8 +53,6 @@ const supportedRuntimes = ref<BuildRunnerRuntime[]>(['php'])
 const projects = ref<Array<{ id: string; name: string }>>([])
 const isSubmitting = ref(false)
 const apiError = ref<string | null>(null)
-const showPublicKeySheet = ref(false)
-const registeredPublicKey = ref('')
 
 const runtimeOptions: Array<{ value: BuildRunnerRuntime; label: string }> = [
   { value: 'php', label: 'PHP' },
@@ -143,14 +140,11 @@ async function handleSubmit(): Promise<void> {
       projectId: projectId.value ?? null,
     })
 
+    emit('registered', {
+      publicKey: result.publicKey,
+      sshUser: sshUser.value.trim(),
+    })
     emit('update:open', false)
-    emit('registered')
-
-    if (result.publicKey !== null && result.publicKey !== '') {
-      registeredPublicKey.value = result.publicKey
-      showPublicKeySheet.value = true
-    }
-
     resetForm()
   } catch (error) {
     const fieldErrors = extractFieldErrors(error)
@@ -322,11 +316,4 @@ function handleOpenChange(value: boolean): void {
       </SheetFooter>
     </SheetContent>
   </Sheet>
-
-  <PublicKeySuccessSheet
-    v-model:open="showPublicKeySheet"
-    :public-key="registeredPublicKey"
-    title="Build runner registered"
-    description="Your build runner has been registered. Add this SSH public key to the runner's authorized_keys file to complete setup."
-  />
 </template>

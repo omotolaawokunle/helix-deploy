@@ -62,31 +62,34 @@ class SSHConnection implements SSHConnectionInterface
         $buffer = '';
         $start = hrtime(true);
 
-        $stdout = (string) $this->ssh->exec($command, function (string $chunk) use ($lineCallback, &$buffer): void {
-            if ($lineCallback === null) {
-                return;
-            }
+        if ($lineCallback === null) {
+            $stdout = (string) $this->ssh->exec($command);
+        } else {
+            $stdout = '';
 
-            $buffer .= $chunk;
-            $parts = preg_split('/\r\n|\r|\n/', $buffer);
+            $this->ssh->exec($command, function (string $chunk) use ($lineCallback, &$buffer, &$stdout): void {
+                $stdout .= $chunk;
+                $buffer .= $chunk;
+                $parts = preg_split('/\r\n|\r|\n/', $buffer);
 
-            if ($parts === false || $parts === []) {
-                return;
-            }
-
-            $buffer = (string) array_pop($parts);
-
-            foreach ($parts as $line) {
-                if ($line === '') {
-                    continue;
+                if ($parts === false || $parts === []) {
+                    return;
                 }
 
-                $lineCallback($line);
-            }
-        });
+                $buffer = (string) array_pop($parts);
 
-        if ($lineCallback !== null && trim($buffer) !== '') {
-            $lineCallback(trim($buffer));
+                foreach ($parts as $line) {
+                    if ($line === '') {
+                        continue;
+                    }
+
+                    $lineCallback($line);
+                }
+            });
+
+            if (trim($buffer) !== '') {
+                $lineCallback(trim($buffer));
+            }
         }
 
         if (method_exists($this->ssh, 'isTimeout') && $this->ssh->isTimeout()) {

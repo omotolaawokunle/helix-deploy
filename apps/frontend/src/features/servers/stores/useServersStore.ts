@@ -85,6 +85,7 @@ export const useServersStore = defineStore('servers', () => {
     os?: string | null
     phpVersion?: string | null
     nodeVersion?: string | null
+    installedServices?: Server['installedServices'] | Record<string, { installed?: boolean }>
   }
 
   function applyServerUpdate(payload: ServerUpdatePayload): void {
@@ -97,6 +98,9 @@ export const useServersStore = defineStore('servers', () => {
     }
 
     const current = servers.value[index]
+    const installedServices = payload.installedServices !== undefined
+      ? normalizeInstalledServices(payload.installedServices)
+      : current.installedServices
 
     servers.value[index] = {
       ...current,
@@ -104,7 +108,20 @@ export const useServersStore = defineStore('servers', () => {
       os: payload.os ?? current.os,
       phpVersion: payload.phpVersion ?? current.phpVersion,
       nodeVersion: payload.nodeVersion ?? current.nodeVersion,
+      installedServices,
     }
+  }
+
+  function normalizeInstalledServices(
+    services: Server['installedServices'] | Record<string, { installed?: boolean }>,
+  ): Server['installedServices'] {
+    if (Array.isArray(services)) {
+      return services
+    }
+
+    return Object.entries(services)
+      .filter(([, value]) => value?.installed === true)
+      .map(([name]) => name)
   }
 
   function removeServer(serverId: string): void {

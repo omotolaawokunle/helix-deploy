@@ -179,6 +179,16 @@ function handleServerDeleted(deletedId: string): void {
 }
 
 watch(
+  () => realtimeStore.serverInventoryRefreshId,
+  (refreshedServerId) => {
+    if (refreshedServerId === serverId.value) {
+      void loadServer()
+      realtimeStore.consumeServerInventoryRefresh(serverId.value)
+    }
+  },
+)
+
+watch(
   () => realtimeStore.deletedServerId,
   (deletedId) => {
     if (deletedId === null) {
@@ -392,7 +402,7 @@ onMounted(() => {
                 </li>
               </ul>
               <p v-else class="text-sm text-muted-foreground">
-                No services installed yet. Use Provision Server to install stack components.
+                No services detected yet. HelixDeploy scans the server after SSH connects, or you can provision a stack manually.
               </p>
             </div>
           </section>

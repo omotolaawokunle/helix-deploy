@@ -134,7 +134,13 @@ const routes: RouteRecordRaw[] = [
     path: "/",
     component: () => import("@/layouts/AppLayout.vue"),
     meta: { requiresAuth: true },
-    children: authenticatedRoutes,
+    children: [
+      {
+        path: "",
+        redirect: "/dashboard",
+      },
+      ...authenticatedRoutes,
+    ],
   },
   {
     path: "/:pathMatch(.*)*",

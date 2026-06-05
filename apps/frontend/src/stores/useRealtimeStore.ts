@@ -12,6 +12,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
   const dashboardRefreshToken = ref(0)
   const buildRunnersRefreshToken = ref(0)
   const deletedServerId = ref<string | null>(null)
+  const serverInventoryRefreshId = ref<string | null>(null)
   const connectionStatus = ref<RealtimeConnectionStatus>('unconfigured')
 
   function requestDashboardRefresh(): void {
@@ -36,6 +37,20 @@ export const useRealtimeStore = defineStore('realtime', () => {
     return true
   }
 
+  function signalServerInventoryRefresh(serverId: string): void {
+    serverInventoryRefreshId.value = serverId
+  }
+
+  function consumeServerInventoryRefresh(serverId: string): boolean {
+    if (serverInventoryRefreshId.value !== serverId) {
+      return false
+    }
+
+    serverInventoryRefreshId.value = null
+
+    return true
+  }
+
   function setConnectionStatus(status: RealtimeConnectionStatus): void {
     connectionStatus.value = status
   }
@@ -48,11 +63,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
     dashboardRefreshToken,
     buildRunnersRefreshToken,
     deletedServerId,
+    serverInventoryRefreshId,
     connectionStatus,
     requestDashboardRefresh,
     requestBuildRunnersRefresh,
     signalServerDeleted,
     consumeServerDeleted,
+    signalServerInventoryRefresh,
+    consumeServerInventoryRefresh,
     setConnectionStatus,
     markRealtimeUnconfigured,
   }

@@ -8,7 +8,7 @@ import {
   ServerStatus,
 } from '@/types'
 
-type StatusType = 'server' | 'deployment' | 'daemon' | 'build-runner'
+type StatusType = 'server' | 'deployment' | 'daemon' | 'build-runner' | 'site'
 
 interface Props {
   status: string
@@ -121,12 +121,33 @@ const buildRunnerStatusMap: Record<string, StatusConfig> = {
   },
 }
 
+const siteStatusMap: Record<string, StatusConfig> = {
+  provisioning: {
+    label: 'Provisioning',
+    className: 'bg-primary/10 text-primary dark:bg-primary/20',
+    pulse: true,
+  },
+  active: {
+    label: 'Active',
+    className: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200',
+  },
+  discovered: {
+    label: 'Discovered',
+    className: 'bg-secondary text-secondary-foreground',
+  },
+  failed: {
+    label: 'Failed',
+    className: 'bg-destructive/10 text-destructive',
+  },
+}
+
 const config = computed<StatusConfig>(() => {
   const maps: Record<StatusType, Record<string, StatusConfig>> = {
     server: serverStatusMap,
     deployment: deploymentStatusMap,
     daemon: daemonStatusMap,
     'build-runner': buildRunnerStatusMap,
+    site: siteStatusMap,
   }
 
   const map = maps[props.type]
