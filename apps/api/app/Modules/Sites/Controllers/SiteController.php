@@ -15,6 +15,8 @@ use App\Modules\Sites\Models\Site;
 use App\Modules\Sites\Requests\StoreSiteRequest;
 use App\Modules\Sites\Requests\UpdateSiteRequest;
 use App\Modules\Sites\Resources\SiteResource;
+use App\Modules\Sites\Enums\GitProvider;
+use App\Modules\Sites\Services\GitProviderService;
 use App\Modules\Sites\Services\SiteTableFilterService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
@@ -135,6 +137,14 @@ class SiteController extends Controller
 
         if (array_key_exists('pipelineId', $validated)) {
             $siteModel->pipeline_id = $validated['pipelineId'];
+        }
+
+        if (array_key_exists('repositoryUrl', $validated)) {
+            $siteModel->repository_url = $validated['repositoryUrl'];
+        }
+
+        if (array_key_exists('repositoryProvider', $validated)) {
+            $siteModel->repository_provider = $validated['repositoryProvider'];
         }
 
         $siteModel->save();

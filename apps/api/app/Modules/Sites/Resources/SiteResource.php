@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Resources;
 
+use App\Modules\Organizations\Models\Organization;
+use App\Modules\Sites\Enums\GitProvider;
 use App\Modules\Sites\Enums\SiteStatus;
+use App\Modules\Sites\Services\GitProviderService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,6 +34,7 @@ class SiteResource extends JsonResource
             'deployMode' => $this->deploy_mode->value,
             'repositoryUrl' => $this->repository_url,
             'repositoryProvider' => $this->repository_provider,
+            'gitCredentialConfigured' => $this->gitCredentialConfigured(),
             'deployBranch' => $this->deploy_branch,
             'deployScript' => $this->deploy_script,
             'runMigrations' => $this->run_migrations,
@@ -49,5 +53,32 @@ class SiteResource extends JsonResource
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];
+    }
+
+    private function gitCredentialConfigured(): bool
+    {
+        $providerValue = $this->repository_provider;
+
+        if ($providerValue === null || $providerValue === '') {
+            return false;
+        }
+
+        $provider = GitProvider::tryFrom((string) $providerValue);
+
+        if ($provider === null) {
+            return false;
+        }
+
+        $organization = $this->organization;
+
+        if (! $organization instanceof Organization && $this->organization_id !== null) {
+            $organization = Organization::query()->find($this->organization_id);
+        }
+
+        if (! $organization instanceof Organization) {
+            return false;
+        }
+
+        return app(GitProviderService::class)->hasProviderToken($organization, $provider);
     }
 }

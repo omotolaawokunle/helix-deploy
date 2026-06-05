@@ -37,6 +37,8 @@ class DeploymentContext
 
     public readonly string $releaseId;
 
+    public readonly ?string $repositoryCloneUrl;
+
     public ?DeploymentStepRecord $currentStepRecord = null;
 
     public ?string $executingStepName = null;
@@ -50,6 +52,7 @@ class DeploymentContext
         string $sharedPath,
         string $currentPath,
         string $releaseId,
+        ?string $repositoryCloneUrl = null,
     ) {
         $this->deployment = $deployment;
         $this->site = $site;
@@ -59,6 +62,7 @@ class DeploymentContext
         $this->sharedPath = $sharedPath;
         $this->currentPath = $currentPath;
         $this->releaseId = $releaseId;
+        $this->repositoryCloneUrl = $repositoryCloneUrl;
     }
 
     public static function forDeployment(
@@ -67,6 +71,7 @@ class DeploymentContext
         Server $server,
         SSHConnectionInterface $ssh,
         ?string $releaseId = null,
+        ?string $repositoryCloneUrl = null,
     ): self {
         $domain = $site->domain;
         $base = '/var/www/'.$domain;
@@ -81,6 +86,7 @@ class DeploymentContext
             sharedPath: $base.'/shared',
             currentPath: $base.'/current',
             releaseId: $releaseId,
+            repositoryCloneUrl: $repositoryCloneUrl,
         );
     }
 
@@ -103,6 +109,7 @@ class DeploymentContext
             sharedPath: $base.'/shared',
             currentPath: $base.'/current',
             releaseId: basename($releasePath),
+            repositoryCloneUrl: null,
         );
     }
 

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,10 +16,19 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useActiveOrg } from '@/composables/useActiveOrg'
+import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchPipelines } from '@/features/pipelines/api'
 import type { PipelineRecord } from '@/features/pipelines/types'
-import { deleteSite, updateSite } from '@/features/sites/api'
-import type { Site } from '@/types'
+import {
+  deleteGitProviderToken,
+  deleteSite,
+  fetchGitBranches,
+  fetchGitProviders,
+  fetchGitRepositories,
+  storeGitProviderToken,
+  updateSite,
+} from '@/features/sites/api'
+import type { GitProviderType, Site } from '@/types'
 
 interface Props {
   site: Site
@@ -31,12 +41,22 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const authStore = useAuthStore()
 const { orgId } = useActiveOrg()
 
 const deployBranch = ref('')
-const pipelineId = ref<string | null>(null)
+const repositoryUrl = ref('')
+const repositoryProvider = ref<GitProviderType | 'none'>('none')
+const providerToken = ref('')
 const pipelines = ref<PipelineRecord[]>([])
+const gitRepositories = ref<Array<{ id: string; fullName: string; cloneUrl: string; defaultBranch: string }>>([])
+const gitBranches = ref<string[]>([])
 const isLoadingPipelines = ref(false)
+const isLoadingRepositories = ref(false)
+const isLoadingBranches = ref(false)
+const isSavingProviderToken = ref(false)
+const gitCredentialConfigured = ref(false)
+const pipelineId = ref<string | null>(null)
 const deployScript = ref('')
 const runMigrations = ref(false)
 const dockerImage = ref('')
@@ -44,6 +64,18 @@ const dockerRegistry = ref('')
 const dockerComposePath = ref('')
 const isSaving = ref(false)
 const isDeleteDialogOpen = ref(false)
+
+const providerOptions: Array<{ value: GitProviderType; label: string }> = [
+  { value: 'github', label: 'GitHub' },
+  { value: 'gitlab', label: 'GitLab' },
+  { value: 'bitbucket', label: 'Bitbucket' },
+]
+
+const selectedRepository = computed((): string | null => {
+  const match = gitRepositories.value.find(repo => repo.cloneUrl === repositoryUrl.value)
+
+  return match?.fullName ?? null
+})
 
 watch(
   () => props.site,
@@ -55,9 +87,20 @@ watch(
     dockerRegistry.value = site.dockerRegistry ?? ''
     dockerComposePath.value = site.dockerComposePath ?? ''
     pipelineId.value = site.pipelineId
+    repositoryUrl.value = site.repositoryUrl ?? ''
+    repositoryProvider.value = site.repositoryProvider ?? 'none'
+    gitCredentialConfigured.value = site.gitCredentialConfigured
   },
   { immediate: true },
 )
+
+watch(repositoryProvider, () => {
+  void refreshGitMetadata()
+})
+
+onMounted(() => {
+  void Promise.all([loadPipelines(), refreshGitMetadata()])
+})
 
 async function loadPipelines(): Promise<void> {
   const activeOrgId = orgId.value
@@ -77,6 +120,130 @@ async function loadPipelines(): Promise<void> {
   }
 }
 
+async function refreshGitMetadata(): Promise<void> {
+  const activeOrgId = orgId.value
+
+  if (activeOrgId === null || repositoryProvider.value === 'none') {
+    gitRepositories.value = []
+    gitBranches.value = []
+
+    return
+  }
+
+  try {
+    const providers = await fetchGitProviders(activeOrgId)
+    gitCredentialConfigured.value = providers.some(entry => entry.provider === repositoryProvider.value)
+  } catch {
+    gitCredentialConfigured.value = false
+  }
+
+  if (!gitCredentialConfigured.value) {
+    gitRepositories.value = []
+    gitBranches.value = []
+
+    return
+  }
+
+  isLoadingRepositories.value = true
+
+  try {
+    gitRepositories.value = await fetchGitRepositories(activeOrgId, repositoryProvider.value)
+    await loadBranchesForCurrentRepository()
+  } catch {
+    gitRepositories.value = []
+    gitBranches.value = []
+  } finally {
+    isLoadingRepositories.value = false
+  }
+}
+
+async function loadBranchesForCurrentRepository(): Promise<void> {
+  const activeOrgId = orgId.value
+  const fullName = selectedRepository.value
+
+  if (
+    activeOrgId === null
+    || repositoryProvider.value === 'none'
+    || fullName === null
+    || !fullName.includes('/')
+  ) {
+    gitBranches.value = []
+
+    return
+  }
+
+  const [owner, repo] = fullName.split('/', 2)
+  isLoadingBranches.value = true
+
+  try {
+    const branches = await fetchGitBranches(activeOrgId, repositoryProvider.value, owner, repo)
+    gitBranches.value = branches.map(branch => branch.name)
+  } catch {
+    gitBranches.value = []
+  } finally {
+    isLoadingBranches.value = false
+  }
+}
+
+async function handleSaveProviderToken(): Promise<void> {
+  const activeOrgId = orgId.value
+
+  if (activeOrgId === null || repositoryProvider.value === 'none' || providerToken.value.trim() === '') {
+    return
+  }
+
+  isSavingProviderToken.value = true
+
+  try {
+    await storeGitProviderToken(activeOrgId, {
+      provider: repositoryProvider.value,
+      token: providerToken.value.trim(),
+    })
+    providerToken.value = ''
+    gitCredentialConfigured.value = true
+    toast.success('Git provider token saved.')
+    await refreshGitMetadata()
+  } catch {
+    toast.error('Unable to save provider token.')
+  } finally {
+    isSavingProviderToken.value = false
+  }
+}
+
+async function handleRevokeProviderToken(): Promise<void> {
+  const activeOrgId = orgId.value
+
+  if (activeOrgId === null || repositoryProvider.value === 'none') {
+    return
+  }
+
+  try {
+    await deleteGitProviderToken(activeOrgId, repositoryProvider.value)
+    gitCredentialConfigured.value = false
+    gitRepositories.value = []
+    gitBranches.value = []
+    toast.success('Git provider token removed.')
+  } catch {
+    toast.error('Unable to remove provider token.')
+  }
+}
+
+function handleRepositoryChange(fullName: string): void {
+  const repository = gitRepositories.value.find(repo => repo.fullName === fullName)
+
+  if (repository === undefined) {
+    return
+  }
+
+  repositoryUrl.value = repository.cloneUrl
+
+  if (deployBranch.value.trim() === '') {
+    deployBranch.value = repository.defaultBranch
+  }
+
+  void loadBranchesForCurrentRepository()
+}
+
 async function handleSave(): Promise<void> {
   isSaving.value = true
 
@@ -89,6 +256,8 @@ async function handleSave(): Promise<void> {
       dockerRegistry: dockerRegistry.value || null,
       dockerComposePath: dockerComposePath.value || null,
       pipelineId: pipelineId.value,
+      repositoryUrl: repositoryUrl.value || null,
+      repositoryProvider: repositoryProvider.value === 'none' ? null : repositoryProvider.value,
     })
     emit('updated', updated)
     toast.success('Site settings saved.')
@@ -108,22 +277,143 @@ async function handleDelete(): Promise<void> {
     toast.error('Unable to delete site.')
   }
 }
-
-onMounted(() => {
-  void loadPipelines()
-})
 </script>
 
 <template>
   <div class="space-y-8">
     <form class="panel space-y-4 p-6" @submit.prevent="handleSave">
       <h2 class="section-label">
-        Deployment
+        Repository
       </h2>
+
+      <div class="space-y-2">
+        <Label for="repository-provider">Git provider</Label>
+        <Select
+          :model-value="repositoryProvider"
+          @update:model-value="(value) => { repositoryProvider = value as GitProviderType | 'none' }"
+        >
+          <SelectTrigger id="repository-provider">
+            <SelectValue placeholder="Select provider" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">
+              None / public URL only
+            </SelectItem>
+            <SelectItem
+              v-for="option in providerOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div
+        v-if="repositoryProvider !== 'none' && authStore.isAdmin"
+        class="space-y-3 rounded-lg border p-4"
+        data-testid="git-provider-token-panel"
+      >
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium">Provider access token</span>
+          <Badge :variant="gitCredentialConfigured ? 'default' : 'outline'">
+            {{ gitCredentialConfigured ? 'Configured' : 'Not configured' }}
+          </Badge>
+        </div>
+        <div class="space-y-2">
+          <Label for="provider-token">Personal access token</Label>
+          <Input
+            id="provider-token"
+            v-model="providerToken"
+            type="password"
+            autocomplete="off"
+            placeholder="Paste PAT (never shown again)"
+          />
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            :disabled="isSavingProviderToken || providerToken.trim() === ''"
+            @click="handleSaveProviderToken"
+          >
+            {{ isSavingProviderToken ? 'Saving…' : 'Save token' }}
+          </Button>
+          <Button
+            v-if="gitCredentialConfigured"
+            type="button"
+            size="sm"
+            variant="outline"
+            @click="handleRevokeProviderToken"
+          >
+            Remove token
+          </Button>
+        </div>
+      </div>
+
+      <div v-if="gitCredentialConfigured && gitRepositories.length > 0" class="space-y-2">
+        <Label for="repository-picker">Repository</Label>
+        <Select
+          :model-value="selectedRepository ?? undefined"
+          :disabled="isLoadingRepositories"
+          @update:model-value="(value) => handleRepositoryChange(String(value))"
+        >
+          <SelectTrigger id="repository-picker">
+            <SelectValue placeholder="Select repository" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="repository in gitRepositories"
+              :key="repository.id"
+              :value="repository.fullName"
+            >
+              {{ repository.fullName }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div class="space-y-2">
+        <Label for="repository-url">Repository URL</Label>
+        <Input
+          id="repository-url"
+          v-model="repositoryUrl"
+          placeholder="https://github.com/org/repo.git"
+        />
+      </div>
+
       <div class="space-y-2">
         <Label for="deploy-branch">Deploy branch</Label>
-        <Input id="deploy-branch" v-model="deployBranch" />
+        <Select
+          v-if="gitBranches.length > 0"
+          :model-value="deployBranch"
+          :disabled="isLoadingBranches"
+          @update:model-value="(value) => { deployBranch = String(value) }"
+        >
+          <SelectTrigger id="deploy-branch">
+            <SelectValue placeholder="Select branch" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="branch in gitBranches"
+              :key="branch"
+              :value="branch"
+            >
+              {{ branch }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          v-else
+          id="deploy-branch"
+          v-model="deployBranch"
+        />
       </div>
+
+      <h2 class="section-label pt-4">
+        Deployment
+      </h2>
       <div class="space-y-2">
         <Label for="deploy-script">Deploy script</Label>
         <Textarea id="deploy-script" v-model="deployScript" rows="8" class="font-mono text-sm" />

@@ -1,5 +1,5 @@
 import { api } from '@/lib/axios'
-import type { EnvVarListItem, NginxConfig, Site } from '@/types'
+import type { EnvVarListItem, GitProviderType, NginxConfig, Site } from '@/types'
 
 interface ResourceResponse<T> {
   data: T
@@ -33,9 +33,87 @@ export async function fetchSite(siteId: string): Promise<Site> {
   return response.data.data
 }
 
+export interface GitProviderConnection {
+  provider: GitProviderType
+  label: string | null
+  configuredAt: string | null
+  lastUsedAt: string | null
+}
+
+export interface GitRepositoryOption {
+  id: string
+  name: string
+  fullName: string
+  cloneUrl: string
+  defaultBranch: string
+  isPrivate: boolean
+}
+
+export interface GitBranchOption {
+  name: string
+  isDefault: boolean
+}
+
+export async function fetchGitProviders(organizationId: string): Promise<GitProviderConnection[]> {
+  const response = await api.get<CollectionResponse<GitProviderConnection>>(
+    `/api/v1/organizations/${organizationId}/git-providers`,
+  )
+
+  return response.data.data
+}
+
+export async function storeGitProviderToken(
+  organizationId: string,
+  payload: { provider: GitProviderType; token: string },
+): Promise<void> {
+  await api.post(`/api/v1/organizations/${organizationId}/git-providers`, payload)
+}
+
+export async function deleteGitProviderToken(
+  organizationId: string,
+  provider: GitProviderType,
+): Promise<void> {
+  await api.delete(`/api/v1/organizations/${organizationId}/git-providers/${provider}`)
+}
+
+export async function fetchGitRepositories(
+  organizationId: string,
+  provider: GitProviderType,
+): Promise<GitRepositoryOption[]> {
+  const response = await api.get<CollectionResponse<GitRepositoryOption>>(
+    `/api/v1/organizations/${organizationId}/git-providers/${provider}/repositories`,
+  )
+
+  return response.data.data
+}
+
+export async function fetchGitBranches(
+  organizationId: string,
+  provider: GitProviderType,
+  owner: string,
+  repo: string,
+): Promise<GitBranchOption[]> {
+  const response = await api.get<CollectionResponse<GitBranchOption>>(
+    `/api/v1/organizations/${organizationId}/git-providers/${provider}/repositories/${owner}/${repo}/branches`,
+  )
+
+  return response.data.data
+}
+
 export async function updateSite(
   siteId: string,
-  payload: Partial<Pick<Site, 'deployBranch' | 'deployScript' | 'runMigrations' | 'dockerImage' | 'dockerRegistry' | 'dockerComposePath' | 'pipelineId'>>,
+  payload: Partial<Pick<
+    Site,
+    | 'deployBranch'
+    | 'deployScript'
+    | 'runMigrations'
+    | 'dockerImage'
+    | 'dockerRegistry'
+    | 'dockerComposePath'
+    | 'pipelineId'
+    | 'repositoryUrl'
+    | 'repositoryProvider'
+  >>,
 ): Promise<Site> {
   const response = await api.patch<ResourceResponse<Site>>(`/api/v1/sites/${siteId}`, payload)
 

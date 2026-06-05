@@ -18,7 +18,7 @@ final class CloneRepositoryStep extends BaseDeploymentStep
     public function run(DeploymentContext $ctx): void
     {
         $branch = $ctx->deployment->branch ?? $ctx->site->deploy_branch;
-        $repoUrl = $ctx->site->repository_url;
+        $repoUrl = $ctx->repositoryCloneUrl ?? $ctx->site->repository_url;
 
         if ($repoUrl === null || $repoUrl === '') {
             throw new \RuntimeException('Site repository_url is required for git deployments');

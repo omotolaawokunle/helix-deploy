@@ -100,6 +100,106 @@ class CredentialVault implements CredentialVaultInterface
         return $credential;
     }
 
+    public function storeGitProviderToken(Organization $organization, string $name, string $token): Credential
+    {
+        $existing = Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::GIT_PROVIDER_TOKEN)
+            ->where('name', $name)
+            ->first();
+
+        if ($existing !== null) {
+            return $this->updateGitProviderToken((string) $existing->getKey(), $organization, $token);
+        }
+
+        $credential = $this->storeEncrypted(
+            organization: $organization,
+            owner: $organization,
+            name: $name,
+            type: CredentialType::GIT_PROVIDER_TOKEN,
+            plaintext: $token,
+            publicKey: null,
+        );
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.created',
+            resourceId: (string) $credential->getKey(),
+            afterState: [
+                'name' => $credential->name,
+                'type' => $credential->type?->value,
+            ],
+        );
+
+        return $credential;
+    }
+
+    public function updateGitProviderToken(string $credentialId, Organization $organization, string $token): Credential
+    {
+        $credential = $this->loadCredential($credentialId, $organization);
+        $this->assertCredentialType($credential, CredentialType::GIT_PROVIDER_TOKEN);
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $masterKey = $this->getMasterKey($organization);
+
+        try {
+            $payload = $this->encryption->encrypt($token, $masterKey);
+        } finally {
+            sodium_memzero($masterKey);
+        }
+
+        $credential->forceFill([
+            'encrypted_value' => $payload->ciphertext,
+            'nonce' => $payload->nonce,
+            'last_used_at' => null,
+        ])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.updated',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $credential;
+    }
+
+    public function getGitProviderToken(Organization $organization, string $name): string
+    {
+        $credential = $this->findGitProviderCredential($organization, $name);
+
+        if ($credential === null) {
+            throw new CredentialNotFoundException('Git provider credential not found.');
+        }
+
+        $plaintext = $this->decryptCredential($organization, $credential);
+
+        $credential->forceFill(['last_used_at' => now()])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.accessed',
+            resourceId: (string) $credential->getKey(),
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $plaintext;
+    }
+
+    public function findGitProviderCredential(Organization $organization, string $name): ?Credential
+    {
+        return Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::GIT_PROVIDER_TOKEN)
+            ->where('name', $name)
+            ->first();
+    }
+
     public function updateSecret(string $credentialId, Organization $organization, string $value): Credential
     {
         $credential = $this->loadCredential($credentialId, $organization);

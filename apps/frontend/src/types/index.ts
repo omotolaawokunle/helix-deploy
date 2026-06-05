@@ -188,6 +188,8 @@ export interface ServerGroup {
   updatedAt: string
 }
 
+export type GitProviderType = 'github' | 'gitlab' | 'bitbucket'
+
 export interface Site {
   id: string
   organizationId: string
@@ -196,6 +198,9 @@ export interface Site {
   environmentId: string | null
   name?: string
   domain: string
+  repositoryUrl: string | null
+  repositoryProvider: GitProviderType | null
+  gitCredentialConfigured: boolean
   deployBranch: string
   deployScript: string | null
   runMigrations: boolean

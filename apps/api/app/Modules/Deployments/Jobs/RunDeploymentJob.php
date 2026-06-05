@@ -15,6 +15,7 @@ use App\Modules\Deployments\Models\Release;
 use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
 use App\Packages\Execution\DeploymentContext;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
+use App\Modules\Sites\Services\Git\AuthenticatedGitCloneUrlResolver;
 use App\Packages\Execution\PipelineBuilder;
 use App\Packages\SSH\SSHManager;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
@@ -57,6 +58,7 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
         ExecutionRunnerInterface $runner,
         SSHManager $sshManager,
         CredentialVault $credentialVault,
+        AuthenticatedGitCloneUrlResolver $cloneUrlResolver,
     ): void {
         $deployment = Deployment::query()
             ->withoutGlobalScope('owned_by_organization')
@@ -109,7 +111,18 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
         $connection->connect();
 
         try {
-            $ctx = DeploymentContext::forDeployment($deployment, $site, $server, $connection);
+            $organization = $site->organization;
+            abort_if($organization === null, 404, 'Deployment organization not found.');
+
+            $repositoryCloneUrl = $cloneUrlResolver->resolve($site, $organization);
+
+            $ctx = DeploymentContext::forDeployment(
+                $deployment,
+                $site,
+                $server,
+                $connection,
+                repositoryCloneUrl: $repositoryCloneUrl,
+            );
 
             $runner->run($ctx, $pipelineSteps);
 

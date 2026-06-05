@@ -24,6 +24,8 @@ use App\Modules\Pipelines\StageHandlers\NotifyStageHandler;
 use App\Modules\Pipelines\StageHandlers\ScriptStageHandler;
 use App\Modules\Monitoring\Contracts\ServerMetricsCollectorInterface;
 use App\Modules\Monitoring\Services\ServerMetricsCollector;
+use App\Modules\Sites\Models\GitProviderIntegration;
+use App\Modules\Sites\Policies\GitProviderPolicy;
 use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use App\Modules\Teams\Services\TeamProjectVisibilityService;
 use App\Packages\Realtime\DeploymentStreamPublisher;
@@ -65,5 +67,6 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(SupervisorProcess::class, DaemonPolicy::class);
+        Gate::policy(GitProviderIntegration::class, GitProviderPolicy::class);
     }
 }
