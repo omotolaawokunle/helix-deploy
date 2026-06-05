@@ -17,7 +17,7 @@ vi.mock('@/features/deployments/composables/useDeploymentStream', () => ({
     callbacks: {
       onLogLine: (stepId: string, line: string, timestamp: string) => void
       onStepUpdate: (stepId: string, status: string, duration: number | null) => void
-      onStepStarted: (stepId: string, name: string, order: number, status: string) => void
+      onStepStarted: (stepId: string, name: string, order: number, status: string, phase: string) => void
     },
   ) => {
     streamSetup(deploymentId, callbacks)
@@ -39,6 +39,9 @@ function buildDeployment(overrides: Partial<DeploymentDetail> = {}): DeploymentD
     commitMessage: 'Fix deploy viewer',
     releasePath: null,
     pipelineRunId: null,
+    buildStrategy: null,
+    buildRunnerId: null,
+    buildArtifactId: null,
     isRollbackable: false,
     triggeredBy: { id: 'user-1', name: 'Alex' },
     startedAt: '2026-06-04T10:00:00Z',
@@ -54,6 +57,7 @@ function buildDeployment(overrides: Partial<DeploymentDetail> = {}): DeploymentD
         deploymentId: 'dep-1',
         name: 'Clone repository',
         status: 'success',
+        phase: 'deploy',
         order: 1,
         exitCode: 0,
         startedAt: '2026-06-04T10:00:00Z',
@@ -64,6 +68,7 @@ function buildDeployment(overrides: Partial<DeploymentDetail> = {}): DeploymentD
         deploymentId: 'dep-1',
         name: 'Install dependencies',
         status: 'running',
+        phase: 'deploy',
         order: 2,
         exitCode: null,
         startedAt: '2026-06-04T10:00:11Z',
@@ -132,6 +137,7 @@ describe('DeploymentLogViewer', () => {
           deploymentId: 'dep-1',
           name: 'Deploy release',
           status: 'failed',
+          phase: 'deploy',
           order: 1,
           exitCode: 1,
           startedAt: '2026-06-04T10:00:00Z',
@@ -199,5 +205,45 @@ describe('DeploymentLogViewer', () => {
     await flushPromises()
 
     expect(scrollEl.scrollTop).toBe(scrollEl.scrollHeight)
+  })
+
+  it('shows build and deploy tabs when build phase steps exist', async () => {
+    fetchDeploymentMock.mockResolvedValue(buildDeployment({
+      steps: [
+        {
+          id: 'step-build',
+          deploymentId: 'dep-1',
+          name: 'Clone repository',
+          status: 'success',
+          phase: 'build',
+          order: 1,
+          exitCode: 0,
+          startedAt: '2026-06-04T10:00:00Z',
+          finishedAt: '2026-06-04T10:00:10Z',
+        },
+        {
+          id: 'step-deploy',
+          deploymentId: 'dep-1',
+          name: 'Extract artifact',
+          status: 'running',
+          phase: 'deploy',
+          order: 1,
+          exitCode: null,
+          startedAt: '2026-06-04T10:00:11Z',
+          finishedAt: null,
+        },
+      ],
+    }))
+
+    const wrapper = mount(DeploymentLogViewer, {
+      props: { deploymentId: 'dep-1' },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Build')
+    expect(wrapper.text()).toContain('Deploy')
+    expect(wrapper.find('[data-testid="deployment-step-step-build"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="deployment-step-step-deploy"]').exists()).toBe(false)
   })
 })

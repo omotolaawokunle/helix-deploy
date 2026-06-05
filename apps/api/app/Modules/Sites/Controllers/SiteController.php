@@ -123,6 +123,20 @@ class SiteController extends Controller
             $siteModel->post_deploy_script = $validated['postDeployScript'];
         }
 
+        if (array_key_exists('preBuildScript', $validated)) {
+            $siteModel->pre_build_script = $validated['preBuildScript'];
+        }
+
+        if (array_key_exists('buildStrategy', $validated)) {
+            $siteModel->build_strategy = (string) $validated['buildStrategy'];
+        }
+
+        if (array_key_exists('buildRunnerId', $validated)) {
+            $siteModel->build_runner_id = $validated['buildRunnerId'];
+        } elseif (array_key_exists('buildStrategy', $validated) && $validated['buildStrategy'] !== 'runner') {
+            $siteModel->build_runner_id = null;
+        }
+
         if (array_key_exists('runMigrations', $validated)) {
             $siteModel->run_migrations = (bool) $validated['runMigrations'];
         }

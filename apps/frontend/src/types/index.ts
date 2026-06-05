@@ -31,8 +31,12 @@ export enum DeployMode {
   Recreate = 'recreate',
 }
 
+export type SiteBuildStrategy = 'on_server' | 'runner' | 'external'
+
 export enum DeploymentStatus {
   Pending = 'pending',
+  Building = 'building',
+  Built = 'built',
   Running = 'running',
   Succeeded = 'success',
   Failed = 'failed',
@@ -205,6 +209,9 @@ export interface Site {
   deployBranch: string
   preDeployScript: string | null
   postDeployScript: string | null
+  preBuildScript: string | null
+  buildStrategy: SiteBuildStrategy
+  buildRunnerId: string | null
   runMigrations: boolean
   dockerImage: string | null
   dockerRegistry: string | null

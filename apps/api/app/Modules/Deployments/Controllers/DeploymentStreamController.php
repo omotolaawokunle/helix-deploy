@@ -21,7 +21,7 @@ final class DeploymentStreamController extends Controller
         $deploymentModel = $this->resolveDeployment($deployment);
         $this->authorize('viewLogs', $deploymentModel);
 
-        $deploymentModel->load(['steps' => fn ($query) => $query->orderBy('order')]);
+        $deploymentModel->load(['steps' => fn ($query) => $query->orderBy('phase')->orderBy('order')]);
 
         return response()->stream(
             function () use ($deploymentModel): void {
@@ -52,6 +52,7 @@ final class DeploymentStreamController extends Controller
                 'stepId' => (string) $step->getKey(),
                 'name' => $step->name,
                 'order' => $step->order,
+                'phase' => $step->phase?->value ?? 'deploy',
                 'status' => $step->status->value,
             ]);
 

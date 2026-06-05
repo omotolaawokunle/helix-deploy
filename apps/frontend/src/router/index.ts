@@ -45,7 +45,13 @@ const authenticatedRoutes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, title: "Site" },
   },
   {
-    path: "/deployments/:id",
+    path: '/build-runners',
+    name: 'build-runners',
+    component: () => import('@/features/build-runners/pages/BuildRunnersIndexPage.vue'),
+    meta: { requiresAuth: true, title: 'Build Runners' },
+  },
+  {
+    path: '/deployments/:id',
     name: "deployment-detail",
     component: () =>
       import("@/features/deployments/pages/DeploymentDetailPage.vue"),

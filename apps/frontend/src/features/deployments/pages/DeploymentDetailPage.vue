@@ -59,7 +59,10 @@ const canRollback = computed(
 const canCancel = computed(() => {
   const status = deployment.value?.status
 
-  return status === DeploymentStatus.Pending || status === DeploymentStatus.Running
+  return status === DeploymentStatus.Pending
+    || status === DeploymentStatus.Building
+    || status === DeploymentStatus.Built
+    || status === DeploymentStatus.Running
 })
 
 const isProduction = computed(() => deployment.value?.site?.isProduction ?? false)

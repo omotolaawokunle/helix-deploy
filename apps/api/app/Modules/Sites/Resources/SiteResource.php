@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Resources;
 
+use App\Modules\BuildRunners\Enums\BuildStrategy;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Sites\Enums\GitProvider;
 use App\Modules\Sites\Enums\SiteStatus;
@@ -38,6 +39,11 @@ class SiteResource extends JsonResource
             'deployBranch' => $this->deploy_branch,
             'preDeployScript' => $this->pre_deploy_script,
             'postDeployScript' => $this->post_deploy_script,
+            'preBuildScript' => $this->pre_build_script,
+            'buildStrategy' => $this->build_strategy instanceof BuildStrategy
+                ? $this->build_strategy->value
+                : $this->build_strategy,
+            'buildRunnerId' => $this->build_runner_id,
             'runMigrations' => $this->run_migrations,
             'dockerImage' => $this->docker_image,
             'dockerRegistry' => $this->docker_registry,

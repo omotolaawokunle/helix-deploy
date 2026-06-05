@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Requests;
 
+use App\Modules\BuildRunners\Enums\BuildStrategy;
 use App\Modules\Sites\Enums\GitProvider;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -24,6 +25,19 @@ final class UpdateSiteRequest extends FormRequest
             'deployBranch' => ['sometimes', 'string', 'max:255'],
             'preDeployScript' => ['sometimes', 'nullable', 'string', 'max:65535'],
             'postDeployScript' => ['sometimes', 'nullable', 'string', 'max:65535'],
+            'preBuildScript' => ['sometimes', 'nullable', 'string', 'max:65535'],
+            'buildStrategy' => ['sometimes', 'string', Rule::enum(BuildStrategy::class)],
+            'buildRunnerId' => [
+                'sometimes',
+                'nullable',
+                'uuid',
+                Rule::exists('build_runners', 'id')->where(
+                    fn ($query) => $query->where(
+                        'organization_id',
+                        (string) $this->user()?->currentOrganization()?->getKey(),
+                    ),
+                ),
+            ],
             'runMigrations' => ['sometimes', 'boolean'],
             'dockerImage' => ['sometimes', 'nullable', 'string', 'max:255'],
             'dockerRegistry' => ['sometimes', 'nullable', 'string', 'max:255'],

@@ -16,9 +16,15 @@ import {
 interface Props {
   open: boolean
   publicKey: string
+  title?: string
+  description?: string
 }
 
-defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  title: 'Server registered',
+  description:
+    'Your server has been registered. To complete setup, add this SSH public key to your server\'s authorized_keys file:',
+})
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
@@ -40,10 +46,9 @@ async function handleCopy(publicKey: string): Promise<void> {
   <Sheet :open="open" @update:open="emit('update:open', $event)">
     <SheetContent side="right" class="flex w-full flex-col sm:max-w-lg">
       <SheetHeader>
-        <SheetTitle>Server registered</SheetTitle>
+        <SheetTitle>{{ props.title }}</SheetTitle>
         <SheetDescription>
-          Your server has been registered. To complete setup, add this SSH public key
-          to your server's <code class="rounded bg-muted px-1 text-xs text-foreground">authorized_keys</code> file:
+          {{ props.description }}
         </SheetDescription>
       </SheetHeader>
 

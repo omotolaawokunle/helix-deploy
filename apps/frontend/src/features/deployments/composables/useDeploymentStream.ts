@@ -4,7 +4,7 @@ import type { DeploymentCompletedPayload } from '@/features/deployments/types'
 export interface DeploymentStreamCallbacks {
   onLogLine: (stepId: string, line: string, timestamp: string) => void
   onStepUpdate: (stepId: string, status: string, duration: number | null) => void
-  onStepStarted: (stepId: string, name: string, order: number, status: string) => void
+  onStepStarted: (stepId: string, name: string, order: number, status: string, phase: string) => void
   onComplete: (payload: DeploymentCompletedPayload) => void
   onApprovalRequired: (payload: Record<string, unknown>) => void
 }
@@ -59,6 +59,7 @@ export function useDeploymentStream(
         name?: string
         order?: number
         status?: string
+        phase?: string
       }>(event.data)
 
       if (data?.stepId === undefined || data.name === undefined) {
@@ -70,6 +71,7 @@ export function useDeploymentStream(
         data.name,
         data.order ?? 0,
         data.status ?? 'running',
+        data.phase ?? 'deploy',
       )
     })
 

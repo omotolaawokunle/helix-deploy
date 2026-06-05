@@ -17,6 +17,8 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
+import { fetchBuildRunners } from '@/features/build-runners/api'
+import type { BuildRunner } from '@/features/build-runners/types'
 import { fetchPipelines } from '@/features/pipelines/api'
 import type { PipelineRecord } from '@/features/pipelines/types'
 import {
@@ -28,7 +30,7 @@ import {
   storeGitProviderToken,
   updateSite,
 } from '@/features/sites/api'
-import type { GitProviderType, Site } from '@/types'
+import type { GitProviderType, Site, SiteBuildStrategy } from '@/types'
 
 interface Props {
   site: Site
@@ -59,6 +61,11 @@ const gitCredentialConfigured = ref(false)
 const pipelineId = ref<string | null>(null)
 const preDeployScript = ref('')
 const postDeployScript = ref('')
+const preBuildScript = ref('')
+const buildStrategy = ref<SiteBuildStrategy>('on_server')
+const buildRunnerId = ref<string | null>(null)
+const buildRunners = ref<BuildRunner[]>([])
+const isLoadingBuildRunners = ref(false)
 const runMigrations = ref(false)
 const dockerImage = ref('')
 const dockerRegistry = ref('')
@@ -70,6 +77,24 @@ const providerOptions: Array<{ value: GitProviderType; label: string }> = [
   { value: 'github', label: 'GitHub' },
   { value: 'gitlab', label: 'GitLab' },
   { value: 'bitbucket', label: 'Bitbucket' },
+]
+
+const buildStrategyOptions: Array<{ value: SiteBuildStrategy; label: string; description: string }> = [
+  {
+    value: 'on_server',
+    label: 'On server',
+    description: 'Clone and build directly on the deployment server.',
+  },
+  {
+    value: 'runner',
+    label: 'Build runner',
+    description: 'Compile on a dedicated runner, then deploy the artifact.',
+  },
+  {
+    value: 'external',
+    label: 'External artifact',
+    description: 'Supply a pre-built artifact from outside HelixDeploy.',
+  },
 ]
 
 const selectedRepository = computed((): string | null => {
@@ -84,6 +109,9 @@ watch(
     deployBranch.value = site.deployBranch
     preDeployScript.value = site.preDeployScript ?? ''
     postDeployScript.value = site.postDeployScript ?? ''
+    preBuildScript.value = site.preBuildScript ?? ''
+    buildStrategy.value = site.buildStrategy ?? 'on_server'
+    buildRunnerId.value = site.buildRunnerId
     runMigrations.value = site.runMigrations
     dockerImage.value = site.dockerImage ?? ''
     dockerRegistry.value = site.dockerRegistry ?? ''
@@ -101,8 +129,28 @@ watch(repositoryProvider, () => {
 })
 
 onMounted(() => {
-  void Promise.all([loadPipelines(), refreshGitMetadata()])
+  void Promise.all([loadPipelines(), refreshGitMetadata(), loadBuildRunners()])
 })
+
+async function loadBuildRunners(): Promise<void> {
+  const activeOrgId = orgId.value
+
+  if (activeOrgId === null) {
+    buildRunners.value = []
+
+    return
+  }
+
+  isLoadingBuildRunners.value = true
+
+  try {
+    buildRunners.value = await fetchBuildRunners(activeOrgId)
+  } catch {
+    buildRunners.value = []
+  } finally {
+    isLoadingBuildRunners.value = false
+  }
+}
 
 async function loadPipelines(): Promise<void> {
   const activeOrgId = orgId.value
@@ -254,6 +302,9 @@ async function handleSave(): Promise<void> {
       deployBranch: deployBranch.value,
       preDeployScript: preDeployScript.value,
       postDeployScript: postDeployScript.value,
+      preBuildScript: preBuildScript.value,
+      buildStrategy: buildStrategy.value,
+      buildRunnerId: buildStrategy.value === 'runner' ? buildRunnerId.value : null,
       runMigrations: runMigrations.value,
       dockerImage: dockerImage.value || null,
       dockerRegistry: dockerRegistry.value || null,
@@ -412,6 +463,71 @@ async function handleDelete(): Promise<void> {
           id="deploy-branch"
           v-model="deployBranch"
         />
+      </div>
+
+      <h2 class="section-label pt-4">
+        Build strategy
+      </h2>
+      <div class="space-y-2">
+        <Label for="build-strategy">Where to build</Label>
+        <Select
+          :model-value="buildStrategy"
+          @update:model-value="(value) => { buildStrategy = value as SiteBuildStrategy }"
+        >
+          <SelectTrigger id="build-strategy">
+            <SelectValue placeholder="Select build strategy" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="option in buildStrategyOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p class="text-sm text-muted-foreground">
+          {{ buildStrategyOptions.find(option => option.value === buildStrategy)?.description }}
+        </p>
+      </div>
+
+      <div v-if="buildStrategy === 'runner'" class="space-y-2">
+        <Label for="build-runner">Preferred build runner</Label>
+        <Select
+          :model-value="buildRunnerId ?? 'auto'"
+          :disabled="isLoadingBuildRunners"
+          @update:model-value="(value) => { buildRunnerId = value === 'auto' ? null : String(value) }"
+        >
+          <SelectTrigger id="build-runner">
+            <SelectValue placeholder="Auto-select from pool" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">
+              Auto-select from pool
+            </SelectItem>
+            <SelectItem
+              v-for="runner in buildRunners"
+              :key="runner.id"
+              :value="runner.id"
+            >
+              {{ runner.name }} ({{ runner.availableSlots }} slots free)
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p class="text-sm text-muted-foreground">
+          <RouterLink to="/build-runners" class="text-primary hover:underline">
+            Manage build runners
+          </RouterLink>
+        </p>
+      </div>
+
+      <div v-if="buildStrategy === 'runner'" class="space-y-2">
+        <Label for="pre-build-script">Pre-build script</Label>
+        <p class="text-sm text-muted-foreground">
+          Runs on the build runner after dependencies install and before the artifact is created.
+        </p>
+        <Textarea id="pre-build-script" v-model="preBuildScript" rows="6" class="font-mono text-sm" />
       </div>
 
       <h2 class="section-label pt-4">

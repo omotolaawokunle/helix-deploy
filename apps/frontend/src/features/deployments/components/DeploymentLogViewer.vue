@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useBatchedUpdates } from '@/composables/useBatchedUpdates'
 import {
   CheckCircle2Icon,
@@ -12,12 +12,14 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatDurationSeconds } from '@/lib/format'
 import { fetchDeployment } from '@/features/deployments/api'
 import { useDeploymentStream } from '@/features/deployments/composables/useDeploymentStream'
 import type {
   DeploymentCompletedPayload,
   DeploymentLogStep,
+  DeploymentStepPhase,
   DeploymentStepResource,
   DeploymentStepStatus,
 } from '@/features/deployments/types'
@@ -47,6 +49,7 @@ const userExpandedSteps = ref<Set<string>>(new Set())
 const userCollapsedSteps = ref<Set<string>>(new Set())
 const autoScrollEnabled = ref(props.autoScroll)
 const showJumpToLatest = ref(false)
+const activePhaseTab = ref<DeploymentStepPhase>('build')
 let scrollRafId: number | null = null
 
 function rebuildStepIndex(): void {
@@ -57,8 +60,33 @@ function rebuildStepIndex(): void {
   })
 }
 
+const phaseOrder: Record<DeploymentStepPhase, number> = {
+  build: 0,
+  deploy: 1,
+}
+
+const hasBuildPhase = computed(
+  () => steps.value.some(step => step.phase === 'build'),
+)
+
+const visibleSteps = computed((): DeploymentLogStep[] => {
+  if (!hasBuildPhase.value) {
+    return steps.value
+  }
+
+  return steps.value.filter(step => step.phase === activePhaseTab.value)
+})
+
 function sortStepsInPlace(): void {
-  steps.value.sort((left, right) => left.order - right.order)
+  steps.value.sort((left, right) => {
+    const phaseDiff = phaseOrder[left.phase] - phaseOrder[right.phase]
+
+    if (phaseDiff !== 0) {
+      return phaseDiff
+    }
+
+    return left.order - right.order
+  })
   rebuildStepIndex()
 }
 
@@ -67,6 +95,7 @@ function mapApiStep(step: DeploymentStepResource): DeploymentLogStep {
     id: step.id,
     name: step.name,
     order: step.order,
+    phase: step.phase ?? 'deploy',
     status: step.status,
     duration: null,
     lines: [],
@@ -75,7 +104,7 @@ function mapApiStep(step: DeploymentStepResource): DeploymentLogStep {
 
 function upsertStep(
   stepId: string,
-  patch: Partial<DeploymentLogStep> & { name?: string; order?: number },
+  patch: Partial<DeploymentLogStep> & { name?: string; order?: number; phase?: DeploymentStepPhase },
 ): void {
   const index = stepIndexById.get(stepId)
 
@@ -84,6 +113,7 @@ function upsertStep(
       id: stepId,
       name: patch.name ?? 'Step',
       order: patch.order ?? steps.value.length + 1,
+      phase: patch.phase ?? 'deploy',
       status: patch.status ?? 'pending',
       duration: patch.duration ?? null,
       lines: patch.lines ?? [],
@@ -322,11 +352,12 @@ useDeploymentStream(props.deploymentId, {
   onLogLine: (stepId, line, timestamp) => {
     queueLogLine({ stepId, line, timestamp })
   },
-  onStepStarted: (stepId, name, order, status) => {
+  onStepStarted: (stepId, name, order, status, phase) => {
     upsertStep(stepId, {
       name,
       order,
       status: status as DeploymentStepStatus,
+      phase: phase as DeploymentStepPhase,
     })
   },
   onStepUpdate: (stepId, status, duration) => {
@@ -382,8 +413,23 @@ onMounted(async () => {
       data-testid="deployment-log-scroll"
       @scroll="handleScroll"
     >
+      <Tabs
+        v-if="hasBuildPhase"
+        v-model="activePhaseTab"
+        class="border-b border-zinc-800 px-4 pt-3"
+      >
+        <TabsList class="grid w-full max-w-xs grid-cols-2 bg-zinc-900">
+          <TabsTrigger value="build">
+            Build
+          </TabsTrigger>
+          <TabsTrigger value="deploy">
+            Deploy
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div
-        v-for="step in steps"
+        v-for="step in visibleSteps"
         :key="step.id"
         class="border-b border-zinc-800 last:border-b-0"
         :data-testid="`deployment-step-${step.id}`"
@@ -445,7 +491,7 @@ onMounted(async () => {
       </div>
 
       <p
-        v-if="steps.length === 0"
+        v-if="visibleSteps.length === 0"
         class="px-4 py-8 text-center text-sm text-zinc-500"
       >
         Waiting for deployment output…

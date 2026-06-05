@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Deployments\Resources;
 
+use App\Modules\BuildRunners\Enums\BuildStrategy;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentType;
 use App\Modules\Deployments\Enums\TriggerType;
@@ -34,6 +35,11 @@ class DeploymentResource extends JsonResource
             'commitMessage' => $this->commit_message,
             'releasePath' => $this->release_path,
             'pipelineRunId' => $this->pipeline_run_id,
+            'buildStrategy' => $this->build_strategy instanceof BuildStrategy
+                ? $this->build_strategy->value
+                : $this->build_strategy,
+            'buildRunnerId' => $this->build_runner_id,
+            'buildArtifactId' => $this->build_artifact_id,
             'isRollbackable' => $this->isRollbackable(),
             'triggeredBy' => $this->whenLoaded('triggeredBy', fn () => [
                 'id' => (string) $this->triggeredBy?->getKey(),

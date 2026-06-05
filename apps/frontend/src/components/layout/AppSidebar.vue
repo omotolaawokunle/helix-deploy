@@ -5,6 +5,7 @@ import {
   ActivityIcon,
   Building2Icon,
   ClipboardListIcon,
+  CpuIcon,
   FolderKanbanIcon,
   GitBranchIcon,
   HexagonIcon,
@@ -31,6 +32,7 @@ const { prefetchRoute } = useRoutePrefetch()
 const primaryNavItems = computed<NavItem[]>(() => [
   { label: 'Dashboard', to: '/dashboard', icon: ActivityIcon, visible: true },
   { label: 'Servers', to: '/servers', icon: ServerIcon, visible: true },
+  { label: 'Build Runners', to: '/build-runners', icon: CpuIcon, visible: true },
   { label: 'Projects', to: '/projects', icon: FolderKanbanIcon, visible: true },
   { label: 'Pipelines', to: '/pipelines', icon: GitBranchIcon, visible: true },
   {

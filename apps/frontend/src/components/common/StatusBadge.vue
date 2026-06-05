@@ -48,6 +48,15 @@ const deploymentStatusMap: Record<string, StatusConfig> = {
     label: 'Pending',
     className: 'bg-muted text-muted-foreground',
   },
+  [DeploymentStatus.Building]: {
+    label: 'Building',
+    className: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200',
+    pulse: true,
+  },
+  [DeploymentStatus.Built]: {
+    label: 'Built',
+    className: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200',
+  },
   [DeploymentStatus.Running]: {
     label: 'Running',
     className: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200',

@@ -53,6 +53,7 @@ class DeploymentStepUpdated implements ShouldBroadcastNow
             'stepId' => (string) $this->step->getKey(),
             'name' => $this->step->name,
             'order' => $this->step->order,
+            'phase' => $this->step->phase?->value ?? 'deploy',
             'status' => $this->step->status->value,
             'duration' => $this->stepDuration(),
         ];

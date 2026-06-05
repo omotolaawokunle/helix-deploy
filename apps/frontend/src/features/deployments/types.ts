@@ -22,6 +22,8 @@ export type DeploymentStepStatus =
   | 'failed'
   | 'skipped'
 
+export type DeploymentStepPhase = 'build' | 'deploy'
+
 export interface DeploymentLogLine {
   timestamp: string
   content: string
@@ -31,6 +33,7 @@ export interface DeploymentLogStep {
   id: string
   name: string
   order: number
+  phase: DeploymentStepPhase
   status: DeploymentStepStatus
   duration: number | null
   lines: DeploymentLogLine[]
@@ -54,6 +57,7 @@ export interface DeploymentStepResource {
   deploymentId: string
   name: string
   status: DeploymentStepStatus
+  phase: DeploymentStepPhase
   order: number
   exitCode: number | null
   startedAt: string | null
@@ -72,6 +76,9 @@ export interface DeploymentDetail {
   commitMessage: string | null
   releasePath: string | null
   pipelineRunId: string | null
+  buildStrategy: string | null
+  buildRunnerId: string | null
+  buildArtifactId: string | null
   isRollbackable: boolean
   triggeredBy: DeploymentTriggeredBy | null
   startedAt: string | null
