@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Deployments\Models;
 
 use App\Models\User;
+use App\Modules\BuildRunners\Enums\BuildStrategy;
+use App\Modules\BuildRunners\Models\BuildArtifact;
+use App\Modules\BuildRunners\Models\BuildRunner;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentType;
 use App\Modules\Deployments\Enums\DeploymentStepStatus;
@@ -16,6 +19,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Deployment extends Model
 {
@@ -27,6 +31,13 @@ class Deployment extends Model
     public $incrementing = false;
 
     protected $keyType = 'string';
+
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'build_strategy' => 'on_server',
+    ];
 
     protected $fillable = [
         'site_id',
@@ -42,6 +53,9 @@ class Deployment extends Model
         'rollback_target_id',
         'rollback_reason',
         'pipeline_run_id',
+        'build_runner_id',
+        'build_artifact_id',
+        'build_strategy',
         'metadata',
         'started_at',
         'finished_at',
@@ -56,6 +70,7 @@ class Deployment extends Model
             'status' => DeploymentStatus::class,
             'type' => DeploymentType::class,
             'trigger_type' => TriggerType::class,
+            'build_strategy' => BuildStrategy::class,
             'metadata' => 'array',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
@@ -82,9 +97,29 @@ class Deployment extends Model
         return $this->hasMany(DeploymentStep::class)->orderBy('order');
     }
 
+    public function buildRunner(): BelongsTo
+    {
+        return $this->belongsTo(BuildRunner::class);
+    }
+
+    public function buildArtifact(): HasOne
+    {
+        return $this->hasOne(BuildArtifact::class);
+    }
+
     public function rollbackTarget(): BelongsTo
     {
         return $this->belongsTo(self::class, 'rollback_target_id');
+    }
+
+    public function isRunnerBuild(): bool
+    {
+        return $this->build_strategy === BuildStrategy::RUNNER;
+    }
+
+    public function isOnServerBuild(): bool
+    {
+        return $this->build_strategy === BuildStrategy::ON_SERVER;
     }
 
     public function releases(): HasMany

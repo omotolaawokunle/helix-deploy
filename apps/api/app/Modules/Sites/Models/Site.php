@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Sites\Models;
 
 use App\Modules\Credentials\Models\Credential;
+use App\Modules\BuildRunners\Enums\BuildStrategy;
+use App\Modules\BuildRunners\Models\BuildRunner;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\Release;
 use App\Modules\Organizations\Models\Organization;
@@ -36,6 +38,13 @@ class Site extends Model
 
     protected $keyType = 'string';
 
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'build_strategy' => 'on_server',
+    ];
+
     protected $fillable = [
         'server_id',
         'organization_id',
@@ -49,6 +58,9 @@ class Site extends Model
         'repository_url',
         'repository_provider',
         'deploy_branch',
+        'build_strategy',
+        'build_runner_id',
+        'pre_build_script',
         'pre_deploy_script',
         'post_deploy_script',
         'run_migrations',
@@ -78,6 +90,7 @@ class Site extends Model
             'node_pm' => NodePM::class,
             'python_wsgi' => PythonWSGI::class,
             'status' => SiteStatus::class,
+            'build_strategy' => BuildStrategy::class,
             'aliases' => 'array',
             'run_migrations' => 'boolean',
             'app_port' => 'integer',
@@ -122,5 +135,10 @@ class Site extends Model
     public function pipeline(): BelongsTo
     {
         return $this->belongsTo(Pipeline::class);
+    }
+
+    public function preferredRunner(): BelongsTo
+    {
+        return $this->belongsTo(BuildRunner::class, 'build_runner_id');
     }
 }
