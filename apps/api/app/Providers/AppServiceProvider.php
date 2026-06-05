@@ -24,6 +24,8 @@ use App\Modules\Pipelines\StageHandlers\NotifyStageHandler;
 use App\Modules\Pipelines\StageHandlers\ScriptStageHandler;
 use App\Modules\Monitoring\Contracts\ServerMetricsCollectorInterface;
 use App\Modules\Monitoring\Services\ServerMetricsCollector;
+use App\Modules\Servers\Models\CloudProviderIntegration;
+use App\Modules\Servers\Policies\CloudProviderPolicy;
 use App\Modules\Sites\Models\GitProviderIntegration;
 use App\Modules\Sites\Policies\GitProviderPolicy;
 use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
@@ -68,5 +70,6 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::policy(SupervisorProcess::class, DaemonPolicy::class);
         Gate::policy(GitProviderIntegration::class, GitProviderPolicy::class);
+        Gate::policy(CloudProviderIntegration::class, CloudProviderPolicy::class);
     }
 }

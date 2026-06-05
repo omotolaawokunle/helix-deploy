@@ -161,6 +161,7 @@ export interface Server {
   sshPort: number
   sshUser: string
   provider: ServerProvider
+  providerInstanceId: string | null
   region: string | null
   serverType: string | null
   os: string | null

@@ -14,6 +14,8 @@ export interface RegisterServerPayload {
   environmentId?: string
   region?: string | null
   serverType?: string | null
+  providerInstanceId?: string | null
+  os?: string | null
   tags?: string[]
 }
 

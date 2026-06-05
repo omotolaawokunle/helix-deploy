@@ -30,6 +30,8 @@ class RegisterServerRequest extends FormRequest
             'provider' => ['required', 'string', Rule::in(array_column(ServerProvider::cases(), 'value'))],
             'region' => ['nullable', 'string', 'max:255'],
             'serverType' => ['nullable', 'string', 'max:255'],
+            'providerInstanceId' => ['nullable', 'string', 'max:255'],
+            'os' => ['nullable', 'string', 'max:255'],
             'managementMode' => ['required', 'string', Rule::in(array_column(ManagementMode::cases(), 'value'))],
             'authMethod' => ['required', 'string', Rule::in(['generate', 'import'])],
             'privateKey' => ['nullable', 'string', 'required_if:authMethod,import'],

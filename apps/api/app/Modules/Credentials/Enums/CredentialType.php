@@ -12,6 +12,7 @@ enum CredentialType: string
     case ENV_VAR = 'env_var';
     case REGISTRY_PASSWORD = 'registry_password';
     case GIT_PROVIDER_TOKEN = 'git_provider_token';
+    case CLOUD_PROVIDER_CREDENTIAL = 'cloud_provider_credential';
 
     public function label(): string
     {
@@ -22,6 +23,7 @@ enum CredentialType: string
             self::ENV_VAR => 'Environment Variable',
             self::REGISTRY_PASSWORD => 'Registry Password',
             self::GIT_PROVIDER_TOKEN => 'Git Provider Token',
+            self::CLOUD_PROVIDER_CREDENTIAL => 'Cloud Provider Credential',
         };
     }
 
@@ -34,6 +36,7 @@ enum CredentialType: string
             self::ENV_VAR => 'secondary',
             self::REGISTRY_PASSWORD => 'danger',
             self::GIT_PROVIDER_TOKEN => 'success',
+            self::CLOUD_PROVIDER_CREDENTIAL => 'success',
         };
     }
 }

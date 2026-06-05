@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { AlertTriangleIcon } from '@lucide/vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import PublicKeySuccessSheet from '@/features/servers/components/PublicKeySuccessSheet.vue'
 import ServerFormFields from '@/features/servers/components/ServerFormFields.vue'
+import type { CloudInstanceSelection } from '@/features/servers/components/CloudProviderImportPanel.vue'
 import {
   fetchProjectEnvironments,
   fetchProjects,
@@ -26,11 +27,15 @@ import { useActiveOrg } from '@/composables/useActiveOrg'
 import { ManagementMode, ServerProvider } from '@/types'
 import { extractFieldErrors } from '@/lib/validation-errors'
 
+const CloudProviderImportPanel = defineAsyncComponent(
+  () => import('@/features/servers/components/CloudProviderImportPanel.vue'),
+)
+
 interface Props {
   open: boolean
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
@@ -48,6 +53,10 @@ const ipAddress = ref('')
 const sshPort = ref(22)
 const sshUser = ref('deploy')
 const provider = ref<ServerProvider>(ServerProvider.Generic)
+const region = ref<string | null>(null)
+const serverType = ref<string | null>(null)
+const providerInstanceId = ref<string | null>(null)
+const os = ref<string | null>(null)
 const projectId = ref<string | undefined>(undefined)
 const environmentId = ref<string | undefined>(undefined)
 const authMethod = ref<'generate' | 'import'>('generate')
@@ -70,6 +79,9 @@ const providerOptions = [
 ]
 
 const isImportTab = computed(() => activeTab.value === 'import')
+const isCloudProviderSelected = computed(() =>
+  [ServerProvider.Hetzner, ServerProvider.DigitalOcean, ServerProvider.Aws].includes(provider.value),
+)
 
 watch(
   () => orgId.value,
@@ -95,6 +107,10 @@ function resetForm(): void {
   sshPort.value = 22
   sshUser.value = 'deploy'
   provider.value = ServerProvider.Generic
+  region.value = null
+  serverType.value = null
+  providerInstanceId.value = null
+  os.value = null
   projectId.value = undefined
   environmentId.value = undefined
   authMethod.value = 'generate'
@@ -109,6 +125,15 @@ function parseTags(value: string): string[] {
     .split(',')
     .map(tag => tag.trim())
     .filter(tag => tag !== '')
+}
+
+function handleCloudInstanceSelected(selection: CloudInstanceSelection): void {
+  hostname.value = selection.hostname
+  ipAddress.value = selection.ipAddress
+  region.value = selection.region
+  serverType.value = selection.serverType
+  providerInstanceId.value = selection.providerInstanceId
+  os.value = selection.os
 }
 
 async function handleSubmit(): Promise<void> {
@@ -129,6 +154,10 @@ async function handleSubmit(): Promise<void> {
       sshPort: sshPort.value,
       sshUser: sshUser.value,
       provider: provider.value,
+      region: region.value,
+      serverType: serverType.value,
+      providerInstanceId: providerInstanceId.value,
+      os: os.value,
       managementMode: isImportTab.value ? managementMode.value : ManagementMode.Managed,
       authMethod: authMethod.value,
       privateKey: authMethod.value === 'import' ? privateKey.value : undefined,
@@ -171,6 +200,14 @@ async function handleSubmit(): Promise<void> {
       </SheetHeader>
 
       <SheetBody>
+        <CloudProviderImportPanel
+          v-if="orgId !== null && isCloudProviderSelected"
+          :organization-id="orgId"
+          :provider="provider"
+          :active="props.open"
+          @instance-selected="handleCloudInstanceSelected"
+        />
+
         <Tabs v-model="activeTab" class="w-full">
           <TabsList class="grid h-auto w-full grid-cols-2">
             <TabsTrigger value="new" class="min-h-9">
@@ -181,7 +218,7 @@ async function handleSubmit(): Promise<void> {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="new" class="mt-4">
+          <TabsContent value="new" class="mt-4 space-y-4">
             <ServerFormFields
               v-model:hostname="hostname"
               v-model:ip-address="ipAddress"

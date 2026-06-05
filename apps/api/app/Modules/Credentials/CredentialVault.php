@@ -200,6 +200,129 @@ class CredentialVault implements CredentialVaultInterface
             ->first();
     }
 
+    public function storeCloudProviderCredential(Organization $organization, string $name, string $payload): Credential
+    {
+        $existing = Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::CLOUD_PROVIDER_CREDENTIAL)
+            ->where('name', $name)
+            ->first();
+
+        if ($existing !== null) {
+            return $this->updateCloudProviderCredential((string) $existing->getKey(), $organization, $payload);
+        }
+
+        $credential = $this->storeEncrypted(
+            organization: $organization,
+            owner: $organization,
+            name: $name,
+            type: CredentialType::CLOUD_PROVIDER_CREDENTIAL,
+            plaintext: $payload,
+            publicKey: null,
+        );
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.created',
+            resourceId: (string) $credential->getKey(),
+            afterState: [
+                'name' => $credential->name,
+                'type' => $credential->type?->value,
+            ],
+        );
+
+        return $credential;
+    }
+
+    public function updateCloudProviderCredential(string $credentialId, Organization $organization, string $payload): Credential
+    {
+        $credential = $this->loadCredential($credentialId, $organization);
+        $this->assertCredentialType($credential, CredentialType::CLOUD_PROVIDER_CREDENTIAL);
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $masterKey = $this->getMasterKey($organization);
+
+        try {
+            $encrypted = $this->encryption->encrypt($payload, $masterKey);
+        } finally {
+            sodium_memzero($masterKey);
+        }
+
+        $credential->forceFill([
+            'encrypted_value' => $encrypted->ciphertext,
+            'nonce' => $encrypted->nonce,
+            'last_used_at' => null,
+        ])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.updated',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $credential;
+    }
+
+    public function getCloudProviderCredential(Organization $organization, string $name): string
+    {
+        $credential = $this->findCloudProviderCredential($organization, $name);
+
+        if ($credential === null) {
+            throw new CredentialNotFoundException('Cloud provider credential not found.');
+        }
+
+        $plaintext = $this->decryptCredential($organization, $credential);
+
+        $credential->forceFill(['last_used_at' => now()])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.accessed',
+            resourceId: (string) $credential->getKey(),
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $plaintext;
+    }
+
+    public function findCloudProviderCredential(Organization $organization, string $name): ?Credential
+    {
+        return Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::CLOUD_PROVIDER_CREDENTIAL)
+            ->where('name', $name)
+            ->first();
+    }
+
+    public function deleteCloudProviderCredential(Organization $organization, string $name): void
+    {
+        $credential = $this->findCloudProviderCredential($organization, $name);
+
+        if ($credential === null) {
+            return;
+        }
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $credential->delete();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.deleted',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
+        );
+    }
+
     public function updateSecret(string $credentialId, Organization $organization, string $value): Credential
     {
         $credential = $this->loadCredential($credentialId, $organization);

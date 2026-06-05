@@ -18,6 +18,63 @@ export interface FetchServersOptions {
   serverGroupId?: string
 }
 
+export type CloudProviderType = 'hetzner' | 'digitalocean' | 'aws'
+
+export interface CloudProviderConnection {
+  provider: CloudProviderType
+  label: string
+  configured: boolean
+}
+
+export interface CloudInstance {
+  id: string
+  name: string
+  ipAddress: string | null
+  region: string | null
+  serverType: string | null
+  status: string
+  os: string | null
+}
+
+interface CollectionResponse<T> {
+  data: T[]
+}
+
+export async function fetchCloudProviders(organizationId: string): Promise<CloudProviderConnection[]> {
+  const response = await api.get<CollectionResponse<CloudProviderConnection>>(
+    `/api/v1/organizations/${organizationId}/cloud-providers`,
+  )
+
+  return response.data.data
+}
+
+export async function storeCloudProviderCredential(
+  organizationId: string,
+  payload:
+    | { provider: 'hetzner' | 'digitalocean'; token: string }
+    | { provider: 'aws'; accessKeyId: string; secretAccessKey: string; region: string },
+): Promise<void> {
+  await api.post(`/api/v1/organizations/${organizationId}/cloud-providers`, payload)
+}
+
+export async function deleteCloudProviderCredential(
+  organizationId: string,
+  provider: CloudProviderType,
+): Promise<void> {
+  await api.delete(`/api/v1/organizations/${organizationId}/cloud-providers/${provider}`)
+}
+
+export async function fetchCloudInstances(
+  organizationId: string,
+  provider: CloudProviderType,
+): Promise<CloudInstance[]> {
+  const response = await api.get<CollectionResponse<CloudInstance>>(
+    `/api/v1/organizations/${organizationId}/cloud-providers/${provider}/instances`,
+  )
+
+  return response.data.data
+}
+
 export async function fetchServers(
   organizationId: string,
   options: FetchServersOptions = {},

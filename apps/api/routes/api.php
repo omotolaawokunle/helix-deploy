@@ -27,6 +27,7 @@ use App\Modules\Deployments\Controllers\DeploymentStreamController;
 use App\Modules\CronJobs\Controllers\CronJobController;
 use App\Modules\Daemons\Controllers\DaemonController;
 use App\Modules\Sites\Controllers\GitProviderController;
+use App\Modules\Servers\Controllers\CloudProviderController;
 use App\Modules\Sites\Controllers\EnvVarController;
 use App\Modules\Sites\Controllers\NginxConfigController;
 use App\Modules\Sites\Controllers\SiteController;
@@ -123,6 +124,10 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::delete('/organizations/{org}/git-providers/{provider}', [GitProviderController::class, 'destroy']);
     Route::get('/organizations/{org}/git-providers/{provider}/repositories', [GitProviderController::class, 'repositories']);
     Route::get('/organizations/{org}/git-providers/{provider}/repositories/{owner}/{repo}/branches', [GitProviderController::class, 'branches']);
+    Route::get('/organizations/{org}/cloud-providers', [CloudProviderController::class, 'index']);
+    Route::post('/organizations/{org}/cloud-providers', [CloudProviderController::class, 'store']);
+    Route::delete('/organizations/{org}/cloud-providers/{provider}', [CloudProviderController::class, 'destroy']);
+    Route::get('/organizations/{org}/cloud-providers/{provider}/instances', [CloudProviderController::class, 'instances']);
     Route::get('/organizations/{org}/sites', [SiteController::class, 'index']);
     Route::get('/servers/{server}/sites', [SiteController::class, 'indexForServer']);
     Route::post('/servers/{server}/sites', [SiteController::class, 'store']);
