@@ -7,6 +7,7 @@ namespace App\Modules\Servers\Policies;
 use App\Models\User;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Servers\Models\Server;
+use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use App\Modules\Teams\Enums\TeamRole;
 
 class ServerPolicy
@@ -18,9 +19,18 @@ class ServerPolicy
 
     public function view(User $user, Server $server): bool
     {
-        $role = $this->roleInOrganization($user, $server->organization);
+        if ($this->roleInOrganization($user, $server->organization) === null) {
+            return false;
+        }
 
-        return $role !== null;
+        $project = $server->project;
+
+        if ($project === null) {
+            return app(TeamProjectVisibilityServiceInterface::class)
+                ->visibleProjectIds($user, $server->organization) === null;
+        }
+
+        return app(TeamProjectVisibilityServiceInterface::class)->canAccessProject($user, $project);
     }
 
     public function create(User $user, Organization $org): bool

@@ -7,6 +7,7 @@ namespace App\Modules\Projects\Policies;
 use App\Models\User;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Projects\Models\Project;
+use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use App\Modules\Teams\Enums\TeamRole;
 
 class ProjectPolicy
@@ -18,7 +19,11 @@ class ProjectPolicy
 
     public function view(User $user, Project $project): bool
     {
-        return $this->roleInOrganization($user, $project->organization) !== null;
+        if ($this->roleInOrganization($user, $project->organization) === null) {
+            return false;
+        }
+
+        return app(TeamProjectVisibilityServiceInterface::class)->canAccessProject($user, $project);
     }
 
     public function create(User $user, Organization $org): bool

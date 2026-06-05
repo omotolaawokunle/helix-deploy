@@ -19,6 +19,7 @@ use App\Modules\Servers\Resources\ServerRegistrationResource;
 use App\Modules\Servers\Resources\ServerResource;
 use App\Modules\Servers\Services\ServerTableFilterService;
 use App\Modules\Organizations\Models\Organization;
+use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,15 +30,27 @@ class ServerController extends Controller
         Organization $org,
         Request $request,
         ServerTableFilterService $tableFilterService,
+        TeamProjectVisibilityServiceInterface $visibilityService,
     ): \Illuminate\Http\Resources\Json\AnonymousResourceCollection {
         $this->authorize('viewAny', [Server::class, $org]);
 
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        $query = Server::query()
+            ->withoutGlobalScope('owned_by_organization')
+            ->where('organization_id', (string) $org->getKey())
+            ->select('servers.*')
+            ->with(['project', 'environment']);
+
+        $visibleProjectIds = $visibilityService->visibleProjectIds($user, $org);
+
+        if ($visibleProjectIds !== null) {
+            $query->whereIn('project_id', $visibleProjectIds);
+        }
+
         $servers = $tableFilterService->paginate(
-            query: Server::query()
-                ->withoutGlobalScope('owned_by_organization')
-                ->where('organization_id', (string) $org->getKey())
-                ->select('servers.*')
-                ->with(['project', 'environment']),
+            query: $query,
             request: $request,
         );
 

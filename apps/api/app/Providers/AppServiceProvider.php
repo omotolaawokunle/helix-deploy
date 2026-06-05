@@ -14,6 +14,8 @@ use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
 use App\Packages\Execution\DeploymentRunner;
 use App\Modules\Daemons\Models\SupervisorProcess;
 use App\Modules\Daemons\Policies\DaemonPolicy;
+use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
+use App\Modules\Teams\Services\TeamProjectVisibilityService;
 use App\Packages\Realtime\DeploymentStreamPublisher;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -30,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(NginxConfigGeneratorInterface::class, NginxConfigGenerator::class);
         $this->app->singleton(ExecutionRunnerInterface::class, DeploymentRunner::class);
         $this->app->singleton(DeploymentStreamPublisher::class);
+        $this->app->singleton(TeamProjectVisibilityServiceInterface::class, TeamProjectVisibilityService::class);
     }
 
     /**
