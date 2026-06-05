@@ -6,6 +6,7 @@ namespace App\Modules\BuildRunners\Enums;
 
 enum BuildRunnerStatus: string
 {
+    case CONNECTING = 'connecting';
     case ONLINE = 'online';
     case OFFLINE = 'offline';
     case MAINTENANCE = 'maintenance';
@@ -13,6 +14,7 @@ enum BuildRunnerStatus: string
     public function label(): string
     {
         return match ($this) {
+            self::CONNECTING => 'Connecting',
             self::ONLINE => 'Online',
             self::OFFLINE => 'Offline',
             self::MAINTENANCE => 'Maintenance',
@@ -22,6 +24,7 @@ enum BuildRunnerStatus: string
     public function color(): string
     {
         return match ($this) {
+            self::CONNECTING => 'info',
             self::ONLINE => 'success',
             self::OFFLINE => 'danger',
             self::MAINTENANCE => 'warning',

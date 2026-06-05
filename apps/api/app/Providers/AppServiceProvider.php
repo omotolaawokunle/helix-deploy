@@ -30,6 +30,8 @@ use App\Modules\Sites\Models\GitProviderIntegration;
 use App\Modules\Sites\Policies\GitProviderPolicy;
 use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use App\Modules\Teams\Services\TeamProjectVisibilityService;
+use App\Modules\BuildRunners\Contracts\RunnerSlotStoreInterface;
+use App\Modules\BuildRunners\Services\RedisRunnerSlotStore;
 use App\Packages\Realtime\DeploymentStreamPublisher;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -48,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(DeploymentStreamPublisher::class);
         $this->app->singleton(TeamProjectVisibilityServiceInterface::class, TeamProjectVisibilityService::class);
         $this->app->singleton(ServerMetricsCollectorInterface::class, ServerMetricsCollector::class);
+        $this->app->singleton(RunnerSlotStoreInterface::class, RedisRunnerSlotStore::class);
         $this->app->singleton(PipelineStageHandlerRegistry::class, function (): PipelineStageHandlerRegistry {
             /** @var list<PipelineStageHandlerInterface> $handlers */
             $handlers = [

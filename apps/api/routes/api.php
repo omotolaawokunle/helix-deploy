@@ -31,6 +31,7 @@ use App\Modules\Servers\Controllers\CloudProviderController;
 use App\Modules\Sites\Controllers\EnvVarController;
 use App\Modules\Sites\Controllers\NginxConfigController;
 use App\Modules\Sites\Controllers\SiteController;
+use App\Modules\BuildRunners\Controllers\BuildRunnerController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/auth')->middleware('web')->group(function (): void {
@@ -108,6 +109,12 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::patch('/servers/{server}', [ServerController::class, 'update']);
     Route::delete('/servers/{server}', [ServerController::class, 'destroy']);
     Route::post('/servers/{server}/test-connection', [ServerController::class, 'testConnection']);
+    Route::get('/organizations/{org}/build-runners', [BuildRunnerController::class, 'index']);
+    Route::post('/organizations/{org}/build-runners', [BuildRunnerController::class, 'store']);
+    Route::get('/build-runners/{buildRunner}', [BuildRunnerController::class, 'show']);
+    Route::patch('/build-runners/{buildRunner}', [BuildRunnerController::class, 'update']);
+    Route::delete('/build-runners/{buildRunner}', [BuildRunnerController::class, 'destroy']);
+    Route::post('/build-runners/{buildRunner}/test-connection', [BuildRunnerController::class, 'testConnection']);
     Route::get('/servers/{server}/commands', [CommandController::class, 'index']);
     Route::post('/servers/{server}/commands', [CommandController::class, 'store']);
     Route::get('/commands/{command}/stream', [CommandStreamController::class, 'stream']);
