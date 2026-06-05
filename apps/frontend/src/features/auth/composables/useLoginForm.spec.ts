@@ -12,9 +12,11 @@ vi.mock('@/features/organizations/api', () => ({
   fetchCurrentMemberRole: vi.fn().mockResolvedValue('owner'),
 }))
 
+const routerPush = vi.fn()
+
 vi.mock('vue-router', () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: routerPush,
   }),
 }))
 
@@ -24,6 +26,7 @@ describe('useLoginForm', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    routerPush.mockReset()
   })
 
   it('submits correct payload on form submit', async () => {
@@ -48,6 +51,28 @@ describe('useLoginForm', () => {
       password: 'secret-password',
     })
     expect(authStore.isAuthenticated).toBe(true)
+    expect(routerPush).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('redirects unverified users to email verification', async () => {
+    vi.mocked(loginRequest).mockResolvedValue({
+      id: 'user-1',
+      name: 'Test User',
+      email: 'test@example.com',
+      emailVerifiedAt: null,
+      currentOrganizationId: 'org-1',
+      createdAt: new Date().toISOString(),
+    })
+
+    const { submitLogin, authStore } = useLoginForm()
+
+    await submitLogin({
+      email: 'test@example.com',
+      password: 'secret-password',
+    })
+
+    expect(authStore.isEmailVerified).toBe(false)
+    expect(routerPush).toHaveBeenCalledWith('/verify-email')
   })
 
   it('shows 422 errors on correct fields', async () => {

@@ -13,7 +13,7 @@ defineProps<Props>()
 <template>
   <RouterLink
     :to="to"
-    class="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+    class="inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
   >
     <ArrowLeftIcon class="size-4" />
     {{ label }}

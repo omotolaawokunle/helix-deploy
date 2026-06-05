@@ -11,7 +11,10 @@
         var stored = localStorage.getItem(key);
         var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         var isDark = stored === 'dark' || ((stored === 'system' || !stored) && prefersDark);
-        if (isDark) document.documentElement.classList.add('dark');
+        var root = document.documentElement;
+        root.classList.toggle('dark', isDark);
+        root.classList.toggle('light', !isDark);
+        root.dataset.theme = isDark ? 'dark' : 'light';
       })();
     </script>
   </head>

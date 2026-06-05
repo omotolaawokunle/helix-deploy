@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
   SelectContent,
@@ -25,6 +26,7 @@ import {
 } from '@/components/ui/table'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import {
+  deleteOrganization,
   fetchOrganization,
   fetchOrganizationMembers,
   inviteOrganizationMember,
@@ -40,10 +42,16 @@ const router = useRouter()
 
 const organization = ref<Organization | null>(null)
 const members = ref<OrganizationMemberRecord[]>([])
+const isLoading = ref(true)
 const orgName = ref('')
 const inviteEmail = ref('')
 const inviteRole = ref<TeamRole>(TeamRole.Member)
 const isDeleteOrgOpen = ref(false)
+const isDeletingOrg = ref(false)
+
+const canDeleteOrganization = computed(
+  () => authStore.organizations.length > 1,
+)
 
 const roleOptions = [
   TeamRole.Owner,
@@ -66,9 +74,22 @@ async function load(): Promise<void> {
     return
   }
 
-  organization.value = await fetchOrganization(orgId)
-  orgName.value = organization.value.name
-  members.value = await fetchOrganizationMembers(orgId)
+  isLoading.value = true
+
+  try {
+    const [organizationData, membersData] = await Promise.all([
+      fetchOrganization(orgId),
+      fetchOrganizationMembers(orgId),
+    ])
+
+    organization.value = organizationData
+    orgName.value = organizationData.name
+    members.value = membersData
+  } catch {
+    toast.error('Unable to load organization settings.')
+  } finally {
+    isLoading.value = false
+  }
 }
 
 async function saveOrganization(): Promise<void> {
@@ -137,8 +158,27 @@ async function removeMember(memberId: string): Promise<void> {
   }
 }
 
-function handleDeleteOrg(): void {
-  toast.error('Organization deletion is not available yet.')
+async function handleDeleteOrg(): Promise<void> {
+  const orgId = authStore.currentOrg?.id
+
+  if (orgId === undefined) {
+    return
+  }
+
+  isDeletingOrg.value = true
+
+  try {
+    await deleteOrganization(orgId)
+    isDeleteOrgOpen.value = false
+    toast.success('Organization deleted.')
+    await authStore.loadOrganizations()
+    await router.push('/dashboard')
+    window.location.reload()
+  } catch {
+    toast.error('Unable to delete organization.')
+  } finally {
+    isDeletingOrg.value = false
+  }
 }
 
 onMounted(() => {
@@ -153,6 +193,12 @@ onMounted(() => {
       description="Manage your organization name, members, and access."
     />
 
+    <div v-if="isLoading" class="space-y-4">
+      <Skeleton class="h-48 w-full max-w-lg rounded-lg" />
+      <Skeleton class="h-64 w-full rounded-lg" />
+    </div>
+
+    <template v-else>
     <form class="panel max-w-lg space-y-4 p-6" @submit.prevent="saveOrganization">
       <div class="space-y-2">
         <Label for="org-name">Organization name</Label>
@@ -263,13 +309,17 @@ onMounted(() => {
       <p class="mt-2 text-sm text-muted-foreground">
         Delete this organization and all associated data permanently.
       </p>
+      <p v-if="!canDeleteOrganization" class="mt-2 text-sm text-muted-foreground">
+        You must belong to at least one other organization before deleting this one.
+      </p>
       <Button
         type="button"
         variant="destructive"
         class="mt-4"
+        :disabled="!canDeleteOrganization || isDeletingOrg"
         @click="isDeleteOrgOpen = true"
       >
-        Delete Organization
+        Delete organization
       </Button>
     </section>
 
@@ -282,5 +332,6 @@ onMounted(() => {
       confirm-button-label="Delete organization"
       @confirm="handleDeleteOrg"
     />
+    </template>
   </div>
 </template>

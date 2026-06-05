@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select'
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -134,7 +135,7 @@ async function handleSubmit(): Promise<void> {
 
 <template>
   <Sheet :open="open" @update:open="emit('update:open', $event)">
-    <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-lg">
+    <SheetContent side="right" class="flex w-full flex-col sm:max-w-lg">
       <SheetHeader>
         <SheetTitle>Provision server</SheetTitle>
         <SheetDescription>
@@ -142,7 +143,7 @@ async function handleSubmit(): Promise<void> {
         </SheetDescription>
       </SheetHeader>
 
-      <div class="mt-4 space-y-6">
+      <SheetBody class="space-y-6">
         <div class="space-y-2">
           <Label>Quick templates</Label>
           <div class="flex flex-wrap gap-2">
@@ -165,7 +166,7 @@ async function handleSubmit(): Promise<void> {
             <label
               v-for="script in PROVISIONING_SCRIPTS"
               :key="script"
-              class="flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm"
+              class="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-3 text-sm text-foreground transition-colors hover:bg-muted/50"
               :class="selectedScripts.has(script) ? 'border-primary bg-primary/5' : ''"
             >
               <input
@@ -225,9 +226,9 @@ async function handleSubmit(): Promise<void> {
         <p v-if="apiError" class="text-sm text-destructive">
           {{ apiError }}
         </p>
-      </div>
+      </SheetBody>
 
-      <SheetFooter class="mt-6">
+      <SheetFooter>
         <Button
           type="button"
           variant="outline"

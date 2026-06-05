@@ -41,6 +41,7 @@ const servers = ref<Server[]>([])
 const deployments = ref<DeploymentListItem[]>([])
 const sites = ref<Site[]>([])
 const isLoading = ref(true)
+const loadError = ref<string | null>(null)
 
 const quickDeploySiteId = ref('')
 
@@ -104,12 +105,17 @@ async function refreshDashboard(): Promise<void> {
   }
 
   try {
-    const data = await loadDashboardData(orgId)
+    const [data, orgSites] = await Promise.all([
+      loadDashboardData(orgId),
+      fetchOrgSites(orgId),
+    ])
     stats.value = data.stats
     servers.value = data.servers
     deployments.value = data.deployments
-    sites.value = await fetchOrgSites(orgId)
+    sites.value = orgSites
+    loadError.value = null
   } catch {
+    loadError.value = 'Unable to load dashboard.'
     toast.error('Unable to load dashboard.')
   }
 }
@@ -162,6 +168,10 @@ onMounted(() => {
       description="Organization overview — servers, deployments, and quick actions."
     />
 
+    <p v-if="loadError !== null" class="text-sm text-destructive">
+      {{ loadError }}
+    </p>
+
     <section>
       <h2 class="section-label">
         Overview
@@ -175,7 +185,7 @@ onMounted(() => {
           <dt class="text-sm text-muted-foreground">
             {{ row.label }}
           </dt>
-          <dd class="text-sm font-semibold tabular-nums">
+          <dd class="text-sm font-semibold tabular-nums text-foreground">
             {{ row.value }}
           </dd>
         </div>
@@ -206,6 +216,11 @@ onMounted(() => {
               <TableRow v-if="isLoading">
                 <TableCell colspan="6" class="text-muted-foreground">
                   Loading…
+                </TableCell>
+              </TableRow>
+              <TableRow v-else-if="deployments.length === 0">
+                <TableCell colspan="6" class="text-muted-foreground">
+                  No deployments yet.
                 </TableCell>
               </TableRow>
               <TableRow
@@ -239,10 +254,16 @@ onMounted(() => {
             Server Status
           </h2>
           <ul class="panel divide-y">
+            <li v-if="isLoading" class="px-4 py-3 text-sm text-muted-foreground">
+              Loading…
+            </li>
+            <li v-else-if="servers.length === 0" class="px-4 py-3 text-sm text-muted-foreground">
+              No servers registered.
+            </li>
             <li v-for="server in servers" :key="server.id">
               <RouterLink
                 :to="`/servers/${server.id}`"
-                class="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50"
+                class="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <div>
                   <p class="font-medium">
@@ -261,9 +282,12 @@ onMounted(() => {
         </div>
 
         <div class="panel space-y-4 p-4">
-          <h2 class="text-sm font-medium">
+          <h2 class="section-label mb-0">
             Quick Deploy
           </h2>
+          <p v-if="!isLoading && sites.length === 0" class="text-sm text-muted-foreground">
+            Add a site to a server to enable quick deploy.
+          </p>
           <ProductionWarningBanner
             variant="inline"
             :resource-name="selectedSite?.domain ?? ''"

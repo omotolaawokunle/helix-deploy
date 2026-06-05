@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table'
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -339,20 +340,22 @@ onUnmounted(() => {
     />
 
     <Sheet v-model:open="isBulkImportOpen">
-      <SheetContent class="sm:max-w-lg">
+      <SheetContent side="right" class="flex w-full flex-col sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>Bulk import</SheetTitle>
           <SheetDescription>
             Paste .env file contents. Each KEY=VALUE line will be created.
           </SheetDescription>
         </SheetHeader>
-        <Textarea
-          v-model="bulkImportContent"
-          rows="12"
-          class="mt-4 font-mono text-sm"
-          placeholder="APP_ENV=production&#10;APP_KEY=base64:..."
-        />
-        <SheetFooter class="mt-4 flex-row justify-end gap-2 border-t pt-4">
+        <SheetBody>
+          <Textarea
+            v-model="bulkImportContent"
+            rows="12"
+            class="font-mono text-sm"
+            placeholder="APP_ENV=production&#10;APP_KEY=base64:..."
+          />
+        </SheetBody>
+        <SheetFooter>
           <Button variant="outline" type="button" @click="isBulkImportOpen = false">
             Cancel
           </Button>

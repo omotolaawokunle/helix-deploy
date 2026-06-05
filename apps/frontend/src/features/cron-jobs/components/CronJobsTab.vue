@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -221,14 +222,14 @@ void loadCronJobs()
     </div>
 
     <Sheet v-model:open="isCreateOpen">
-      <SheetContent class="sm:max-w-md">
+      <SheetContent side="right" class="flex w-full flex-col sm:max-w-md">
         <SheetHeader>
           <SheetTitle>New cron job</SheetTitle>
           <SheetDescription>
             Schedule a command on this server.
           </SheetDescription>
         </SheetHeader>
-        <div class="space-y-4 py-4">
+        <SheetBody class="space-y-4">
           <div class="space-y-2">
             <Label for="cron-expression">Expression</Label>
             <Input
@@ -261,8 +262,11 @@ void loadCronJobs()
               </SelectContent>
             </Select>
           </div>
-        </div>
+        </SheetBody>
         <SheetFooter>
+          <Button type="button" variant="outline" @click="isCreateOpen = false">
+            Cancel
+          </Button>
           <Button type="button" @click="handleCreate">
             Create
           </Button>

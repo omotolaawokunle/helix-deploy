@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from '@lucide/vue'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -11,9 +11,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import CreateOrgModal from '@/components/layout/CreateOrgModal.vue'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { getInitials } from '@/lib/utils'
+
+const CreateOrgModal = defineAsyncComponent(
+  () => import('@/components/layout/CreateOrgModal.vue'),
+)
 
 const authStore = useAuthStore()
 const isCreateModalOpen = ref(false)
@@ -42,7 +45,7 @@ async function handleSelect(orgId: string): Promise<void> {
       <DropdownMenuTrigger as-child>
         <Button
           variant="outline"
-          class="w-full justify-between gap-2 border-sidebar-border bg-background/60 px-2 hover:bg-sidebar-accent"
+          class="w-full justify-between gap-2 border-sidebar-border bg-background/60 px-2 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           :disabled="isSwitching"
         >
           <span class="flex min-w-0 items-center gap-2">
@@ -51,7 +54,7 @@ async function handleSelect(orgId: string): Promise<void> {
                 {{ getInitials(currentOrgName) }}
               </AvatarFallback>
             </Avatar>
-            <span class="truncate text-left text-sm font-medium">{{ currentOrgName }}</span>
+            <span class="truncate text-left text-sm font-medium text-sidebar-foreground">{{ currentOrgName }}</span>
           </span>
           <ChevronsUpDownIcon class="size-4 shrink-0 opacity-50" />
         </Button>
@@ -89,6 +92,7 @@ async function handleSelect(orgId: string): Promise<void> {
     </DropdownMenu>
 
     <CreateOrgModal
+      v-if="isCreateModalOpen"
       v-model:open="isCreateModalOpen"
       @created="authStore.loadOrganizations()"
     />

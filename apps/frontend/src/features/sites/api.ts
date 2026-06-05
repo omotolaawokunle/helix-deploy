@@ -9,6 +9,24 @@ interface CollectionResponse<T> {
   data: T[]
 }
 
+export interface CreateSitePayload {
+  domain: string
+  runtime: string
+  deployBranch?: string
+  repositoryUrl?: string
+  phpVersion?: string
+  appPort?: number
+}
+
+export async function createSite(serverId: string, payload: CreateSitePayload): Promise<Site> {
+  const response = await api.post<ResourceResponse<Site>>(
+    `/api/v1/servers/${serverId}/sites`,
+    payload,
+  )
+
+  return response.data.data
+}
+
 export async function fetchSite(siteId: string): Promise<Site> {
   const response = await api.get<ResourceResponse<Site>>(`/api/v1/sites/${siteId}`)
 

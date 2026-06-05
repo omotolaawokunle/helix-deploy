@@ -20,8 +20,11 @@ export const useAuthStore = defineStore('auth', () => {
   const organizations = ref<Organization[]>([])
   const currentRole = ref<TeamRole | null>(null)
   const isLoading = ref(false)
+  const isInitialized = ref(false)
 
   const isAuthenticated = computed(() => user.value !== null)
+
+  const isEmailVerified = computed(() => user.value?.emailVerifiedAt != null)
 
   const currentOrg = computed(() => user.value?.currentOrganization ?? null)
 
@@ -55,6 +58,11 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     organizations.value = []
     currentRole.value = null
+    isInitialized.value = false
+  }
+
+  function markAuthInitialized(): void {
+    isInitialized.value = true
   }
 
   async function resolveCurrentRole(): Promise<void> {
@@ -73,29 +81,43 @@ export const useAuthStore = defineStore('auth', () => {
     organizations.value = await fetchOrganizations()
   }
 
+  async function hydrateAuthenticatedUser(authUser: AuthUser): Promise<void> {
+    setAuthUser(authUser)
+
+    if (authUser.emailVerifiedAt == null) {
+      return
+    }
+
+    await loadOrganizations()
+    await resolveCurrentRole()
+  }
+
   async function init(): Promise<void> {
+    if (isInitialized.value) {
+      return
+    }
+
     isLoading.value = true
 
     try {
       const authUser = await fetchAuthUser()
-      setAuthUser(authUser)
-      await loadOrganizations()
-      await resolveCurrentRole()
+      await hydrateAuthenticatedUser(authUser)
     } catch {
       clearAuth()
     } finally {
       isLoading.value = false
+      isInitialized.value = true
     }
   }
 
-  async function login(payload: LoginPayload): Promise<void> {
+  async function login(payload: LoginPayload): Promise<AuthUser> {
     isLoading.value = true
 
     try {
       const authUser = await loginRequest(payload)
-      setAuthUser(authUser)
-      await loadOrganizations()
-      await resolveCurrentRole()
+      await hydrateAuthenticatedUser(authUser)
+
+      return authUser
     } finally {
       isLoading.value = false
     }
@@ -143,7 +165,9 @@ export const useAuthStore = defineStore('auth', () => {
     organizations,
     currentRole,
     isLoading,
+    isInitialized,
     isAuthenticated,
+    isEmailVerified,
     currentOrg,
     isOwner,
     isAdmin,
@@ -152,6 +176,7 @@ export const useAuthStore = defineStore('auth', () => {
     canManageOrgSettings,
     setAuthUser,
     clearAuth,
+    markAuthInitialized,
     init,
     login,
     logout,

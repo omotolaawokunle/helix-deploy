@@ -8,6 +8,7 @@ export const useServersStore = defineStore('servers', () => {
   const servers = ref<Server[]>([])
   const isLoading = ref(false)
   const hasFetched = ref(false)
+  const fetchError = ref<string | null>(null)
 
   const { orgId } = useActiveOrg()
 
@@ -21,9 +22,13 @@ export const useServersStore = defineStore('servers', () => {
     }
 
     isLoading.value = true
+    fetchError.value = null
 
     try {
       servers.value = await fetchServers(activeOrgId)
+      hasFetched.value = true
+    } catch {
+      fetchError.value = 'Unable to load servers.'
       hasFetched.value = true
     } finally {
       isLoading.value = false
@@ -52,6 +57,7 @@ export const useServersStore = defineStore('servers', () => {
   function invalidateCache(): void {
     hasFetched.value = false
     servers.value = []
+    fetchError.value = null
   }
 
   async function handleServerConnected(): Promise<void> {
@@ -63,6 +69,7 @@ export const useServersStore = defineStore('servers', () => {
     servers,
     isLoading,
     hasFetched,
+    fetchError,
     fetch,
     getById,
     invalidateCache,

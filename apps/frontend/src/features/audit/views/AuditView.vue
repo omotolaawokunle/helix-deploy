@@ -116,14 +116,20 @@ function toggleExpanded(entry: AuditLogEntry): void {
   expandedId.value = expandedId.value === entry.id ? null : entry.id
 }
 
+function handleRowKeydown(event: KeyboardEvent, entry: AuditLogEntry): void {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    toggleExpanded(entry)
+  }
+}
+
 onMounted(() => {
-  void loadMembers()
-  void loadAuditLogs()
+  void Promise.all([loadMembers(), loadAuditLogs()])
 })
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-8">
     <PageHeader
       title="Audit Log"
       description="Immutable record of sensitive operations across your organization."
@@ -193,11 +199,26 @@ onMounted(() => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <template v-for="entry in logs" :key="entry.id">
+            <TableRow v-if="isLoading">
+              <TableCell colspan="5" class="text-muted-foreground">
+                Loading audit logs…
+              </TableCell>
+            </TableRow>
+            <TableRow v-else-if="logs.length === 0">
+              <TableCell colspan="5" class="text-muted-foreground">
+                No audit entries match your filters.
+              </TableCell>
+            </TableRow>
+            <template v-else>
+              <template v-for="entry in logs" :key="entry.id">
               <TableRow
-                class="cursor-pointer"
+                tabindex="0"
+                role="button"
+                :aria-expanded="expandedId === entry.id"
+                class="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 data-testid="audit-log-row"
                 @click="toggleExpanded(entry)"
+                @keydown="handleRowKeydown($event, entry)"
               >
                 <TableCell>
                   <Badge
@@ -238,6 +259,7 @@ onMounted(() => {
                   </p>
                 </TableCell>
               </TableRow>
+            </template>
             </template>
           </TableBody>
         </Table>

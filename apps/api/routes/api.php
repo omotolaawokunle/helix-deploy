@@ -23,13 +23,10 @@ Route::prefix('v1/auth')->middleware('web')->group(function (): void {
     Route::post('/login', [AuthController::class, 'login']);
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('/user', [AuthController::class, 'user']);
+        Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail']);
         Route::post('/email/resend', [AuthController::class, 'resendVerificationEmail']);
-    });
-
-    Route::middleware(['auth:sanctum', 'verified'])->group(function (): void {
-        Route::post('/logout', [AuthController::class, 'logout']);
-        Route::get('/user', [AuthController::class, 'user']);
     });
 });
 
@@ -38,6 +35,7 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::post('/organizations', [OrganizationController::class, 'store']);
     Route::get('/organizations/{org}', [OrganizationController::class, 'show']);
     Route::patch('/organizations/{org}', [OrganizationController::class, 'update']);
+    Route::delete('/organizations/{org}', [OrganizationController::class, 'destroy']);
     Route::get('/organizations/{org}/members', [OrganizationMemberController::class, 'index']);
     Route::post('/organizations/{org}/invitations', [OrganizationMemberController::class, 'invite']);
     Route::patch('/organizations/{org}/members/{user}', [OrganizationMemberController::class, 'update']);

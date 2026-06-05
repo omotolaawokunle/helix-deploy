@@ -1,10 +1,14 @@
 import { computed, watch, type Ref } from 'vue'
-import { useIntervalFn } from '@vueuse/core'
+import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
 import { ServerStatus, type Server } from '@/types'
 
 export function useServerPolling(servers: Ref<Server[]>, refetch: () => Promise<void>): void {
-  const shouldPoll = computed(() =>
-    servers.value.some(server => server.status === ServerStatus.Connecting),
+  const documentVisibility = useDocumentVisibility()
+
+  const shouldPoll = computed(
+    () =>
+      documentVisibility.value === 'visible'
+      && servers.value.some(server => server.status === ServerStatus.Connecting),
   )
 
   const { pause, resume } = useIntervalFn(

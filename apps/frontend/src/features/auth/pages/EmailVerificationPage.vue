@@ -16,13 +16,19 @@ const authStore = useAuthStore()
 const router = useRouter()
 const isResending = ref(false)
 const resendMessage = ref<string | null>(null)
+const resendIsError = ref(false)
 
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
     await authStore.init()
   }
 
-  if (authStore.user?.emailVerifiedAt !== null && authStore.user?.emailVerifiedAt !== undefined) {
+  if (!authStore.isAuthenticated) {
+    await router.replace('/login')
+    return
+  }
+
+  if (authStore.isEmailVerified) {
     await router.replace('/dashboard')
   }
 })
@@ -33,8 +39,10 @@ async function handleResend(): Promise<void> {
 
   try {
     await authStore.resendVerification()
+    resendIsError.value = false
     resendMessage.value = 'Verification email sent.'
   } catch {
+    resendIsError.value = true
     resendMessage.value = 'Unable to resend verification email.'
   } finally {
     isResending.value = false
@@ -68,7 +76,11 @@ async function handleResend(): Promise<void> {
           {{ isResending ? 'Sending…' : 'Resend verification' }}
         </Button>
 
-        <p v-if="resendMessage" class="text-sm text-muted-foreground">
+        <p
+          v-if="resendMessage"
+          class="text-sm"
+          :class="resendIsError ? 'text-destructive' : 'text-muted-foreground'"
+        >
           {{ resendMessage }}
         </p>
       </CardContent>

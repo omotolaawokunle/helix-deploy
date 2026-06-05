@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -82,7 +83,7 @@ function handleSubmit(): void {
         </SheetDescription>
       </SheetHeader>
 
-      <div class="flex flex-1 flex-col gap-4 overflow-y-auto py-4">
+      <SheetBody class="space-y-4">
         <ProductionWarningBanner
           :resource-name="site?.domain ?? 'site'"
           :is-production="isProduction"
@@ -110,13 +111,13 @@ function handleSubmit(): void {
             class="mt-1 size-4 rounded border-input"
             data-testid="production-confirm-checkbox"
           />
-          <Label for="production-confirm" class="text-sm leading-snug">
+          <Label for="production-confirm" class="text-sm leading-snug text-foreground">
             I confirm this deployment will affect live traffic
           </Label>
         </div>
-      </div>
+      </SheetBody>
 
-      <SheetFooter class="flex-row justify-end gap-2 border-t pt-4">
+      <SheetFooter>
         <Button variant="outline" @click="handleOpenChange(false)">
           Cancel
         </Button>

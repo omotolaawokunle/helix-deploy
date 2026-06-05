@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   CheckIcon,
@@ -16,14 +16,26 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ProviderIcon from '@/features/servers/components/ProviderIcon.vue'
-import CommandRunnerTab from '@/features/commands/components/CommandRunnerTab.vue'
-import CronJobsTab from '@/features/cron-jobs/components/CronJobsTab.vue'
-import DaemonsTab from '@/features/daemons/components/DaemonsTab.vue'
-import ProvisionServerDrawer from '@/features/servers/components/ProvisionServerDrawer.vue'
-import ServerSitesTab from '@/features/servers/components/ServerSitesTab.vue'
+
 import { testServerConnection } from '@/features/servers/api'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
 import { ManagementMode, type Server } from '@/types'
+
+const ServerSitesTab = defineAsyncComponent(
+  () => import('@/features/servers/components/ServerSitesTab.vue'),
+)
+const CronJobsTab = defineAsyncComponent(
+  () => import('@/features/cron-jobs/components/CronJobsTab.vue'),
+)
+const DaemonsTab = defineAsyncComponent(
+  () => import('@/features/daemons/components/DaemonsTab.vue'),
+)
+const CommandRunnerTab = defineAsyncComponent(
+  () => import('@/features/commands/components/CommandRunnerTab.vue'),
+)
+const ProvisionServerDrawer = defineAsyncComponent(
+  () => import('@/features/servers/components/ProvisionServerDrawer.vue'),
+)
 
 const route = useRoute()
 const serversStore = useServersStore()
@@ -310,19 +322,23 @@ onMounted(() => {
         </TabsContent>
 
         <TabsContent value="sites" class="mt-6">
-          <ServerSitesTab :server-id="server.id" />
+          <ServerSitesTab v-if="activeTab === 'sites'" :server-id="server.id" />
         </TabsContent>
 
         <TabsContent value="cron" class="mt-6">
-          <CronJobsTab :server-id="server.id" />
+          <CronJobsTab v-if="activeTab === 'cron'" :server-id="server.id" />
         </TabsContent>
 
         <TabsContent value="daemons" class="mt-6">
-          <DaemonsTab :server-id="server.id" />
+          <DaemonsTab v-if="activeTab === 'daemons'" :server-id="server.id" />
         </TabsContent>
 
         <TabsContent value="commands" class="mt-6">
-          <CommandRunnerTab :server-id="server.id" :is-production="isProduction" />
+          <CommandRunnerTab
+            v-if="activeTab === 'commands'"
+            :server-id="server.id"
+            :is-production="isProduction"
+          />
         </TabsContent>
 
         <TabsContent value="audit" class="mt-6">
@@ -335,6 +351,7 @@ onMounted(() => {
       </Tabs>
 
       <ProvisionServerDrawer
+        v-if="isProvisionDrawerOpen"
         v-model:open="isProvisionDrawerOpen"
         :server-id="server.id"
       />

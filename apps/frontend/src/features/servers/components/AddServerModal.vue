@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -151,7 +152,7 @@ async function handleSubmit(): Promise<void> {
 
 <template>
   <Sheet :open="open" @update:open="emit('update:open', $event)">
-    <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-lg">
+    <SheetContent side="right" class="flex w-full flex-col sm:max-w-lg">
       <SheetHeader>
         <SheetTitle>Add server</SheetTitle>
         <SheetDescription>
@@ -159,101 +160,107 @@ async function handleSubmit(): Promise<void> {
         </SheetDescription>
       </SheetHeader>
 
-      <Tabs v-model="activeTab" class="mt-4">
-        <TabsList class="grid w-full grid-cols-2">
-          <TabsTrigger value="new">
-            New Server
-          </TabsTrigger>
-          <TabsTrigger value="import">
-            Import Existing
-          </TabsTrigger>
-        </TabsList>
+      <SheetBody>
+        <Tabs v-model="activeTab" class="w-full">
+          <TabsList class="grid h-auto w-full grid-cols-2">
+            <TabsTrigger value="new" class="min-h-9">
+              New Server
+            </TabsTrigger>
+            <TabsTrigger value="import" class="min-h-9">
+              Import Existing
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="new" class="mt-4">
-          <ServerFormFields
-            v-model:hostname="hostname"
-            v-model:ip-address="ipAddress"
-            v-model:ssh-port="sshPort"
-            v-model:ssh-user="sshUser"
-            v-model:provider="provider"
-            v-model:project-id="projectId"
-            v-model:environment-id="environmentId"
-            v-model:auth-method="authMethod"
-            v-model:private-key="privateKey"
-            :projects="projects"
-            :environments="environments"
-            :provider-options="providerOptions"
-          />
-        </TabsContent>
+          <TabsContent value="new" class="mt-4">
+            <ServerFormFields
+              v-model:hostname="hostname"
+              v-model:ip-address="ipAddress"
+              v-model:ssh-port="sshPort"
+              v-model:ssh-user="sshUser"
+              v-model:provider="provider"
+              v-model:project-id="projectId"
+              v-model:environment-id="environmentId"
+              v-model:auth-method="authMethod"
+              v-model:private-key="privateKey"
+              :projects="projects"
+              :environments="environments"
+              :provider-options="providerOptions"
+            />
+          </TabsContent>
 
-        <TabsContent value="import" class="mt-4 space-y-4">
-          <ServerFormFields
-            v-model:hostname="hostname"
-            v-model:ip-address="ipAddress"
-            v-model:ssh-port="sshPort"
-            v-model:ssh-user="sshUser"
-            v-model:provider="provider"
-            v-model:project-id="projectId"
-            v-model:environment-id="environmentId"
-            v-model:auth-method="authMethod"
-            v-model:private-key="privateKey"
-            :projects="projects"
-            :environments="environments"
-            :provider-options="providerOptions"
-          />
+          <TabsContent value="import" class="mt-4 space-y-4">
+            <ServerFormFields
+              v-model:hostname="hostname"
+              v-model:ip-address="ipAddress"
+              v-model:ssh-port="sshPort"
+              v-model:ssh-user="sshUser"
+              v-model:provider="provider"
+              v-model:project-id="projectId"
+              v-model:environment-id="environmentId"
+              v-model:auth-method="authMethod"
+              v-model:private-key="privateKey"
+              :projects="projects"
+              :environments="environments"
+              :provider-options="providerOptions"
+            />
 
-          <div class="space-y-3">
-            <Label>Management mode</Label>
-            <div class="space-y-2">
-              <label class="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
-                <input
-                  v-model="managementMode"
-                  type="radio"
-                  class="mt-1"
-                  :value="ManagementMode.Managed"
+            <div class="space-y-3">
+              <Label>Management mode</Label>
+              <div class="space-y-2">
+                <label
+                  class="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
                 >
-                <span>
-                  <span class="block text-sm font-medium">Managed</span>
-                  <span class="text-xs text-muted-foreground">
-                    HelixDeploy controls deployments
+                  <input
+                    v-model="managementMode"
+                    type="radio"
+                    class="mt-1 border-input text-primary"
+                    :value="ManagementMode.Managed"
+                  >
+                  <span>
+                    <span class="block text-sm font-medium text-foreground">Managed</span>
+                    <span class="text-xs text-muted-foreground">
+                      HelixDeploy controls deployments
+                    </span>
                   </span>
-                </span>
-              </label>
-              <label class="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
-                <input
-                  v-model="managementMode"
-                  type="radio"
-                  class="mt-1"
-                  :value="ManagementMode.Observe"
+                </label>
+                <label
+                  class="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
                 >
-                <span>
-                  <span class="block text-sm font-medium">Observe</span>
-                  <span class="text-xs text-muted-foreground">
-                    Register for visibility only; keep existing workflow
+                  <input
+                    v-model="managementMode"
+                    type="radio"
+                    class="mt-1 border-input text-primary"
+                    :value="ManagementMode.Observe"
+                  >
+                  <span>
+                    <span class="block text-sm font-medium text-foreground">Observe</span>
+                    <span class="text-xs text-muted-foreground">
+                      Register for visibility only; keep existing workflow
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+              </div>
             </div>
-          </div>
 
-          <Alert
-            v-if="managementMode === ManagementMode.Managed"
-            variant="destructive"
-          >
-            <AlertTriangleIcon class="size-4" />
-            <AlertTitle>Managed import</AlertTitle>
-            <AlertDescription>
-              Make sure to disable any existing GitHub Actions deploy workflows to avoid conflicts.
-            </AlertDescription>
-          </Alert>
-        </TabsContent>
-      </Tabs>
+            <Alert
+              v-if="managementMode === ManagementMode.Managed"
+              variant="destructive"
+            >
+              <AlertTriangleIcon class="size-4" />
+              <AlertTitle>Managed import</AlertTitle>
+              <AlertDescription>
+                Make sure to disable any existing GitHub Actions deploy workflows to avoid conflicts.
+              </AlertDescription>
+            </Alert>
+          </TabsContent>
+        </Tabs>
 
-      <p v-if="apiError" class="mt-4 text-sm text-destructive">
-        {{ apiError }}
-      </p>
+        <p v-if="apiError" class="mt-4 text-sm text-destructive">
+          {{ apiError }}
+        </p>
+      </SheetBody>
 
-      <SheetFooter class="mt-6">
+      <SheetFooter>
         <Button
           type="button"
           variant="outline"

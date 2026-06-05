@@ -49,8 +49,8 @@ function changePassword(): void {
 <template>
   <div class="space-y-8">
     <PageHeader
-      title="Team settings"
-      description="Your personal profile and preferences."
+      title="Profile settings"
+      description="Your personal profile, preferences, and password."
     />
 
     <form class="panel max-w-lg space-y-4 p-6" @submit.prevent="saveProfile">

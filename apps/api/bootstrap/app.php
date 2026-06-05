@@ -29,6 +29,8 @@ return Application::configure(basePath: dirname(__DIR__))
         __DIR__.'/../app/Modules/Servers/Commands',
     ])
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->statefulApi();
+
         $middleware->api(prepend: [
             AttachRequestId::class,
         ]);

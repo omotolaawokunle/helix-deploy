@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
@@ -9,12 +9,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchCurrentMemberRole } from '@/features/organizations/api'
 import { fetchServer } from '@/features/servers/api'
-import DeploymentsTab from '@/features/sites/components/DeploymentsTab.vue'
-import EnvVarsTab from '@/features/sites/components/EnvVarsTab.vue'
-import NginxConfigTab from '@/features/sites/components/NginxConfigTab.vue'
-import SiteSettingsTab from '@/features/sites/components/SiteSettingsTab.vue'
 import { fetchSite } from '@/features/sites/api'
 import { TeamRole, type Server, type Site } from '@/types'
+
+const DeploymentsTab = defineAsyncComponent(
+  () => import('@/features/sites/components/DeploymentsTab.vue'),
+)
+const EnvVarsTab = defineAsyncComponent(
+  () => import('@/features/sites/components/EnvVarsTab.vue'),
+)
+const NginxConfigTab = defineAsyncComponent(
+  () => import('@/features/sites/components/NginxConfigTab.vue'),
+)
+const SiteSettingsTab = defineAsyncComponent(
+  () => import('@/features/sites/components/SiteSettingsTab.vue'),
+)
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -23,6 +32,7 @@ const site = ref<Site | null>(null)
 const server = ref<Server | null>(null)
 const memberRole = ref<TeamRole | null>(null)
 const isLoading = ref(true)
+const loadError = ref<string | null>(null)
 const activeTab = ref('deployments')
 
 const serverId = computed(() => String(route.params.id))
@@ -36,6 +46,7 @@ const isProduction = computed(() => server.value?.environment?.isProduction ?? f
 
 async function loadPage(): Promise<void> {
   isLoading.value = true
+  loadError.value = null
 
   try {
     const [siteData, serverData] = await Promise.all([
@@ -52,6 +63,9 @@ async function loadPage(): Promise<void> {
     if (orgId !== undefined && userId !== undefined) {
       memberRole.value = await fetchCurrentMemberRole(orgId, userId)
     }
+  } catch {
+    site.value = null
+    loadError.value = 'Unable to load site.'
   } finally {
     isLoading.value = false
   }
@@ -67,7 +81,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-8">
     <BackLink :to="`/servers/${serverId}`" label="Back to server" />
 
     <div v-if="isLoading" class="space-y-4">
@@ -75,7 +89,13 @@ onMounted(() => {
       <Skeleton class="h-64 w-full" />
     </div>
 
-    <template v-else-if="site !== null">
+    <div v-else-if="loadError !== null || site === null" class="panel border-dashed p-8 text-center">
+      <p class="text-muted-foreground">
+        {{ loadError ?? 'Site not found.' }}
+      </p>
+    </div>
+
+    <template v-else>
       <div class="-mx-4 lg:-mx-8">
         <ProductionWarningBanner
           :resource-name="site.domain"
@@ -83,10 +103,10 @@ onMounted(() => {
         />
       </div>
 
-      <div class="flex flex-col gap-3 border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
+      <div class="flex flex-col gap-4 border-b pb-8 sm:flex-row sm:items-start sm:justify-between">
         <div class="space-y-2">
           <div class="flex flex-wrap items-center gap-3">
-            <h1 class="text-2xl font-semibold tracking-tight">
+            <h1 class="page-title">
               {{ site.domain }}
             </h1>
             <EnvironmentBadge
@@ -117,19 +137,24 @@ onMounted(() => {
         </TabsList>
         <TabsContent value="deployments" class="mt-6">
           <DeploymentsTab
+            v-if="activeTab === 'deployments'"
             :site="site"
             :is-production="isProduction"
             :member-role="memberRole"
           />
         </TabsContent>
         <TabsContent value="env-vars" class="mt-6">
-          <EnvVarsTab :site-id="site.id" />
+          <EnvVarsTab v-if="activeTab === 'env-vars'" :site-id="site.id" />
         </TabsContent>
         <TabsContent value="nginx" class="mt-6">
-          <NginxConfigTab :site-id="site.id" />
+          <NginxConfigTab v-if="activeTab === 'nginx'" :site-id="site.id" />
         </TabsContent>
         <TabsContent value="settings" class="mt-6">
-          <SiteSettingsTab :site="site" @updated="handleSiteUpdated" />
+          <SiteSettingsTab
+            v-if="activeTab === 'settings'"
+            :site="site"
+            @updated="handleSiteUpdated"
+          />
         </TabsContent>
       </Tabs>
     </template>

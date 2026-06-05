@@ -21,6 +21,7 @@ return new class extends Migration
             $table->foreignUuid('created_by')->nullable()->constrained('users');
             $table->timestamps();
 
+            $table->unique(['organization_id', 'name'])->nullsNotDistinct();
             $table->index('organization_id');
         });
     }

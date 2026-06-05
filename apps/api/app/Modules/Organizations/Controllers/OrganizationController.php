@@ -6,6 +6,7 @@ namespace App\Modules\Organizations\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Organizations\Actions\CreateOrganizationAction;
+use App\Modules\Organizations\Actions\DeleteOrganizationAction;
 use App\Modules\Organizations\DTOs\CreateOrganizationDTO;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Organizations\Requests\CreateOrganizationRequest;
@@ -66,6 +67,18 @@ class OrganizationController extends Controller
         ])->save();
 
         return OrganizationResource::make($org->refresh());
+    }
+
+    public function destroy(Organization $org, Request $request, DeleteOrganizationAction $action): JsonResponse
+    {
+        $this->authorize('delete', $org);
+
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        $action->execute($org, $user);
+
+        return response()->json(status: 204);
     }
 
     public function switchOrganization(Organization $org, Request $request): JsonResponse

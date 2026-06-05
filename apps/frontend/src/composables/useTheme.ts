@@ -1,41 +1,58 @@
-import { onMounted, onUnmounted, ref, type Ref } from 'vue'
+import { createSharedComposable, useMediaQuery } from '@vueuse/core'
+import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 import {
-  initThemePreference,
-  persistThemePreference,
+  applyThemePreference,
   readStoredThemePreference,
+  writeStoredThemePreference,
+  type ResolvedTheme,
   type ThemePreference,
 } from '@/lib/theme'
 
 interface UseThemeReturn {
   preference: Ref<ThemePreference>
+  resolvedTheme: ComputedRef<ResolvedTheme>
+  isDark: ComputedRef<boolean>
   setPreference: (value: ThemePreference) => void
 }
 
-export function useTheme(): UseThemeReturn {
+export const useTheme = createSharedComposable((): UseThemeReturn => {
   const preference = ref<ThemePreference>(readStoredThemePreference())
+  const systemIsDark = useMediaQuery('(prefers-color-scheme: dark)')
+
+  const isDark = computed((): boolean => {
+    if (preference.value === 'dark') {
+      return true
+    }
+
+    if (preference.value === 'light') {
+      return false
+    }
+
+    return systemIsDark.value
+  })
+
+  const resolvedTheme = computed((): ResolvedTheme => (isDark.value ? 'dark' : 'light'))
+
+  watch(
+    [preference, systemIsDark],
+    ([nextPreference], [previousPreference]) => {
+      if (nextPreference !== previousPreference) {
+        writeStoredThemePreference(nextPreference)
+      }
+
+      applyThemePreference(nextPreference)
+    },
+    { immediate: true },
+  )
 
   function setPreference(value: ThemePreference): void {
     preference.value = value
-    persistThemePreference(value)
   }
-
-  function handleSystemChange(): void {
-    if (preference.value === 'system') {
-      persistThemePreference('system')
-    }
-  }
-
-  onMounted(() => {
-    preference.value = initThemePreference()
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', handleSystemChange)
-  })
-
-  onUnmounted(() => {
-    window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', handleSystemChange)
-  })
 
   return {
     preference,
+    resolvedTheme,
+    isDark,
     setPreference,
   }
-}
+})

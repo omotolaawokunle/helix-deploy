@@ -5,6 +5,7 @@ import { ref } from 'vue'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -37,24 +38,26 @@ async function handleCopy(publicKey: string): Promise<void> {
 
 <template>
   <Sheet :open="open" @update:open="emit('update:open', $event)">
-    <SheetContent side="right" class="w-full sm:max-w-lg">
+    <SheetContent side="right" class="flex w-full flex-col sm:max-w-lg">
       <SheetHeader>
         <SheetTitle>Server registered</SheetTitle>
         <SheetDescription>
           Your server has been registered. To complete setup, add this SSH public key
-          to your server's <code class="text-xs">authorized_keys</code> file:
+          to your server's <code class="rounded bg-muted px-1 text-xs text-foreground">authorized_keys</code> file:
         </SheetDescription>
       </SheetHeader>
 
-      <div class="my-4 rounded-lg bg-muted p-4">
-        <pre class="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">{{ publicKey }}</pre>
-      </div>
+      <SheetBody class="space-y-4">
+        <div class="rounded-lg border border-border bg-muted p-4">
+          <pre class="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground">{{ publicKey }}</pre>
+        </div>
 
-      <p class="text-sm text-muted-foreground">
-        HelixDeploy will automatically verify the connection once the key is added.
-      </p>
+        <p class="text-sm text-muted-foreground">
+          HelixDeploy will automatically verify the connection once the key is added.
+        </p>
+      </SheetBody>
 
-      <SheetFooter class="mt-6">
+      <SheetFooter>
         <Button
           type="button"
           variant="outline"

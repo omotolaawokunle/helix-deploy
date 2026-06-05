@@ -135,7 +135,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-8">
     <div v-if="isLoading" class="space-y-4">
       <Skeleton class="h-6 w-40" />
       <Skeleton class="h-10 w-full max-w-3xl" />
@@ -158,10 +158,12 @@ onMounted(() => {
         />
       </div>
 
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div class="flex flex-col gap-4 border-b pb-8 lg:flex-row lg:items-start lg:justify-between">
         <div class="space-y-2">
+          <h1 class="page-title">
+            {{ deployment.site?.domain ?? 'Deployment' }}
+          </h1>
           <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span class="font-medium text-foreground">{{ deployment.site?.domain ?? 'Site' }}</span>
             <EnvironmentBadge
               v-if="deployment.site !== null"
               :environment="environmentName"
@@ -219,9 +221,11 @@ onMounted(() => {
       />
     </template>
 
-    <p v-else class="text-sm text-destructive">
-      {{ loadError ?? 'Deployment not found.' }}
-    </p>
+    <div v-else class="panel border-dashed p-8 text-center">
+      <p class="text-muted-foreground">
+        {{ loadError ?? 'Deployment not found.' }}
+      </p>
+    </div>
 
     <RollbackDialog
       v-model:open="isRollbackDialogOpen"

@@ -24,6 +24,8 @@ const {
   showVerificationNotice,
   isResending,
   resendMessage,
+  resendIsError,
+  apiError,
   registeredEmail,
   onSubmit,
   handleResend,
@@ -61,7 +63,11 @@ const {
             {{ isResending ? 'Sending…' : 'Resend verification' }}
           </Button>
 
-          <p v-if="resendMessage" class="text-sm text-muted-foreground">
+          <p
+            v-if="resendMessage"
+            class="text-sm"
+            :class="resendIsError ? 'text-destructive' : 'text-muted-foreground'"
+          >
             {{ resendMessage }}
           </p>
 
@@ -110,6 +116,10 @@ const {
               <FormMessage />
             </FormItem>
           </FormField>
+
+          <p v-if="apiError" class="text-sm text-destructive" data-testid="register-api-error">
+            {{ apiError }}
+          </p>
 
           <Button type="submit" class="w-full" :disabled="authStore.isLoading">
             {{ authStore.isLoading ? 'Creating account…' : 'Create account' }}

@@ -11,6 +11,11 @@ const cancelDeploymentMock = vi.fn()
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: 'dep-1' }, query: {} }),
   useRouter: () => ({ push: vi.fn() }),
+  RouterLink: {
+    name: 'RouterLink',
+    props: ['to'],
+    template: '<a :href="typeof to === \'string\' ? to : \'#\'"><slot /></a>',
+  },
 }))
 
 vi.mock('vue-sonner', () => ({

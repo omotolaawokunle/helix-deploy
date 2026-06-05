@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, toRef } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, toRef } from 'vue'
 import { PlusIcon, ServerIcon } from '@lucide/vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import AddServerModal from '@/features/servers/components/AddServerModal.vue'
 import ServerCard from '@/features/servers/components/ServerCard.vue'
+
+const AddServerModal = defineAsyncComponent(
+  () => import('@/features/servers/components/AddServerModal.vue'),
+)
 import { useServerPolling } from '@/features/servers/composables/useServerPolling'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
 
@@ -61,6 +64,19 @@ const isEmpty = computed(
     </EmptyState>
 
     <div
+      v-else-if="serversStore.fetchError !== null"
+      class="panel border-dashed p-8 text-center"
+      data-testid="servers-error"
+    >
+      <p class="text-muted-foreground">
+        {{ serversStore.fetchError }}
+      </p>
+      <Button type="button" variant="outline" class="mt-4" @click="serversStore.fetch()">
+        Try again
+      </Button>
+    </div>
+
+    <div
       v-else
       class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
       data-testid="servers-grid"
@@ -72,6 +88,6 @@ const isEmpty = computed(
       />
     </div>
 
-    <AddServerModal v-model:open="isAddModalOpen" />
+    <AddServerModal v-if="isAddModalOpen" v-model:open="isAddModalOpen" />
   </div>
 </template>

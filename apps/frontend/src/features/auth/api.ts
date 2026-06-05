@@ -2,24 +2,32 @@ import { api } from '@/lib/axios'
 import type { Organization } from '@/types'
 import type { AuthUser, CreateOrganizationPayload, LoginPayload, RegisterPayload } from './types'
 
-export async function fetchAuthUser(): Promise<AuthUser> {
-  const response = await api.get<AuthUser>('/api/v1/auth/user')
+interface ApiResource<T> {
+  data: T
+}
 
-  return response.data
+function unwrapResource<T>(payload: ApiResource<T>): T {
+  return payload.data
+}
+
+export async function fetchAuthUser(): Promise<AuthUser> {
+  const response = await api.get<ApiResource<AuthUser>>('/api/v1/auth/user')
+
+  return unwrapResource(response.data)
 }
 
 export async function loginRequest(payload: LoginPayload): Promise<AuthUser> {
   await api.get('/sanctum/csrf-cookie')
-  const response = await api.post<AuthUser>('/api/v1/auth/login', payload)
+  const response = await api.post<ApiResource<AuthUser>>('/api/v1/auth/login', payload)
 
-  return response.data
+  return unwrapResource(response.data)
 }
 
 export async function registerRequest(payload: RegisterPayload): Promise<AuthUser> {
   await api.get('/sanctum/csrf-cookie')
-  const response = await api.post<AuthUser>('/api/v1/auth/register', payload)
+  const response = await api.post<ApiResource<AuthUser>>('/api/v1/auth/register', payload)
 
-  return response.data
+  return unwrapResource(response.data)
 }
 
 export async function logoutRequest(): Promise<void> {
@@ -37,9 +45,9 @@ export async function fetchOrganizations(): Promise<Organization[]> {
 }
 
 export async function createOrganization(payload: CreateOrganizationPayload): Promise<Organization> {
-  const response = await api.post<Organization>('/api/v1/organizations', payload)
+  const response = await api.post<ApiResource<Organization>>('/api/v1/organizations', payload)
 
-  return response.data
+  return unwrapResource(response.data)
 }
 
 export async function switchOrganization(orgId: string): Promise<void> {

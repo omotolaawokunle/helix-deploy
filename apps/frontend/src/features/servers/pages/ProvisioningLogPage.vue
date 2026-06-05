@@ -14,6 +14,7 @@ const serversStore = useServersStore()
 
 const server = ref<Server | null>(null)
 const isLoading = ref(true)
+const loadError = ref<string | null>(null)
 const logLines = ref<string[]>([])
 const isComplete = ref(false)
 
@@ -36,9 +37,17 @@ const pageDescription = computed(() => {
 
 async function loadServer(): Promise<void> {
   isLoading.value = true
+  loadError.value = null
 
   try {
     server.value = (await serversStore.getById(serverId.value)) ?? null
+
+    if (server.value === null) {
+      loadError.value = 'Server not found.'
+    }
+  } catch {
+    server.value = null
+    loadError.value = 'Unable to load server.'
   } finally {
     isLoading.value = false
   }
@@ -50,7 +59,7 @@ useProvisioningChannel(serverId.value, {
       return
     }
 
-    logLines.value = [...logLines.value, payload.line]
+    logLines.value.push(payload.line)
   },
   onCompleted: (payload) => {
     if (runId.value !== null && payload.runId !== runId.value) {
@@ -74,6 +83,12 @@ onMounted(() => {
     <div v-if="isLoading" class="space-y-4">
       <Skeleton class="h-8 w-72" />
       <Skeleton class="h-96 w-full rounded-lg" />
+    </div>
+
+    <div v-else-if="loadError !== null" class="panel border-dashed p-8 text-center">
+      <p class="text-muted-foreground">
+        {{ loadError }}
+      </p>
     </div>
 
     <template v-else>

@@ -160,9 +160,14 @@ const emit = defineEmits<{
 
     <div class="space-y-3">
       <Label>Authentication</Label>
-      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div
+        class="flex flex-col gap-2"
+        role="group"
+        aria-label="Authentication method"
+      >
         <Button
           type="button"
+          class="h-auto min-h-10 w-full justify-start whitespace-normal px-3 py-2.5 text-left text-sm"
           :variant="authMethod === 'generate' ? 'default' : 'outline'"
           @click="emit('update:authMethod', 'generate')"
         >
@@ -170,6 +175,7 @@ const emit = defineEmits<{
         </Button>
         <Button
           type="button"
+          class="h-auto min-h-10 w-full justify-start whitespace-normal px-3 py-2.5 text-left text-sm"
           :variant="authMethod === 'import' ? 'default' : 'outline'"
           @click="emit('update:authMethod', 'import')"
         >

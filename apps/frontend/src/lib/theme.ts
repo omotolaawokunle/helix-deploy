@@ -1,6 +1,10 @@
 export type ThemePreference = 'light' | 'dark' | 'system'
 
+export type ResolvedTheme = 'light' | 'dark'
+
 export const THEME_STORAGE_KEY = 'helix-deploy-theme'
+
+let appliedIsDark: boolean | null = null
 
 export function resolveIsDark(preference: ThemePreference): boolean {
   if (preference === 'dark') {
@@ -14,6 +18,10 @@ export function resolveIsDark(preference: ThemePreference): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
+export function resolveTheme(preference: ThemePreference): ResolvedTheme {
+  return resolveIsDark(preference) ? 'dark' : 'light'
+}
+
 export function readStoredThemePreference(): ThemePreference {
   const stored = localStorage.getItem(THEME_STORAGE_KEY)
 
@@ -24,24 +32,46 @@ export function readStoredThemePreference(): ThemePreference {
   return 'system'
 }
 
-export function applyThemePreference(preference: ThemePreference): void {
+export function applyThemePreference(preference: ThemePreference): ResolvedTheme {
+  const isDark = resolveIsDark(preference)
+  const resolved: ResolvedTheme = isDark ? 'dark' : 'light'
   const root = document.documentElement
 
-  if (resolveIsDark(preference)) {
-    root.classList.add('dark')
-  } else {
-    root.classList.remove('dark')
+  if (
+    appliedIsDark === isDark
+    && root.classList.contains('dark') === isDark
+    && root.classList.contains('light') === !isDark
+    && root.dataset.theme === resolved
+  ) {
+    return resolved
   }
+
+  root.classList.toggle('dark', isDark)
+  root.classList.toggle('light', !isDark)
+  root.dataset.theme = resolved
+  appliedIsDark = isDark
+
+  return resolved
 }
 
-export function persistThemePreference(preference: ThemePreference): void {
+export function writeStoredThemePreference(preference: ThemePreference): void {
   localStorage.setItem(THEME_STORAGE_KEY, preference)
-  applyThemePreference(preference)
+}
+
+export function persistThemePreference(preference: ThemePreference): ResolvedTheme {
+  writeStoredThemePreference(preference)
+
+  return applyThemePreference(preference)
 }
 
 export function initThemePreference(): ThemePreference {
   const preference = readStoredThemePreference()
+
   applyThemePreference(preference)
 
   return preference
+}
+
+export function resetThemeApplicationState(): void {
+  appliedIsDark = null
 }

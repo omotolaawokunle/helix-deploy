@@ -13,6 +13,7 @@ import {
 } from '@lucide/vue'
 import OrgSwitcher from '@/components/layout/OrgSwitcher.vue'
 import UserMenu from '@/components/layout/UserMenu.vue'
+import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +26,7 @@ interface NavItem {
 
 const route = useRoute()
 const authStore = useAuthStore()
+const { prefetchRoute } = useRoutePrefetch()
 
 const primaryNavItems = computed<NavItem[]>(() => [
   { label: 'Dashboard', to: '/dashboard', icon: ActivityIcon, visible: true },
@@ -40,9 +42,9 @@ const primaryNavItems = computed<NavItem[]>(() => [
 ])
 
 const settingsNavItems = computed<NavItem[]>(() => [
-  { label: 'Team Settings', to: '/settings/team', icon: UsersIcon, visible: true },
+  { label: 'Profile Settings', to: '/settings/team', icon: UsersIcon, visible: true },
   {
-    label: 'Org Settings',
+    label: 'Organization Settings',
     to: '/settings/organization',
     icon: Building2Icon,
     visible: authStore.canManageOrgSettings,
@@ -55,7 +57,7 @@ function isActive(path: string): boolean {
 
 function navLinkClass(active: boolean): string {
   return cn(
-    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200',
+    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
     active
       ? 'bg-primary/10 text-primary'
       : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
@@ -64,10 +66,10 @@ function navLinkClass(active: boolean): string {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div class="flex h-full flex-col text-sidebar-foreground">
     <div class="flex items-center gap-2.5 px-4 py-5">
       <HexagonIcon class="size-6 text-primary" />
-      <span class="text-lg font-semibold tracking-tight">HelixDeploy</span>
+      <span class="text-lg font-semibold tracking-tight text-sidebar-foreground">HelixDeploy</span>
     </div>
 
     <div class="px-3 pb-4">
@@ -80,6 +82,7 @@ function navLinkClass(active: boolean): string {
         :key="item.to"
         :to="item.to"
         :class="navLinkClass(isActive(item.to))"
+        @mouseenter="prefetchRoute(item.to)"
       >
         <component :is="item.icon" class="size-4 shrink-0" />
         {{ item.label }}
@@ -94,6 +97,7 @@ function navLinkClass(active: boolean): string {
         :key="item.to"
         :to="item.to"
         :class="navLinkClass(isActive(item.to))"
+        @mouseenter="prefetchRoute(item.to)"
       >
         <component :is="item.icon" class="size-4 shrink-0" />
         {{ item.label }}

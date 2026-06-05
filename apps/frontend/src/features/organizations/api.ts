@@ -100,3 +100,7 @@ export async function removeOrganizationMember(
 ): Promise<void> {
   await api.delete(`/api/v1/organizations/${organizationId}/members/${userId}`)
 }
+
+export async function deleteOrganization(organizationId: string): Promise<void> {
+  await api.delete(`/api/v1/organizations/${organizationId}`)
+}

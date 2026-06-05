@@ -23,6 +23,8 @@ export function useRegisterForm() {
   const showVerificationNotice = ref(false)
   const isResending = ref(false)
   const resendMessage = ref<string | null>(null)
+  const resendIsError = ref(false)
+  const apiError = ref<string | null>(null)
   const registeredEmail = ref<string | null>(null)
 
   const form = useForm({
@@ -37,6 +39,7 @@ export function useRegisterForm() {
 
   async function submitRegister(values: RegisterPayload): Promise<void> {
     resendMessage.value = null
+    apiError.value = null
 
     try {
       const user = await authStore.register(values)
@@ -47,7 +50,10 @@ export function useRegisterForm() {
 
       if (fieldErrors !== null) {
         form.setErrors(fieldErrors)
+        return
       }
+
+      apiError.value = 'Unable to create account. Please try again.'
     }
   }
 
@@ -56,11 +62,13 @@ export function useRegisterForm() {
   async function handleResend(): Promise<void> {
     isResending.value = true
     resendMessage.value = null
+    resendIsError.value = false
 
     try {
       await authStore.resendVerification()
       resendMessage.value = 'Verification email sent.'
     } catch {
+      resendIsError.value = true
       resendMessage.value = 'Unable to resend verification email. Try signing in first.'
     } finally {
       isResending.value = false
@@ -72,6 +80,8 @@ export function useRegisterForm() {
     showVerificationNotice,
     isResending,
     resendMessage,
+    resendIsError,
+    apiError,
     registeredEmail,
     onSubmit,
     submitRegister,

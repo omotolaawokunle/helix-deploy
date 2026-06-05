@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { ActivityIcon } from '@lucide/vue'
+import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
@@ -17,6 +18,7 @@ import {
 } from '@/components/ui/select'
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -63,7 +65,15 @@ const logLines = ref<string[]>([])
 const isLogsOpen = ref(false)
 const isLogsLoading = ref(false)
 
-let logsPollTimer: ReturnType<typeof setInterval> | null = null
+const documentVisibility = useDocumentVisibility()
+
+const { pause: pauseLogsPolling, resume: resumeLogsPolling } = useIntervalFn(
+  () => {
+    void pollLogs()
+  },
+  2000,
+  { immediate: false },
+)
 
 function truncateCommand(command: string): string {
   if (command.length <= 60) {
@@ -127,10 +137,7 @@ async function runAction(
 }
 
 function stopLogsPolling(): void {
-  if (logsPollTimer !== null) {
-    clearInterval(logsPollTimer)
-    logsPollTimer = null
-  }
+  pauseLogsPolling()
 }
 
 async function pollLogs(): Promise<void> {
@@ -157,9 +164,7 @@ async function openLogs(daemon: DaemonRecord): Promise<void> {
   await pollLogs()
 
   if (isLogsLoading.value) {
-    logsPollTimer = setInterval(() => {
-      void pollLogs()
-    }, 2000)
+    resumeLogsPolling()
   }
 }
 
@@ -167,6 +172,18 @@ function closeLogs(): void {
   isLogsOpen.value = false
   stopLogsPolling()
 }
+
+watch(
+  [isLogsOpen, documentVisibility],
+  ([open, visibility]) => {
+    if (!open || visibility !== 'visible' || !isLogsLoading.value) {
+      pauseLogsPolling()
+      return
+    }
+
+    resumeLogsPolling()
+  },
+)
 
 void loadDaemons()
 
@@ -250,14 +267,14 @@ onUnmounted(() => {
     </div>
 
     <Sheet v-model:open="isCreateOpen">
-      <SheetContent>
+      <SheetContent side="right" class="flex w-full flex-col sm:max-w-md">
         <SheetHeader>
           <SheetTitle>New daemon</SheetTitle>
           <SheetDescription>
             Create a supervised process on this server.
           </SheetDescription>
         </SheetHeader>
-        <div class="space-y-4 py-4">
+        <SheetBody class="space-y-4">
           <div class="space-y-2">
             <Label for="daemon-name">Name</Label>
             <Input id="daemon-name" v-model="createName" />
@@ -297,8 +314,11 @@ onUnmounted(() => {
               class="w-full"
             >
           </div>
-        </div>
+        </SheetBody>
         <SheetFooter>
+          <Button type="button" variant="outline" @click="isCreateOpen = false">
+            Cancel
+          </Button>
           <Button type="button" @click="handleCreate">
             Create
           </Button>
@@ -307,14 +327,16 @@ onUnmounted(() => {
     </Sheet>
 
     <Sheet v-model:open="isLogsOpen" @update:open="(open) => !open && closeLogs()">
-      <SheetContent class="w-full sm:max-w-2xl">
+      <SheetContent side="right" class="flex w-full flex-col sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>{{ logsDaemon?.name }} logs</SheetTitle>
           <SheetDescription>
             Last 50 lines from the supervisor log file.
           </SheetDescription>
         </SheetHeader>
-        <pre class="log-panel mt-4 max-h-[70vh] overflow-auto whitespace-pre-wrap p-4">{{ isLogsLoading ? 'Loading logs…' : logLines.join('\n') || 'No log lines yet.' }}</pre>
+        <SheetBody class="px-0 py-0">
+          <pre class="log-panel max-h-[70vh] overflow-auto whitespace-pre-wrap p-4">{{ isLogsLoading ? 'Loading logs…' : logLines.join('\n') || 'No log lines yet.' }}</pre>
+        </SheetBody>
       </SheetContent>
     </Sheet>
   </div>

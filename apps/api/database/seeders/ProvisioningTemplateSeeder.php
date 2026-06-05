@@ -44,8 +44,8 @@ class ProvisioningTemplateSeeder extends Seeder
 
         DB::table('provisioning_templates')->upsert(
             $templates,
-            ['name'],
-            ['description', 'services', 'options', 'is_system', 'updated_at', 'organization_id'],
+            ['organization_id', 'name'],
+            ['description', 'services', 'options', 'is_system', 'updated_at'],
         );
     }
 }

@@ -1,11 +1,20 @@
-import { watch } from 'vue'
-import { useIntervalFn, usePreferredReducedMotion } from '@vueuse/core'
+import { computed, watch } from 'vue'
+import {
+  useDocumentVisibility,
+  useIntervalFn,
+  usePreferredReducedMotion,
+} from '@vueuse/core'
 
 export function useReducedMotionPolling(
   callback: () => void | Promise<void>,
   intervalMs: number,
 ): void {
   const prefersReducedMotion = usePreferredReducedMotion()
+  const documentVisibility = useDocumentVisibility()
+
+  const shouldPoll = computed(
+    () => prefersReducedMotion.value !== 'reduce' && documentVisibility.value === 'visible',
+  )
 
   const { pause, resume } = useIntervalFn(
     () => {
@@ -16,14 +25,14 @@ export function useReducedMotionPolling(
   )
 
   watch(
-    prefersReducedMotion,
-    (reduced) => {
-      if (reduced === 'reduce') {
-        pause()
+    shouldPoll,
+    (active) => {
+      if (active) {
+        resume()
         return
       }
 
-      resume()
+      pause()
     },
     { immediate: true },
   )
