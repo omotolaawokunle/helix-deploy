@@ -97,6 +97,7 @@ return [
     */
 
     'waits' => [
+        'redis:builds' => 60,
         'redis:deployments' => 60,
         'redis:provisioning' => 60,
         'redis:commands' => 60,

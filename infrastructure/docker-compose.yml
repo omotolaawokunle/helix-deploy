@@ -34,6 +34,25 @@ services:
       - internal
     restart: unless-stopped
 
+  worker-builds:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: >
+      php artisan queue:work redis
+      --queue=builds
+      --sleep=3
+      --tries=1
+      --timeout=1800
+      --max-time=3600
+    env_file: .env
+    depends_on:
+      - api
+      - redis
+    networks:
+      - internal
+    restart: unless-stopped
+
   worker-provisioning:
     build:
       context: ../apps/api

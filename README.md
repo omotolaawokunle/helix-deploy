@@ -62,12 +62,12 @@ Organization master keys are encrypted with `APP_KEY`. Rotating the application 
 3. Restart API and worker containers:
 
    ```bash
-   docker compose restart api worker-deployments worker-provisioning worker-default
+   docker compose restart api worker-builds worker-deployments worker-provisioning worker-default
    ```
 
 ## Architecture notes
 
-- **Control plane / execution plane** — HTTP controllers dispatch jobs and return immediately; SSH, deployments, and provisioning run on dedicated queue workers (`deployments`, `provisioning`, `commands`, `monitoring`, `default`).
+- **Control plane / execution plane** — HTTP controllers dispatch jobs and return immediately; SSH, deployments, provisioning, and runner builds run on dedicated queue workers (`builds`, `deployments`, `provisioning`, `commands`, `monitoring`, `default`).
 - **Secrets** — Each organization has a libsodium master key; per-secret envelope encryption uses a fresh nonce on every write. Secrets are never returned in API responses or logs.
 - **SSH** — Host fingerprints are recorded on first connection (TOFU) and verified on every subsequent connection. A mismatch aborts the session and alerts the organization; fingerprints are never silently updated.
 - **Audit logs** — Append-only immutable records with `before_state` / `after_state` snapshots. No update or delete paths exist at any layer.
@@ -77,6 +77,7 @@ Organization master keys are encrypted with `APP_KEY`. Rotating the application 
 | Service | Role |
 | --- | --- |
 | `api` | Laravel HTTP API (`artisan serve` on port 8000) |
+| `worker-builds` | `builds` queue (runner compile + artifact transfer) |
 | `worker-deployments` | `deployments` queue |
 | `worker-provisioning` | `provisioning` queue |
 | `worker-default` | `commands`, `monitoring`, and `default` queues |
@@ -86,7 +87,7 @@ Organization master keys are encrypted with `APP_KEY`. Rotating the application 
 | `postgres` | PostgreSQL 16 |
 | `redis` | Redis 7 (AOF persistence, password protected) |
 
-Workers use `queue:work` rather than multiple Horizon masters, because only one Horizon instance should run per Redis namespace. To use Horizon locally for debugging, run `docker compose exec api php artisan horizon` in a separate terminal (stop the split workers first to avoid duplicate job processing).
+Workers use `queue:work` rather than multiple Horizon masters, because only one Horizon instance should run per Redis namespace. The `builds` worker uses the same 30-minute job timeout as deployments (`BUILD_TIMEOUT` / `helixdeploy.build_timeout_minutes`). To use Horizon locally for debugging, run `docker compose exec api php artisan horizon` in a separate terminal (stop the split workers first to avoid duplicate job processing).
 
 ## Local development (without Docker)
 
