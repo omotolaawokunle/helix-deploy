@@ -84,6 +84,28 @@ interface OverviewStatRow {
   value: string
 }
 
+interface ServerMetricRow {
+  id: string
+  hostname: string
+  cpuPercent: number | null
+  memoryPercent: number | null
+  diskPercent: number | null
+}
+
+const serverMetricRows = computed((): ServerMetricRow[] =>
+  servers.value
+    .filter(server => server.healthStatus?.lastCheckedAt !== undefined)
+    .map(server => ({
+      id: server.id,
+      hostname: server.hostname,
+      cpuPercent: server.healthStatus?.cpuPercent ?? null,
+      memoryPercent: server.healthStatus?.memoryUsedPercent ?? null,
+      diskPercent: server.healthStatus?.diskUsedPercent ?? null,
+    }))
+    .sort((left, right) => (right.diskPercent ?? 0) - (left.diskPercent ?? 0))
+    .slice(0, 6),
+)
+
 const overviewRows = computed((): OverviewStatRow[] => {
   if (stats.value === null) {
     return []
@@ -193,6 +215,42 @@ onMounted(() => {
           Loading overview…
         </div>
       </dl>
+    </section>
+
+    <section v-if="serverMetricRows.length > 0">
+      <h2 class="section-label">
+        Server metrics
+      </h2>
+      <div class="panel overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Server</TableHead>
+              <TableHead>CPU</TableHead>
+              <TableHead>Memory</TableHead>
+              <TableHead>Disk</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="row in serverMetricRows" :key="row.id">
+              <TableCell>
+                <RouterLink :to="`/servers/${row.id}`" class="font-medium hover:underline">
+                  {{ row.hostname }}
+                </RouterLink>
+              </TableCell>
+              <TableCell class="tabular-nums">
+                {{ row.cpuPercent !== null ? `${row.cpuPercent}%` : '—' }}
+              </TableCell>
+              <TableCell class="tabular-nums">
+                {{ row.memoryPercent !== null ? `${row.memoryPercent}%` : '—' }}
+              </TableCell>
+              <TableCell class="tabular-nums">
+                {{ row.diskPercent !== null ? `${row.diskPercent}%` : '—' }}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
     </section>
 
     <section class="grid gap-8 lg:grid-cols-3">

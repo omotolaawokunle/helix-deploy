@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Deployments\Jobs\StuckDeploymentWatchdogJob;
+use App\Modules\Monitoring\Jobs\CollectServerMetricsJob;
 use App\Modules\Servers\Jobs\PingServersJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -13,6 +14,10 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::job(new PingServersJob())
+    ->everyFiveMinutes()
+    ->onOneServer();
+
+Schedule::job(new CollectServerMetricsJob())
     ->everyFiveMinutes()
     ->onOneServer();
 

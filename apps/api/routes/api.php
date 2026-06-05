@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Audit\Controllers\AuditLogController;
+use App\Modules\Auth\Controllers\ApiTokenController;
 use App\Modules\Auth\Controllers\AuthController;
 use App\Modules\Commands\Controllers\CommandController;
 use App\Modules\Organizations\Controllers\InvitationAcceptRedirectController;
@@ -12,12 +13,15 @@ use App\Modules\Organizations\Controllers\OrganizationMemberController;
 use App\Modules\Projects\Controllers\EnvironmentController;
 use App\Modules\Projects\Controllers\ProjectController;
 use App\Modules\Provisioning\Controllers\ProvisioningController;
+use App\Modules\Provisioning\Controllers\ProvisioningTemplateController;
 use App\Modules\Servers\Controllers\ServerController;
+use App\Modules\Servers\Controllers\ServerGroupController;
 use App\Modules\Teams\Controllers\TeamController;
 use App\Modules\Teams\Controllers\TeamMemberController;
 use App\Modules\Pipelines\Controllers\PipelineController;
 use App\Modules\Pipelines\Controllers\PipelineRunController;
 use App\Modules\Deployments\Controllers\DeploymentController;
+use App\Modules\Monitoring\Controllers\MonitoringController;
 use App\Modules\Deployments\Controllers\DeploymentStreamController;
 use App\Modules\CronJobs\Controllers\CronJobController;
 use App\Modules\Daemons\Controllers\DaemonController;
@@ -35,6 +39,9 @@ Route::prefix('v1/auth')->middleware('web')->group(function (): void {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail']);
         Route::post('/email/resend', [AuthController::class, 'resendVerificationEmail']);
+        Route::get('/tokens', [ApiTokenController::class, 'index']);
+        Route::post('/tokens', [ApiTokenController::class, 'store']);
+        Route::delete('/tokens/{token}', [ApiTokenController::class, 'destroy']);
     });
 });
 
@@ -42,7 +49,7 @@ Route::get('/v1/organizations/invitations/accept', InvitationAcceptRedirectContr
     ->middleware(['signed', 'throttle:6,1'])
     ->name('organizations.invitations.accept');
 
-Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(function (): void {
+Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->prefix('v1')->group(function (): void {
     Route::post('/organizations/invitations/accept', [OrganizationInvitationController::class, 'accept']);
     Route::get('/organizations', [OrganizationController::class, 'index']);
     Route::post('/organizations', [OrganizationController::class, 'store']);
@@ -58,6 +65,7 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::get('/organizations/{org}/audit-logs/export', [AuditLogController::class, 'export']);
     Route::get('/cron-jobs/describe', [CronJobController::class, 'describe']);
     Route::get('/organizations/{org}/deployments', [DeploymentController::class, 'indexForOrganization']);
+    Route::get('/organizations/{org}/monitoring/servers', [MonitoringController::class, 'servers']);
     Route::get('/organizations/{org}/teams', [TeamController::class, 'index']);
     Route::post('/organizations/{org}/teams', [TeamController::class, 'store']);
     Route::get('/teams/{team}', [TeamController::class, 'show']);
@@ -85,6 +93,12 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::get('/environments/{environment}', [EnvironmentController::class, 'show']);
     Route::patch('/projects/{project}/environments/{environment}', [EnvironmentController::class, 'update']);
     Route::delete('/projects/{project}/environments/{environment}', [EnvironmentController::class, 'destroy']);
+    Route::get('/organizations/{org}/server-groups', [ServerGroupController::class, 'index']);
+    Route::post('/organizations/{org}/server-groups', [ServerGroupController::class, 'store']);
+    Route::get('/server-groups/{serverGroup}', [ServerGroupController::class, 'show']);
+    Route::patch('/server-groups/{serverGroup}', [ServerGroupController::class, 'update']);
+    Route::delete('/server-groups/{serverGroup}', [ServerGroupController::class, 'destroy']);
+    Route::put('/server-groups/{serverGroup}/servers', [ServerGroupController::class, 'syncServers']);
     Route::get('/organizations/{org}/servers', [ServerController::class, 'index']);
     Route::post('/organizations/{org}/servers', [ServerController::class, 'store']);
     Route::get('/servers/{server}', [ServerController::class, 'show']);
@@ -95,6 +109,11 @@ Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(func
     Route::post('/servers/{server}/commands', [CommandController::class, 'store']);
     Route::get('/servers/{server}/audit-logs', [AuditLogController::class, 'indexForServer']);
     Route::post('/servers/{server}/provision', [ProvisioningController::class, 'provision']);
+    Route::get('/organizations/{org}/provisioning-templates', [ProvisioningTemplateController::class, 'index']);
+    Route::post('/organizations/{org}/provisioning-templates', [ProvisioningTemplateController::class, 'store']);
+    Route::get('/provisioning-templates/{provisioningTemplate}', [ProvisioningTemplateController::class, 'show']);
+    Route::patch('/provisioning-templates/{provisioningTemplate}', [ProvisioningTemplateController::class, 'update']);
+    Route::delete('/provisioning-templates/{provisioningTemplate}', [ProvisioningTemplateController::class, 'destroy']);
     Route::get('/organizations/{org}/sites', [SiteController::class, 'index']);
     Route::get('/servers/{server}/sites', [SiteController::class, 'indexForServer']);
     Route::post('/servers/{server}/sites', [SiteController::class, 'store']);

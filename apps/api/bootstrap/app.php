@@ -2,6 +2,7 @@
 
 use App\Exceptions\HelixExceptionRenderer;
 use App\Http\Middleware\AttachRequestId;
+use App\Http\Middleware\EnforceApiTokenAbilities;
 use App\Modules\Commands\Exceptions\DangerousCommandException;
 use App\Modules\Credentials\Exceptions\CredentialAccessDeniedException;
 use App\Modules\CronJobs\Exceptions\InvalidCronExpressionException;
@@ -33,6 +34,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->api(prepend: [
             AttachRequestId::class,
+        ]);
+
+        $middleware->alias([
+            'api.token.abilities' => EnforceApiTokenAbilities::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

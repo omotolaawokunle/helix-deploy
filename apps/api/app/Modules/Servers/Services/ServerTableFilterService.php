@@ -43,6 +43,15 @@ class ServerTableFilterService extends BaseTableFilterService
                     $query->whereJsonContains('servers.tags', $tag);
                 }
             },
+            'server_group_id' => function (Builder $query, mixed $value): void {
+                if (! is_string($value) || $value === '') {
+                    return;
+                }
+
+                $query->whereHas('serverGroups', function (Builder $builder) use ($value): void {
+                    $builder->whereKey($value);
+                });
+            },
         ];
     }
 

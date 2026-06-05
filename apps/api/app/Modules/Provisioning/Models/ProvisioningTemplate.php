@@ -2,21 +2,19 @@
 
 declare(strict_types=1);
 
-namespace App\Modules\Servers\Models;
+namespace App\Modules\Provisioning\Models;
 
+use App\Models\User;
 use App\Modules\Organizations\Models\Organization;
-use App\Modules\Shared\Concerns\OwnedByOrganization;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-class ServerGroup extends Model
+class ProvisioningTemplate extends Model
 {
     use HasUuids;
-    use OwnedByOrganization;
 
-    protected $table = 'server_groups';
+    protected $table = 'provisioning_templates';
 
     public $incrementing = false;
 
@@ -26,15 +24,28 @@ class ServerGroup extends Model
         'organization_id',
         'name',
         'description',
+        'services',
+        'options',
+        'is_system',
+        'created_by',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'services' => 'array',
+            'options' => 'array',
+            'is_system' => 'boolean',
+        ];
+    }
 
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
-    public function servers(): BelongsToMany
+    public function creator(): BelongsTo
     {
-        return $this->belongsToMany(Server::class, 'server_group_server');
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

@@ -145,6 +145,9 @@ export interface ServerProjectSummary {
 }
 
 export interface ServerHealthStatus {
+  cpuPercent?: number
+  memoryUsedPercent?: number
+  memoryTotalMb?: number
   diskUsedPercent?: number
   diskTotalGb?: number
   lastCheckedAt?: string
@@ -179,6 +182,8 @@ export interface ServerGroup {
   organizationId: string
   name: string
   description: string | null
+  serversCount?: number
+  serverIds?: string[]
   createdAt: string
   updatedAt: string
 }

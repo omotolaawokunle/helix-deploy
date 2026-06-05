@@ -1,35 +1,44 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref, toRef } from 'vue'
-import { PlusIcon, ServerIcon, XIcon } from '@lucide/vue'
+import { FolderIcon, PlusIcon, ServerIcon, XIcon } from '@lucide/vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveOrg } from '@/composables/useActiveOrg'
-import { fetchServers } from '@/features/servers/api'
+import { useAuthStore } from '@/features/auth/stores/useAuthStore'
+import { fetchServerGroups, fetchServers } from '@/features/servers/api'
 import ServerCard from '@/features/servers/components/ServerCard.vue'
 import { useServerPolling } from '@/features/servers/composables/useServerPolling'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
-import type { Server } from '@/types'
+import type { Server, ServerGroup } from '@/types'
 
 const AddServerModal = defineAsyncComponent(
   () => import('@/features/servers/components/AddServerModal.vue'),
 )
 
+const ManageServerGroupsSheet = defineAsyncComponent(
+  () => import('@/features/servers/components/ManageServerGroupsSheet.vue'),
+)
+
 const serversStore = useServersStore()
+const authStore = useAuthStore()
 const { orgId } = useActiveOrg()
 const isAddModalOpen = ref(false)
+const isGroupsSheetOpen = ref(false)
 const tagCatalog = ref<Server[]>([])
+const serverGroups = ref<ServerGroup[]>([])
 
 const servers = toRef(serversStore, 'servers')
 const selectedTags = toRef(serversStore, 'activeTagFilters')
+const selectedGroupId = toRef(serversStore, 'activeGroupFilter')
 
-useServerPolling(servers, () => serversStore.fetch(selectedTags.value))
+useServerPolling(servers, () => serversStore.fetch())
 
 onMounted(async () => {
   await serversStore.fetch()
-  await loadTagCatalog()
+  await Promise.all([loadTagCatalog(), loadServerGroups()])
 })
 
 async function loadTagCatalog(): Promise<void> {
@@ -42,6 +51,22 @@ async function loadTagCatalog(): Promise<void> {
   }
 
   tagCatalog.value = await fetchServers(activeOrgId)
+}
+
+async function loadServerGroups(): Promise<void> {
+  const activeOrgId = orgId.value
+
+  if (activeOrgId === null) {
+    serverGroups.value = []
+
+    return
+  }
+
+  try {
+    serverGroups.value = await fetchServerGroups(activeOrgId)
+  } catch {
+    serverGroups.value = []
+  }
 }
 
 const availableTags = computed((): string[] => {
@@ -61,18 +86,30 @@ function toggleTagFilter(tag: string): void {
     ? selectedTags.value.filter(entry => entry !== tag)
     : [...selectedTags.value, tag]
 
-  void serversStore.fetch(nextTags)
+  void serversStore.fetch({ tags: nextTags })
 }
 
-function clearTagFilters(): void {
-  void serversStore.fetch([])
+function toggleGroupFilter(groupId: string): void {
+  const nextGroupId = selectedGroupId.value === groupId ? null : groupId
+
+  void serversStore.fetch({ serverGroupId: nextGroupId })
+}
+
+function clearFilters(): void {
+  void serversStore.fetch({ tags: [], serverGroupId: null })
 }
 
 const isEmpty = computed(
   () => serversStore.hasFetched && !serversStore.isLoading && servers.value.length === 0,
 )
 
-const hasActiveTagFilters = computed(() => selectedTags.value.length > 0)
+const hasActiveFilters = computed(
+  () => selectedTags.value.length > 0 || selectedGroupId.value !== null,
+)
+
+async function handleGroupsChanged(): Promise<void> {
+  await loadServerGroups()
+}
 </script>
 
 <template>
@@ -82,12 +119,48 @@ const hasActiveTagFilters = computed(() => selectedTags.value.length > 0)
       description="Manage and monitor your infrastructure hosts."
     >
       <template #actions>
+        <Button
+          v-if="authStore.isAdmin"
+          type="button"
+          variant="outline"
+          @click="isGroupsSheetOpen = true"
+        >
+          <FolderIcon class="mr-2 size-4" />
+          Manage groups
+        </Button>
         <Button type="button" @click="isAddModalOpen = true">
           <PlusIcon class="mr-2 size-4" />
           Add Server
         </Button>
       </template>
     </PageHeader>
+
+    <div
+      v-if="serverGroups.length > 0"
+      class="flex flex-wrap items-center gap-2"
+      data-testid="server-group-filters"
+    >
+      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Groups
+      </span>
+      <button
+        v-for="group in serverGroups"
+        :key="group.id"
+        type="button"
+        class="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        @click="toggleGroupFilter(group.id)"
+      >
+        <Badge
+          :variant="selectedGroupId === group.id ? 'default' : 'outline'"
+          class="cursor-pointer"
+        >
+          {{ group.name }}
+          <span class="ml-1 text-[10px] opacity-70">
+            {{ group.serversCount ?? 0 }}
+          </span>
+        </Badge>
+      </button>
+    </div>
 
     <div
       v-if="availableTags.length > 0"
@@ -112,12 +185,12 @@ const hasActiveTagFilters = computed(() => selectedTags.value.length > 0)
         </Badge>
       </button>
       <Button
-        v-if="hasActiveTagFilters"
+        v-if="hasActiveFilters"
         type="button"
         variant="ghost"
         size="sm"
         class="h-7 px-2"
-        @click="clearTagFilters"
+        @click="clearFilters"
       >
         <XIcon class="mr-1 size-3" />
         Clear
@@ -133,7 +206,7 @@ const hasActiveTagFilters = computed(() => selectedTags.value.length > 0)
     </div>
 
     <EmptyState
-      v-else-if="isEmpty && !hasActiveTagFilters"
+      v-else-if="isEmpty && !hasActiveFilters"
       title="No servers yet"
       description="Register your first server to start deploying applications."
       :icon="ServerIcon"
@@ -145,14 +218,14 @@ const hasActiveTagFilters = computed(() => selectedTags.value.length > 0)
     </EmptyState>
 
     <div
-      v-else-if="isEmpty && hasActiveTagFilters"
+      v-else-if="isEmpty && hasActiveFilters"
       class="panel border-dashed p-8 text-center"
       data-testid="servers-filter-empty"
     >
       <p class="text-muted-foreground">
-        No servers match the selected tags.
+        No servers match the selected filters.
       </p>
-      <Button type="button" variant="outline" class="mt-4" @click="clearTagFilters">
+      <Button type="button" variant="outline" class="mt-4" @click="clearFilters">
         Clear filters
       </Button>
     </div>
@@ -183,5 +256,11 @@ const hasActiveTagFilters = computed(() => selectedTags.value.length > 0)
     </div>
 
     <AddServerModal v-if="isAddModalOpen" v-model:open="isAddModalOpen" />
+
+    <ManageServerGroupsSheet
+      v-if="isGroupsSheetOpen"
+      v-model:open="isGroupsSheetOpen"
+      @groups-changed="handleGroupsChanged"
+    />
   </div>
 </template>

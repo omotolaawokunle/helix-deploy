@@ -264,6 +264,25 @@ async function handleSubmit(): Promise<void> {
                 Make sure to disable any existing GitHub Actions deploy workflows to avoid conflicts.
               </AlertDescription>
             </Alert>
+
+            <div
+              v-if="managementMode === ManagementMode.Observe"
+              class="rounded-lg border border-border bg-muted/30 p-4"
+              data-testid="observe-mode-guide"
+            >
+              <h3 class="text-sm font-medium text-foreground">
+                Observe-mode setup
+              </h3>
+              <p class="mt-1 text-xs text-muted-foreground">
+                HelixDeploy monitors this server without taking over deployments. Follow these steps:
+              </p>
+              <ol class="mt-3 list-decimal space-y-2 pl-4 text-sm text-foreground">
+                <li>Register the server with SSH credentials HelixDeploy can use for health checks.</li>
+                <li>Keep your existing CI/CD pipeline — HelixDeploy will not run deploy commands.</li>
+                <li>Assign the server to a project and environment for dashboard visibility.</li>
+                <li>When ready to migrate, switch the server to Managed mode from server settings.</li>
+              </ol>
+            </div>
           </TabsContent>
         </Tabs>
 

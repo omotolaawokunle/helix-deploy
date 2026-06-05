@@ -22,6 +22,8 @@ use App\Modules\Pipelines\StageHandlers\HealthCheckStageHandler;
 use App\Modules\Pipelines\StageHandlers\MigrateStageHandler;
 use App\Modules\Pipelines\StageHandlers\NotifyStageHandler;
 use App\Modules\Pipelines\StageHandlers\ScriptStageHandler;
+use App\Modules\Monitoring\Contracts\ServerMetricsCollectorInterface;
+use App\Modules\Monitoring\Services\ServerMetricsCollector;
 use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use App\Modules\Teams\Services\TeamProjectVisibilityService;
 use App\Packages\Realtime\DeploymentStreamPublisher;
@@ -41,6 +43,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ExecutionRunnerInterface::class, DeploymentRunner::class);
         $this->app->singleton(DeploymentStreamPublisher::class);
         $this->app->singleton(TeamProjectVisibilityServiceInterface::class, TeamProjectVisibilityService::class);
+        $this->app->singleton(ServerMetricsCollectorInterface::class, ServerMetricsCollector::class);
         $this->app->singleton(PipelineStageHandlerRegistry::class, function (): PipelineStageHandlerRegistry {
             /** @var list<PipelineStageHandlerInterface> $handlers */
             $handlers = [

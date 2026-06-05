@@ -13,8 +13,14 @@ export const useServersStore = defineStore('servers', () => {
   const { orgId } = useActiveOrg()
 
   const activeTagFilters = ref<string[]>([])
+  const activeGroupFilter = ref<string | null>(null)
 
-  async function fetch(tagFilters: string[] = activeTagFilters.value): Promise<void> {
+  interface FetchOptions {
+    tags?: string[]
+    serverGroupId?: string | null
+  }
+
+  async function fetch(options: FetchOptions = {}): Promise<void> {
     const activeOrgId = orgId.value
 
     if (activeOrgId === null) {
@@ -23,13 +29,21 @@ export const useServersStore = defineStore('servers', () => {
       return
     }
 
-    activeTagFilters.value = tagFilters
+    if (options.tags !== undefined) {
+      activeTagFilters.value = options.tags
+    }
+
+    if (options.serverGroupId !== undefined) {
+      activeGroupFilter.value = options.serverGroupId
+    }
+
     isLoading.value = true
     fetchError.value = null
 
     try {
       servers.value = await fetchServers(activeOrgId, {
-        tags: tagFilters.length > 0 ? tagFilters : undefined,
+        tags: activeTagFilters.value.length > 0 ? activeTagFilters.value : undefined,
+        serverGroupId: activeGroupFilter.value ?? undefined,
       })
       hasFetched.value = true
     } catch {
@@ -76,6 +90,7 @@ export const useServersStore = defineStore('servers', () => {
     hasFetched,
     fetchError,
     activeTagFilters,
+    activeGroupFilter,
     fetch,
     getById,
     invalidateCache,

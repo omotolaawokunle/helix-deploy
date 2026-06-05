@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useActiveOrg } from '@/composables/useActiveOrg'
 import {
   Select,
   SelectContent,
@@ -19,11 +21,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { provisionServer } from '@/features/servers/api'
+import {
+  fetchProvisioningTemplates,
+  provisionServer,
+  type ProvisioningTemplateRecord,
+} from '@/features/servers/api'
 import {
   NODE_VERSIONS,
   PHP_VERSIONS,
-  PROVISION_TEMPLATES,
   PROVISIONING_SCRIPTS,
   SCRIPT_ESTIMATED_MINUTES,
   type ProvisioningScript,
@@ -41,7 +46,10 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { orgId } = useActiveOrg()
 
+const templates = ref<ProvisioningTemplateRecord[]>([])
+const isLoadingTemplates = ref(false)
 const selectedScripts = ref<Set<ProvisioningScript>>(new Set())
 const phpVersion = ref<string>('8.3')
 const nodeVersion = ref<number>(20)
@@ -83,21 +91,55 @@ function toggleScript(script: ProvisioningScript): void {
   selectedScripts.value = next
 }
 
-function applyTemplate(templateId: string): void {
-  const template = PROVISION_TEMPLATES.find(entry => entry.id === templateId)
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      void loadTemplates()
+    }
+  },
+)
 
-  if (template === undefined) {
+async function loadTemplates(): Promise<void> {
+  const activeOrgId = orgId.value
+
+  if (activeOrgId === null) {
+    templates.value = []
+
     return
   }
 
-  selectedScripts.value = new Set(template.scripts)
+  isLoadingTemplates.value = true
 
-  if (template.phpVersion !== undefined) {
-    phpVersion.value = template.phpVersion
+  try {
+    templates.value = await fetchProvisioningTemplates(activeOrgId)
+  } catch {
+    templates.value = []
+  } finally {
+    isLoadingTemplates.value = false
+  }
+}
+
+function templateLabel(template: ProvisioningTemplateRecord): string {
+  return template.name
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function applyTemplate(template: ProvisioningTemplateRecord): void {
+  selectedScripts.value = new Set(template.services as ProvisioningScript[])
+
+  const php = template.options.phpVersion
+
+  if (typeof php === 'string') {
+    phpVersion.value = php
   }
 
-  if (template.nodeVersion !== undefined) {
-    nodeVersion.value = template.nodeVersion
+  const node = template.options.nodeVersion
+
+  if (typeof node === 'number') {
+    nodeVersion.value = node
   }
 }
 
@@ -146,18 +188,24 @@ async function handleSubmit(): Promise<void> {
       <SheetBody class="space-y-6">
         <div class="space-y-2">
           <Label>Quick templates</Label>
-          <div class="flex flex-wrap gap-2">
+          <div v-if="isLoadingTemplates" class="flex flex-wrap gap-2">
+            <Skeleton v-for="index in 4" :key="index" class="h-8 w-28 rounded-md" />
+          </div>
+          <div v-else-if="templates.length > 0" class="flex flex-wrap gap-2">
             <Button
-              v-for="template in PROVISION_TEMPLATES"
+              v-for="template in templates"
               :key="template.id"
               type="button"
               variant="outline"
               size="sm"
-              @click="applyTemplate(template.id)"
+              @click="applyTemplate(template)"
             >
-              {{ template.label }}
+              {{ templateLabel(template) }}
             </Button>
           </div>
+          <p v-else class="text-sm text-muted-foreground">
+            No templates available.
+          </p>
         </div>
 
         <div class="space-y-3">
