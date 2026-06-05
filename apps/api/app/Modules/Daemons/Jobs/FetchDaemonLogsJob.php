@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Daemons\Jobs;
 
 use App\Modules\Credentials\CredentialVault;
+use App\Modules\Daemons\Events\DaemonLogsReady;
 use App\Modules\Daemons\Models\SupervisorProcess;
 use App\Modules\Daemons\Services\SupervisorService;
 use App\Packages\SSH\SSHManager;
@@ -60,6 +61,14 @@ final class FetchDaemonLogsJob implements ShouldQueue
                     'status' => 'ready',
                     'lines' => $lines,
                 ], now()->addMinutes(5));
+
+                event(new DaemonLogsReady(
+                    serverId: (string) $server->getKey(),
+                    organizationId: (string) $daemon->organization_id,
+                    daemonId: (string) $daemon->getKey(),
+                    status: 'ready',
+                    lines: $lines,
+                ));
             } finally {
                 $connection->disconnect();
             }
@@ -69,6 +78,14 @@ final class FetchDaemonLogsJob implements ShouldQueue
                 'lines' => [],
                 'message' => 'Unable to fetch daemon logs.',
             ], now()->addMinutes(1));
+
+            event(new DaemonLogsReady(
+                serverId: (string) $server->getKey(),
+                organizationId: (string) $daemon->organization_id,
+                daemonId: (string) $daemon->getKey(),
+                status: 'failed',
+                message: 'Unable to fetch daemon logs.',
+            ));
         }
     }
 

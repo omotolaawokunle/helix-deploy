@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import ConnectionWaitStrip from '@/components/common/ConnectionWaitStrip.vue'
 import { Badge } from '@/components/ui/badge'
-import type { BuildRunner } from '@/features/build-runners/types'
+import type { BuildRunner, BuildRunnerRuntime } from '@/features/build-runners/types'
 
 interface Props {
   runner: BuildRunner
@@ -9,36 +11,43 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const statusLabel = computed((): string => {
-  const labels: Record<string, string> = {
-    connecting: 'Connecting',
-    online: 'Online',
-    offline: 'Offline',
-    maintenance: 'Maintenance',
-  }
+const isConnecting = computed(() => props.runner.status === 'connecting')
 
-  return labels[props.runner.status] ?? props.runner.status
-})
+const runtimeLabels: Record<BuildRunnerRuntime, string> = {
+  php: 'PHP',
+  nodejs: 'Node.js',
+  python: 'Python',
+  go: 'Go',
+  static: 'Static',
+  docker: 'Docker',
+}
 
-const statusClass = computed((): string => {
-  const classes: Record<string, string> = {
-    connecting: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200',
-    online: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200',
-    offline: 'bg-destructive/10 text-destructive',
-    maintenance: 'bg-muted text-muted-foreground',
-  }
-
-  return classes[props.runner.status] ?? 'bg-muted text-muted-foreground'
-})
+function runtimeLabel(runtime: BuildRunnerRuntime): string {
+  return runtimeLabels[runtime] ?? runtime
+}
 
 const slotSummary = computed(
   () => `${props.runner.activeBuilds} / ${props.runner.maxConcurrentBuilds} slots in use`,
 )
+
+const hardwareSummary = computed((): string | null => {
+  const parts: string[] = []
+
+  if (props.runner.cpuCores !== null) {
+    parts.push(`${props.runner.cpuCores} vCPU`)
+  }
+
+  if (props.runner.ramGb !== null) {
+    parts.push(`${props.runner.ramGb} GB RAM`)
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : null
+})
 </script>
 
 <template>
   <article
-    class="panel p-5"
+    class="panel p-5 transition-colors duration-200"
     data-testid="build-runner-card"
   >
     <div class="flex items-start justify-between gap-3">
@@ -51,12 +60,7 @@ const slotSummary = computed(
         </p>
       </div>
 
-      <Badge
-        variant="outline"
-        :class="['border-transparent capitalize', statusClass]"
-      >
-        {{ statusLabel }}
-      </Badge>
+      <StatusBadge :status="runner.status" type="build-runner" />
     </div>
 
     <div class="mt-3 flex flex-wrap gap-2">
@@ -64,9 +68,9 @@ const slotSummary = computed(
         v-for="runtime in runner.supportedRuntimes"
         :key="runtime"
         variant="secondary"
-        class="text-xs font-normal capitalize"
+        class="text-xs font-normal"
       >
-        {{ runtime }}
+        {{ runtimeLabel(runtime) }}
       </Badge>
       <Badge
         v-if="runner.project"
@@ -77,12 +81,15 @@ const slotSummary = computed(
       </Badge>
     </div>
 
+    <ConnectionWaitStrip
+      v-if="isConnecting"
+      data-testid="build-runner-connecting"
+    />
+
     <div class="mt-4 flex items-center justify-between border-t pt-4 text-sm text-muted-foreground">
       <span>{{ slotSummary }}</span>
-      <span v-if="runner.cpuCores !== null || runner.ramGb !== null">
-        <template v-if="runner.cpuCores !== null">{{ runner.cpuCores }} vCPU</template>
-        <template v-if="runner.cpuCores !== null && runner.ramGb !== null"> · </template>
-        <template v-if="runner.ramGb !== null">{{ runner.ramGb }} GB RAM</template>
+      <span v-if="hardwareSummary !== null" class="text-xs">
+        {{ hardwareSummary }}
       </span>
     </div>
   </article>

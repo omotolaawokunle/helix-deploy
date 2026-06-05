@@ -93,9 +93,12 @@ function resetForm(): void {
   projectId.value = undefined
   supportedRuntimes.value = ['php']
   apiError.value = null
+  runtimeValidationError.value = null
 }
 
 function toggleRuntime(runtime: BuildRunnerRuntime): void {
+  runtimeValidationError.value = null
+
   if (supportedRuntimes.value.includes(runtime)) {
     supportedRuntimes.value = supportedRuntimes.value.filter(entry => entry !== runtime)
 
@@ -105,12 +108,22 @@ function toggleRuntime(runtime: BuildRunnerRuntime): void {
   supportedRuntimes.value = [...supportedRuntimes.value, runtime]
 }
 
+const runtimeValidationError = ref<string | null>(null)
+
 async function handleSubmit(): Promise<void> {
   const activeOrgId = orgId.value
 
-  if (activeOrgId === null || supportedRuntimes.value.length === 0) {
+  if (activeOrgId === null) {
     return
   }
+
+  if (supportedRuntimes.value.length === 0) {
+    runtimeValidationError.value = 'Select at least one supported runtime.'
+
+    return
+  }
+
+  runtimeValidationError.value = null
 
   isSubmitting.value = true
   apiError.value = null
@@ -285,13 +298,23 @@ function handleOpenChange(value: boolean): void {
               {{ option.label }}
             </Button>
           </div>
+          <p v-if="runtimeValidationError !== null" class="text-sm text-destructive">
+            {{ runtimeValidationError }}
+          </p>
         </div>
       </SheetBody>
 
       <SheetFooter>
         <Button
           type="button"
-          :disabled="isSubmitting || name.trim() === '' || ipAddress.trim() === ''"
+          variant="outline"
+          @click="emit('update:open', false)"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          :disabled="isSubmitting || name.trim() === '' || ipAddress.trim() === '' || supportedRuntimes.length === 0"
           @click="handleSubmit"
         >
           {{ isSubmitting ? 'Registering…' : 'Register runner' }}

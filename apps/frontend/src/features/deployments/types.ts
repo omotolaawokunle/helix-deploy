@@ -122,10 +122,14 @@ export interface DeploymentLogLinePayload {
 }
 
 export interface DeploymentCompletedPayload {
+  deploymentId: string
+  siteId: string
+  organizationId: string
   status: string
   duration: number | null
   releaseId: string | null
   commitHash: string | null
+  finishedAt: string | null
 }
 
 export interface DeploymentFailedPayload {

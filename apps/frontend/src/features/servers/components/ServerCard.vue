@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
+import ConnectionWaitStrip from '@/components/common/ConnectionWaitStrip.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import ProviderIcon from '@/features/servers/components/ProviderIcon.vue'
@@ -67,15 +68,11 @@ const isProduction = computed(() => props.server.environment?.isProduction ?? fa
         </Badge>
       </div>
 
-      <div
+      <ConnectionWaitStrip
         v-if="isConnecting"
-        class="mt-4 space-y-2 border-t pt-4"
+        label="Connecting…"
         data-testid="server-connecting-skeleton"
-      >
-        <div class="h-1.5 w-full animate-pulse rounded-full bg-muted" />
-        <div class="h-1.5 w-2/3 animate-pulse rounded-full bg-muted" />
-        <p class="text-xs text-muted-foreground">Connecting…</p>
-      </div>
+      />
 
       <div class="mt-4 flex items-center justify-between border-t pt-4">
         <StatusBadge :status="server.status" type="server" />

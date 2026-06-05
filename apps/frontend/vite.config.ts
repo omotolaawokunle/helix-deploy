@@ -23,10 +23,6 @@ export default defineConfig({
             return 'vue-router'
           }
 
-          if (id.includes('node_modules/@tanstack/vue-query')) {
-            return 'query'
-          }
-
           if (
             id.includes('node_modules/vee-validate')
             || id.includes('node_modules/@vee-validate')

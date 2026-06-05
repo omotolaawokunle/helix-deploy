@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { useReducedMotionPolling } from '@/composables/useReducedMotionPolling'
+import { useDocumentVisibility } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
@@ -30,11 +30,14 @@ import { triggerDeployment } from '@/features/deployments/api'
 import { loadDashboardData } from '@/features/monitoring/api'
 import { fetchOrgSites } from '@/features/sites/api'
 import { formatDurationSeconds, formatRelativeTime } from '@/lib/format'
+import { useRealtimeStore } from '@/stores/useRealtimeStore'
 import type { DeploymentListItem } from '@/features/deployments/types'
 import type { DashboardStats } from '@/features/monitoring/api'
 import type { Server, Site } from '@/types'
 
 const authStore = useAuthStore()
+const realtimeStore = useRealtimeStore()
+const documentVisibility = useDocumentVisibility()
 
 const stats = ref<DashboardStats | null>(null)
 const servers = ref<Server[]>([])
@@ -148,7 +151,18 @@ async function loadInitial(): Promise<void> {
   isLoading.value = false
 }
 
-useReducedMotionPolling(refreshDashboard, 30_000)
+watch(
+  () => realtimeStore.dashboardRefreshToken,
+  () => {
+    void refreshDashboard()
+  },
+)
+
+watch(documentVisibility, (visibility, previousVisibility) => {
+  if (visibility === 'visible' && previousVisibility === 'hidden') {
+    void refreshDashboard()
+  }
+})
 
 async function handleQuickDeploy(): Promise<void> {
   if (quickDeploySiteId.value === '' || quickDeployBranch.value.trim() === '') {

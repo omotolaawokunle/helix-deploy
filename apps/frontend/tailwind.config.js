@@ -69,6 +69,9 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      fontFamily: {
+        sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
     },
   },
   plugins: [],

@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatDurationSeconds } from '@/lib/format'
 import { fetchDeployment } from '@/features/deployments/api'
+import DeploymentLogLines from '@/features/deployments/components/DeploymentLogLines.vue'
 import { useDeploymentStream } from '@/features/deployments/composables/useDeploymentStream'
 import type {
   DeploymentCompletedPayload,
@@ -39,6 +40,7 @@ const emit = defineEmits<{
 }>()
 
 const SCROLL_THRESHOLD_PX = 50
+const MAX_LOG_LINES_PER_STEP = 2000
 
 const steps = ref<DeploymentLogStep[]>([])
 const stepIndexById = new Map<string, number>()
@@ -76,6 +78,18 @@ const visibleSteps = computed((): DeploymentLogStep[] => {
 
   return steps.value.filter(step => step.phase === activePhaseTab.value)
 })
+
+const buildStepCount = computed(
+  () => steps.value.filter(step => step.phase === 'build').length,
+)
+
+const deployStepCount = computed(
+  () => steps.value.filter(step => step.phase === 'deploy').length,
+)
+
+function isLogTruncated(step: DeploymentLogStep): boolean {
+  return step.lines.length >= MAX_LOG_LINES_PER_STEP
+}
 
 function sortStepsInPlace(): void {
   steps.value.sort((left, right) => {
@@ -133,6 +147,16 @@ interface PendingLogLine {
   timestamp: string
 }
 
+function trimLogLines(
+  lines: Array<{ timestamp: string; content: string }>,
+): Array<{ timestamp: string; content: string }> {
+  if (lines.length <= MAX_LOG_LINES_PER_STEP) {
+    return lines
+  }
+
+  return lines.slice(lines.length - MAX_LOG_LINES_PER_STEP)
+}
+
 function appendLogLines(batch: readonly PendingLogLine[]): void {
   const linesByStep = new Map<string, Array<{ timestamp: string; content: string }>>()
 
@@ -157,7 +181,7 @@ function appendLogLines(batch: readonly PendingLogLine[]): void {
     const current = steps.value[index]
     steps.value[index] = {
       ...current,
-      lines: [...current.lines, ...newLines],
+      lines: trimLogLines([...current.lines, ...newLines]),
     }
   }
 }
@@ -309,30 +333,6 @@ function statusScreenReaderLabel(status: DeploymentStepStatus): string {
   return labels[status]
 }
 
-function lineColorClass(content: string): string {
-  if (content.startsWith('  +') || content.startsWith('[success]')) {
-    return 'text-green-400'
-  }
-
-  if (content.startsWith('  -') || content.startsWith('[error]') || content.startsWith('Error')) {
-    return 'text-red-400'
-  }
-
-  if (content.toLowerCase().startsWith('warning')) {
-    return 'text-yellow-400'
-  }
-
-  return 'text-zinc-300'
-}
-
-function formatTimestamp(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString()
-  } catch {
-    return iso
-  }
-}
-
 async function loadInitialSteps(): Promise<void> {
   isLoading.value = true
   loadError.value = null
@@ -359,6 +359,14 @@ useDeploymentStream(props.deploymentId, {
       status: status as DeploymentStepStatus,
       phase: phase as DeploymentStepPhase,
     })
+
+    if (
+      phase === 'deploy'
+      && hasBuildPhase.value
+      && activePhaseTab.value === 'build'
+    ) {
+      activePhaseTab.value = 'deploy'
+    }
   },
   onStepUpdate: (stepId, status, duration) => {
     upsertStep(stepId, {
@@ -419,11 +427,13 @@ onMounted(async () => {
         class="border-b border-zinc-800 px-4 pt-3"
       >
         <TabsList class="grid w-full max-w-xs grid-cols-2 bg-zinc-900">
-          <TabsTrigger value="build">
+          <TabsTrigger value="build" data-testid="deployment-phase-tab-build">
             Build
+            <span class="ml-1.5 tabular-nums text-zinc-500">{{ buildStepCount }}</span>
           </TabsTrigger>
-          <TabsTrigger value="deploy">
+          <TabsTrigger value="deploy" data-testid="deployment-phase-tab-deploy">
             Deploy
+            <span class="ml-1.5 tabular-nums text-zinc-500">{{ deployStepCount }}</span>
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -463,7 +473,10 @@ onMounted(async () => {
           >
             {{ formatDurationSeconds(step.duration) }}
           </Badge>
-          <span class="text-xs text-zinc-500">
+          <span
+            v-if="!hasBuildPhase"
+            class="text-xs text-zinc-500"
+          >
             {{ step.order }}
           </span>
         </button>
@@ -473,19 +486,17 @@ onMounted(async () => {
           class="border-t border-zinc-800"
           :data-testid="`deployment-step-body-${step.id}`"
         >
-          <pre
-            v-for="(logLine, index) in step.lines"
-            :key="`${step.id}-${index}`"
-            class="whitespace-pre-wrap break-words px-2 py-px text-xs leading-relaxed"
-          >
-            <span class="mr-3 select-none text-zinc-600">{{ formatTimestamp(logLine.timestamp) }}</span>
-            <span :class="lineColorClass(logLine.content)">{{ logLine.content }}</span>
-          </pre>
+          <DeploymentLogLines
+            :lines="step.lines"
+            :step-id="step.id"
+            :follow-tail="step.status === 'running'"
+          />
           <p
-            v-if="step.lines.length === 0"
-            class="px-4 py-3 text-xs text-zinc-500"
+            v-if="isLogTruncated(step)"
+            class="border-t border-zinc-800 px-4 py-2 text-xs text-zinc-600"
+            data-testid="deployment-log-truncated"
           >
-            Waiting for output…
+            Showing latest {{ MAX_LOG_LINES_PER_STEP.toLocaleString() }} lines
           </p>
         </div>
       </div>

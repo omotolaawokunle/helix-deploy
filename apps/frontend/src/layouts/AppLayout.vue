@@ -5,9 +5,13 @@ import { MenuIcon } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
+import LiveUpdatesIndicator from '@/components/common/LiveUpdatesIndicator.vue'
+import { useOrganizationRealtime } from '@/composables/useOrganizationRealtime'
 
 const isMobileNavOpen = ref(false)
 const route = useRoute()
+
+useOrganizationRealtime()
 </script>
 
 <template>
@@ -35,6 +39,8 @@ const route = useRoute()
         </p>
 
         <div class="flex-1" />
+
+        <LiveUpdatesIndicator />
       </header>
 
       <main class="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">

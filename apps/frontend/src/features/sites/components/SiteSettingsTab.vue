@@ -54,6 +54,7 @@ const pipelines = ref<PipelineRecord[]>([])
 const gitRepositories = ref<Array<{ id: string; fullName: string; cloneUrl: string; defaultBranch: string }>>([])
 const gitBranches = ref<string[]>([])
 const isLoadingPipelines = ref(false)
+const hasLoadedPipelines = ref(false)
 const isLoadingRepositories = ref(false)
 const isLoadingBranches = ref(false)
 const isSavingProviderToken = ref(false)
@@ -66,6 +67,7 @@ const buildStrategy = ref<SiteBuildStrategy>('on_server')
 const buildRunnerId = ref<string | null>(null)
 const buildRunners = ref<BuildRunner[]>([])
 const isLoadingBuildRunners = ref(false)
+const hasLoadedBuildRunners = ref(false)
 const runMigrations = ref(false)
 const dockerImage = ref('')
 const dockerRegistry = ref('')
@@ -128,16 +130,27 @@ watch(repositoryProvider, () => {
   void refreshGitMetadata()
 })
 
+watch(
+  buildStrategy,
+  (strategy) => {
+    if (strategy === 'runner') {
+      void loadBuildRunners()
+    }
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
-  void Promise.all([loadPipelines(), refreshGitMetadata(), loadBuildRunners()])
+  void Promise.all([
+    loadPipelines(),
+    refreshGitMetadata(),
+  ])
 })
 
 async function loadBuildRunners(): Promise<void> {
   const activeOrgId = orgId.value
 
-  if (activeOrgId === null) {
-    buildRunners.value = []
-
+  if (activeOrgId === null || hasLoadedBuildRunners.value || isLoadingBuildRunners.value) {
     return
   }
 
@@ -145,6 +158,7 @@ async function loadBuildRunners(): Promise<void> {
 
   try {
     buildRunners.value = await fetchBuildRunners(activeOrgId)
+    hasLoadedBuildRunners.value = true
   } catch {
     buildRunners.value = []
   } finally {
@@ -155,7 +169,7 @@ async function loadBuildRunners(): Promise<void> {
 async function loadPipelines(): Promise<void> {
   const activeOrgId = orgId.value
 
-  if (activeOrgId === null) {
+  if (activeOrgId === null || hasLoadedPipelines.value || isLoadingPipelines.value) {
     return
   }
 
@@ -163,6 +177,7 @@ async function loadPipelines(): Promise<void> {
 
   try {
     pipelines.value = await fetchPipelines(activeOrgId)
+    hasLoadedPipelines.value = true
   } catch {
     pipelines.value = []
   } finally {
@@ -494,7 +509,19 @@ async function handleDelete(): Promise<void> {
 
       <div v-if="buildStrategy === 'runner'" class="space-y-2">
         <Label for="build-runner">Preferred build runner</Label>
+        <div
+          v-if="!isLoadingBuildRunners && buildRunners.length === 0"
+          class="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground"
+          data-testid="build-runners-empty-hint"
+        >
+          No build runners registered yet.
+          <RouterLink to="/build-runners" class="text-primary hover:underline">
+            Add a build runner
+          </RouterLink>
+          to use this strategy.
+        </div>
         <Select
+          v-else
           :model-value="buildRunnerId ?? 'auto'"
           :disabled="isLoadingBuildRunners"
           @update:model-value="(value) => { buildRunnerId = value === 'auto' ? null : String(value) }"
@@ -515,10 +542,21 @@ async function handleDelete(): Promise<void> {
             </SelectItem>
           </SelectContent>
         </Select>
-        <p class="text-sm text-muted-foreground">
+        <p v-if="buildRunners.length > 0" class="text-sm text-muted-foreground">
           <RouterLink to="/build-runners" class="text-primary hover:underline">
             Manage build runners
           </RouterLink>
+        </p>
+      </div>
+
+      <div
+        v-if="buildStrategy === 'external'"
+        class="rounded-lg border border-border bg-muted/30 p-4"
+        data-testid="external-build-strategy-note"
+      >
+        <p class="text-sm text-muted-foreground">
+          Deployments will expect a pre-built artifact supplied outside the normal clone-and-build flow.
+          Artifact upload via API is coming soon.
         </p>
       </div>
 

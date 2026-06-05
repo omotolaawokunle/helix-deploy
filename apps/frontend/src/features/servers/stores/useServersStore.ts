@@ -79,6 +79,38 @@ export const useServersStore = defineStore('servers', () => {
     fetchError.value = null
   }
 
+  interface ServerUpdatePayload {
+    serverId: string
+    status?: string
+    os?: string | null
+    phpVersion?: string | null
+    nodeVersion?: string | null
+  }
+
+  function applyServerUpdate(payload: ServerUpdatePayload): void {
+    const index = servers.value.findIndex(server => server.id === payload.serverId)
+
+    if (index === -1) {
+      void fetch()
+
+      return
+    }
+
+    const current = servers.value[index]
+
+    servers.value[index] = {
+      ...current,
+      status: (payload.status ?? current.status) as typeof current.status,
+      os: payload.os ?? current.os,
+      phpVersion: payload.phpVersion ?? current.phpVersion,
+      nodeVersion: payload.nodeVersion ?? current.nodeVersion,
+    }
+  }
+
+  function removeServer(serverId: string): void {
+    servers.value = servers.value.filter(server => server.id !== serverId)
+  }
+
   async function handleServerConnected(): Promise<void> {
     invalidateCache()
     await fetch()
@@ -94,6 +126,8 @@ export const useServersStore = defineStore('servers', () => {
     fetch,
     getById,
     invalidateCache,
+    applyServerUpdate,
+    removeServer,
     handleServerConnected,
   }
 })

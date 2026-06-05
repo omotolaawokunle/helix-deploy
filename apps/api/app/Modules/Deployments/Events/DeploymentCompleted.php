@@ -43,10 +43,14 @@ class DeploymentCompleted implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
+            'deploymentId' => (string) $this->deployment->getKey(),
+            'siteId' => $this->deployment->site_id,
+            'organizationId' => $this->deployment->organization_id,
             'status' => $this->deployment->status->value,
             'duration' => $this->deployment->duration(),
             'releaseId' => $this->releaseId,
             'commitHash' => $this->deployment->commit_hash,
+            'finishedAt' => $this->deployment->finished_at?->toIso8601String(),
         ];
     }
 }

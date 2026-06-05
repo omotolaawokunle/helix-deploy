@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   CheckIcon,
+  LoaderCircleIcon,
   PlugIcon,
   ServerCogIcon,
   Trash2Icon,
@@ -20,8 +21,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ProviderIcon from '@/features/servers/components/ProviderIcon.vue'
 
-import { deleteServer, fetchServer, testServerConnection } from '@/features/servers/api'
+import { deleteServer, testServerConnection } from '@/features/servers/api'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
+import { useRealtimeStore } from '@/stores/useRealtimeStore'
 import { ManagementMode, type Server } from '@/types'
 
 const ServerSitesTab = defineAsyncComponent(
@@ -44,6 +46,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const serversStore = useServersStore()
+const realtimeStore = useRealtimeStore()
 
 const server = ref<Server | null>(null)
 const isLoading = ref(true)
@@ -54,7 +57,6 @@ const isDeleteDialogOpen = ref(false)
 const isDeleting = ref(false)
 const isAwaitingDeletion = ref(false)
 const activeTab = ref('overview')
-let deletionPollTimer: ReturnType<typeof setInterval> | null = null
 
 const serverId = computed(() => String(route.params.id))
 
@@ -165,28 +167,27 @@ async function loadServer(): Promise<void> {
   }
 }
 
-function stopDeletionPolling(): void {
-  if (deletionPollTimer !== null) {
-    clearInterval(deletionPollTimer)
-    deletionPollTimer = null
+function handleServerDeleted(deletedId: string): void {
+  if (!isAwaitingDeletion.value || deletedId !== serverId.value) {
+    return
   }
+
+  isAwaitingDeletion.value = false
+  serversStore.invalidateCache()
+  toast.success('Server deleted.')
+  void router.push('/servers')
 }
 
-async function pollUntilDeleted(): Promise<void> {
-  stopDeletionPolling()
-
-  deletionPollTimer = setInterval(async () => {
-    try {
-      await fetchServer(serverId.value)
-    } catch {
-      stopDeletionPolling()
-      isAwaitingDeletion.value = false
-      serversStore.invalidateCache()
-      toast.success('Server deleted.')
-      await router.push('/servers')
+watch(
+  () => realtimeStore.deletedServerId,
+  (deletedId) => {
+    if (deletedId === null) {
+      return
     }
-  }, 3000)
-}
+
+    handleServerDeleted(deletedId)
+  },
+)
 
 async function handleDeleteServer(): Promise<void> {
   if (server.value === null) {
@@ -199,8 +200,9 @@ async function handleDeleteServer(): Promise<void> {
     await deleteServer(serverId.value)
     isDeleteDialogOpen.value = false
     isAwaitingDeletion.value = true
-    toast.message('Server deletion scheduled. It will be removed in about 30 seconds.')
-    await pollUntilDeleted()
+    toast.message('Deletion scheduled.', {
+      description: 'Live updates will redirect you when cleanup completes.',
+    })
   } catch {
     toast.error('Unable to delete server.')
   } finally {
@@ -224,10 +226,6 @@ async function handleTestConnection(): Promise<void> {
 
 onMounted(() => {
   void loadServer()
-})
-
-onUnmounted(() => {
-  stopDeletionPolling()
 })
 </script>
 
@@ -316,9 +314,23 @@ onUnmounted(() => {
 
       <div
         v-if="isAwaitingDeletion"
-        class="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        class="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3"
+        role="status"
+        aria-live="polite"
+        data-testid="server-deletion-wait-banner"
       >
-        Server deletion is in progress. Credentials will be removed after a short grace period.
+        <LoaderCircleIcon
+          class="mt-0.5 size-4 shrink-0 animate-spin text-destructive motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+        <div class="space-y-1 text-sm">
+          <p class="font-medium text-destructive">
+            Deletion in progress
+          </p>
+          <p class="text-destructive/90">
+            Credentials and server records are being removed. You will be redirected when cleanup finishes.
+          </p>
+        </div>
       </div>
 
       <Tabs v-model="activeTab">

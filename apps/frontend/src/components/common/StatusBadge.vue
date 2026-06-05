@@ -8,7 +8,7 @@ import {
   ServerStatus,
 } from '@/types'
 
-type StatusType = 'server' | 'deployment' | 'daemon'
+type StatusType = 'server' | 'deployment' | 'daemon' | 'build-runner'
 
 interface Props {
   status: string
@@ -50,12 +50,12 @@ const deploymentStatusMap: Record<string, StatusConfig> = {
   },
   [DeploymentStatus.Building]: {
     label: 'Building',
-    className: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200',
+    className: 'bg-primary/10 text-primary dark:bg-primary/20',
     pulse: true,
   },
   [DeploymentStatus.Built]: {
     label: 'Built',
-    className: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200',
+    className: 'bg-secondary text-secondary-foreground',
   },
   [DeploymentStatus.Running]: {
     label: 'Running',
@@ -101,11 +101,32 @@ const daemonStatusMap: Record<string, StatusConfig> = {
   },
 }
 
+const buildRunnerStatusMap: Record<string, StatusConfig> = {
+  connecting: {
+    label: 'Connecting',
+    className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200',
+    pulse: true,
+  },
+  online: {
+    label: 'Online',
+    className: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200',
+  },
+  offline: {
+    label: 'Offline',
+    className: 'bg-destructive/10 text-destructive',
+  },
+  maintenance: {
+    label: 'Maintenance',
+    className: 'bg-muted text-muted-foreground',
+  },
+}
+
 const config = computed<StatusConfig>(() => {
   const maps: Record<StatusType, Record<string, StatusConfig>> = {
     server: serverStatusMap,
     deployment: deploymentStatusMap,
     daemon: daemonStatusMap,
+    'build-runner': buildRunnerStatusMap,
   }
 
   const map = maps[props.type]

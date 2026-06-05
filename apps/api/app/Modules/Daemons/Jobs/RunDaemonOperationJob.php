@@ -10,6 +10,8 @@ use App\Modules\Daemons\Actions\RestartDaemonAction;
 use App\Modules\Daemons\Actions\StartDaemonAction;
 use App\Modules\Daemons\Actions\StopDaemonAction;
 use App\Modules\Daemons\DTOs\CreateDaemonDTO;
+use App\Modules\Daemons\Events\DaemonChanged;
+use App\Modules\Daemons\Models\SupervisorProcess;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -42,7 +44,23 @@ class RunDaemonOperationJob implements ShouldQueue
         StopDaemonAction $stopDaemonAction,
         DeleteDaemonAction $deleteDaemonAction,
     ): void {
-        match ($this->operation) {
+        if ($this->operation === 'delete') {
+            $daemon = SupervisorProcess::query()
+                ->withoutGlobalScope('owned_by_organization')
+                ->whereKey((string) $this->daemonId)
+                ->first();
+
+            if ($daemon === null) {
+                return;
+            }
+
+            $deleteDaemonAction->execute((string) $this->daemonId);
+            event(DaemonChanged::deleted($daemon));
+
+            return;
+        }
+
+        $daemon = match ($this->operation) {
             'create' => $createDaemonAction->execute(
                 serverId: (string) $this->serverId,
                 actorId: (string) $this->actorId,
@@ -51,8 +69,15 @@ class RunDaemonOperationJob implements ShouldQueue
             'restart' => $restartDaemonAction->execute((string) $this->daemonId),
             'start' => $startDaemonAction->execute((string) $this->daemonId),
             'stop' => $stopDaemonAction->execute((string) $this->daemonId),
-            'delete' => $deleteDaemonAction->execute((string) $this->daemonId),
             default => null,
         };
+
+        if ($daemon === null) {
+            return;
+        }
+
+        event($this->operation === 'create'
+            ? DaemonChanged::created($daemon)
+            : DaemonChanged::updated($daemon));
     }
 }

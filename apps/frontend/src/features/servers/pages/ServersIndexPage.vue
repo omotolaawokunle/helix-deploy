@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref, toRef } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, toRef, watch } from 'vue'
 import { FolderIcon, PlusIcon, ServerIcon, XIcon } from '@lucide/vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
@@ -8,9 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
-import { fetchServerGroups, fetchServers } from '@/features/servers/api'
+import { fetchServerGroups } from '@/features/servers/api'
 import ServerCard from '@/features/servers/components/ServerCard.vue'
-import { useServerPolling } from '@/features/servers/composables/useServerPolling'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
 import type { Server, ServerGroup } from '@/types'
 
@@ -34,24 +33,25 @@ const servers = toRef(serversStore, 'servers')
 const selectedTags = toRef(serversStore, 'activeTagFilters')
 const selectedGroupId = toRef(serversStore, 'activeGroupFilter')
 
-useServerPolling(servers, () => serversStore.fetch())
+const hasActiveFilters = computed(
+  () => selectedTags.value.length > 0 || selectedGroupId.value !== null,
+)
 
 onMounted(async () => {
   await serversStore.fetch()
-  await Promise.all([loadTagCatalog(), loadServerGroups()])
+  tagCatalog.value = [...serversStore.servers]
+  await loadServerGroups()
 })
 
-async function loadTagCatalog(): Promise<void> {
-  const activeOrgId = orgId.value
-
-  if (activeOrgId === null) {
-    tagCatalog.value = []
-
-    return
-  }
-
-  tagCatalog.value = await fetchServers(activeOrgId)
-}
+watch(
+  servers,
+  (list) => {
+    if (!hasActiveFilters.value) {
+      tagCatalog.value = [...list]
+    }
+  },
+  { deep: true },
+)
 
 async function loadServerGroups(): Promise<void> {
   const activeOrgId = orgId.value
@@ -101,10 +101,6 @@ function clearFilters(): void {
 
 const isEmpty = computed(
   () => serversStore.hasFetched && !serversStore.isLoading && servers.value.length === 0,
-)
-
-const hasActiveFilters = computed(
-  () => selectedTags.value.length > 0 || selectedGroupId.value !== null,
 )
 
 async function handleGroupsChanged(): Promise<void> {
