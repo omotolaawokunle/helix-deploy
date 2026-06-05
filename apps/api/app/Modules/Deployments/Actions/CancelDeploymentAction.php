@@ -7,11 +7,18 @@ namespace App\Modules\Deployments\Actions;
 use App\Models\User;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Deployments\Enums\DeploymentStatus;
+use App\Modules\Deployments\Events\DeploymentCancelled;
 use App\Modules\Deployments\Models\Deployment;
+use App\Modules\Deployments\Services\DeploymentCancellationService;
 use InvalidArgumentException;
 
 class CancelDeploymentAction
 {
+    public function __construct(
+        private readonly DeploymentCancellationService $cancellationService,
+    ) {
+    }
+
     public function execute(Deployment $deployment, User $actor): Deployment
     {
         if (! in_array($deployment->status, [DeploymentStatus::PENDING, DeploymentStatus::RUNNING], true)) {
@@ -22,10 +29,16 @@ class CancelDeploymentAction
             'status' => $deployment->status->value,
         ];
 
+        $this->cancellationService->request((string) $deployment->getKey());
+
         $deployment->forceFill([
             'status' => DeploymentStatus::CANCELLED,
             'finished_at' => now(),
         ])->save();
+
+        $deployment = $deployment->refresh();
+
+        event(new DeploymentCancelled($deployment));
 
         AuditLog::record(
             operation: 'deployment.cancelled',

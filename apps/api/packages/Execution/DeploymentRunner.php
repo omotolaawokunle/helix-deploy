@@ -5,14 +5,21 @@ declare(strict_types=1);
 namespace App\Packages\Execution;
 
 use App\Modules\Deployments\Enums\DeploymentStepStatus;
+use App\Modules\Deployments\Services\DeploymentCancellationService;
 use App\Modules\Deployments\Events\DeploymentStepUpdated;
 use App\Modules\Deployments\Models\DeploymentStep as DeploymentStepRecord;
 use App\Packages\Execution\Contracts\DeploymentStepInterface;
 use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
+use App\Packages\Execution\Exceptions\DeploymentCancelledException;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
 
 class DeploymentRunner implements ExecutionRunnerInterface
 {
+    public function __construct(
+        private readonly ?DeploymentCancellationService $cancellation = null,
+    ) {
+    }
+
     /**
      * @param list<DeploymentStepInterface> $steps
      */
@@ -23,6 +30,8 @@ class DeploymentRunner implements ExecutionRunnerInterface
 
         try {
             foreach ($steps as $index => $step) {
+                $this->assertNotCancelled($ctx);
+
                 if ($step->isSkippable($ctx)) {
                     $this->markStepSkipped($ctx, $step, $index);
                     $callbacks?->stepSkipped($step, $index);
@@ -35,6 +44,10 @@ class DeploymentRunner implements ExecutionRunnerInterface
                 $callbacks?->stepFinished($step, $index);
                 $completed[] = $step;
             }
+        } catch (DeploymentCancelledException $exception) {
+            $ctx->flushLog();
+
+            throw $exception;
         } catch (DeploymentStepFailedException $exception) {
             $this->rollbackCompleted($ctx, $completed);
             $ctx->flushLog();
@@ -128,6 +141,18 @@ class DeploymentRunner implements ExecutionRunnerInterface
     {
         foreach (array_reverse($completed) as $step) {
             $step->rollback($ctx);
+        }
+    }
+
+    private function assertNotCancelled(DeploymentContext $ctx): void
+    {
+        if ($this->cancellation === null) {
+            return;
+        }
+
+        if ($this->cancellation->isRequested((string) $ctx->deployment->getKey())) {
+            $ctx->ssh->interrupt();
+            throw new DeploymentCancelledException();
         }
     }
 }

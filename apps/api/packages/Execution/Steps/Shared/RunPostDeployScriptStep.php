@@ -7,18 +7,18 @@ namespace App\Packages\Execution\Steps\Shared;
 use App\Packages\Execution\DeploymentContext;
 use App\Packages\Execution\Steps\BaseDeploymentStep;
 
-final class RunCustomScriptStep extends BaseDeploymentStep
+final class RunPostDeployScriptStep extends BaseDeploymentStep
 {
     private const TIMEOUT_SECONDS = 600;
 
     public function name(): string
     {
-        return 'run-custom-script';
+        return 'run-post-deploy-script';
     }
 
     public function run(DeploymentContext $ctx): void
     {
-        $script = $ctx->site->deploy_script;
+        $script = $ctx->site->post_deploy_script;
 
         if ($script === null || $script === '') {
             return;
@@ -33,7 +33,7 @@ final class RunCustomScriptStep extends BaseDeploymentStep
 
     public function isSkippable(DeploymentContext $ctx): bool
     {
-        $script = $ctx->site->deploy_script;
+        $script = $ctx->site->post_deploy_script;
 
         return $script === null || $script === '';
     }

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Commands\Jobs;
 
-use App\Models\User;
+use App\Modules\Commands\Models\Command;
 use App\Modules\Commands\Services\CommandService;
-use App\Modules\Organizations\Models\Organization;
-use App\Modules\Servers\Models\Server;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,37 +19,27 @@ class RunCommandJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public int $timeout = 120;
+    public int $timeout = 600;
 
     public int $tries = 1;
 
     public function __construct(
-        public readonly string $serverId,
-        public readonly string $command,
-        public readonly string $userId,
-        public readonly string $organizationId,
+        public readonly string $commandId,
     ) {
         $this->onQueue('commands');
     }
 
     public function handle(CommandService $commandService): void
     {
-        $server = Server::query()
+        $command = Command::query()
             ->withoutGlobalScope('owned_by_organization')
-            ->whereKey($this->serverId)
+            ->whereKey($this->commandId)
             ->first();
 
-        $actor = User::query()->whereKey($this->userId)->first();
-
-        $organization = Organization::query()
-            ->withoutGlobalScope('owned_by_organization')
-            ->whereKey($this->organizationId)
-            ->first();
-
-        if ($server === null || $actor === null || $organization === null) {
+        if ($command === null) {
             return;
         }
 
-        $commandService->run($server, $this->command, $actor, $organization);
+        $commandService->execute($command);
     }
 }

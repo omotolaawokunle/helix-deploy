@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Modules\Audit\Models\AuditLog;
+use App\Modules\Commands\Enums\CommandStatus;
 use App\Modules\Commands\Exceptions\DangerousCommandException;
+use App\Modules\Commands\Services\CommandCancellationService;
 use App\Modules\Commands\Services\CommandService;
 use App\Modules\Commands\Services\DangerousCommandGuard;
 use App\Modules\Credentials\CredentialVault;
@@ -26,9 +28,10 @@ it('throws before ssh manager is called for blocked commands', function (): void
         dangerousCommandGuard: new DangerousCommandGuard(),
         sshManager: $sshManager,
         credentialVault: app(CredentialVault::class),
+        cancellationService: new CommandCancellationService(),
     );
 
-    expect(fn () => $service->run($server, 'rm -rf /', $actor, $org))
+    expect(fn () => $service->queue($server, 'rm -rf /', $actor, $org))
         ->toThrow(DangerousCommandException::class);
 });
 
@@ -48,9 +51,12 @@ it('records command execution without output in audit log', function (): void {
         $mock->shouldReceive('connect')->once()->andReturn($fake);
     });
 
-    $command = app(CommandService::class)->run($server, 'uptime', $actor, $org);
+    $service = app(CommandService::class);
+    $queued = $service->queue($server, 'uptime', $actor, $org);
+    $command = $service->execute($queued);
 
-    expect($command->output)->toBe('up 1 day');
+    expect($command->output)->toContain('up 1 day')
+        ->and($command->status)->toBe(CommandStatus::COMPLETED);
 
     $audit = AuditLog::query()
         ->where('operation', 'command.executed')
@@ -62,8 +68,31 @@ it('records command execution without output in audit log', function (): void {
             'command_text' => 'uptime',
             'exit_code' => 0,
             'server_id' => (string) $server->getKey(),
+            'status' => CommandStatus::COMPLETED->value,
         ])
         ->and(json_encode($audit?->after_state))->not->toContain('up 1 day');
+});
+
+it('marks queued command cancelled without connecting when cancellation is already requested', function (): void {
+    [$server, $actor, $org] = commandServiceFixture();
+
+    $sshManager = \Mockery::mock(SSHManager::class);
+    $sshManager->shouldNotReceive('connect');
+
+    $cancellation = new CommandCancellationService();
+    $service = new CommandService(
+        dangerousCommandGuard: new DangerousCommandGuard(),
+        sshManager: $sshManager,
+        credentialVault: app(CredentialVault::class),
+        cancellationService: $cancellation,
+    );
+
+    $queued = $service->queue($server, 'uptime', $actor, $org);
+    $cancellation->request((string) $queued->getKey());
+
+    $command = $service->execute($queued);
+
+    expect($command->status)->toBe(CommandStatus::CANCELLED);
 });
 
 /**

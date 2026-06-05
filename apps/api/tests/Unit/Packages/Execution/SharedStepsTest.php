@@ -10,7 +10,8 @@ use App\Packages\Execution\Steps\Shared\CleanupOldReleasesStep;
 use App\Packages\Execution\Steps\Shared\CloneRepositoryStep;
 use App\Packages\Execution\Steps\Shared\CreateReleaseDirectoryStep;
 use App\Packages\Execution\Steps\Shared\LinkSharedDirectoriesStep;
-use App\Packages\Execution\Steps\Shared\RunCustomScriptStep;
+use App\Packages\Execution\Steps\Shared\RunPostDeployScriptStep;
+use App\Packages\Execution\Steps\Shared\RunPreDeployScriptStep;
 use App\Packages\Execution\Steps\Shared\VerifyConnectionStep;
 use Illuminate\Support\Facades\Event;
 
@@ -189,27 +190,52 @@ it('link shared directories symlinks env and storage', function (): void {
         ->and($ssh->getExecutedCommands()[0])->toContain('/shared/.env');
 });
 
-it('run custom script is skippable when deploy script is null', function (): void {
+it('run pre-deploy script is skippable when script is null', function (): void {
     [, , $site] = executionFixture();
-    $site->forceFill(['deploy_script' => null])->save();
+    $site->forceFill(['pre_deploy_script' => null])->save();
     $ssh = fakeSsh();
     [, $server, , $deployment] = executionFixture();
     $ctx = executionContext($site, $deployment, $server, $ssh);
-    $step = new RunCustomScriptStep();
+    $step = new RunPreDeployScriptStep();
 
     expect($step->isSkippable($ctx))->toBeTrue();
     $step->run($ctx);
     $ssh->assertCommandCount(0);
 });
 
-it('run custom script executes with timeout when script is set', function (): void {
+it('run pre-deploy script executes when script is set', function (): void {
     [, $server, $site, $deployment] = executionFixture();
-    $site->forceFill(['deploy_script' => 'php artisan deploy:hook'])->save();
+    $site->forceFill(['pre_deploy_script' => 'php artisan deploy:pre'])->save();
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['cd * && php artisan deploy:pre' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new RunPreDeployScriptStep())->run($ctx);
+
+    $ssh->assertCommandExecuted('cd */releases/* && php artisan deploy:pre');
+});
+
+it('run post-deploy script is skippable when script is null', function (): void {
+    [, , $site] = executionFixture();
+    $site->forceFill(['post_deploy_script' => null])->save();
+    $ssh = fakeSsh();
+    [, $server, , $deployment] = executionFixture();
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+    $step = new RunPostDeployScriptStep();
+
+    expect($step->isSkippable($ctx))->toBeTrue();
+    $step->run($ctx);
+    $ssh->assertCommandCount(0);
+});
+
+it('run post-deploy script executes when script is set', function (): void {
+    [, $server, $site, $deployment] = executionFixture();
+    $site->forceFill(['post_deploy_script' => 'php artisan deploy:hook'])->save();
     $ssh = fakeSsh();
     queueSshResponses($ssh, ['cd * && php artisan deploy:hook' => sshSuccess()]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
-    (new RunCustomScriptStep())->run($ctx);
+    (new RunPostDeployScriptStep())->run($ctx);
 
     $ssh->assertCommandExecuted('cd */releases/* && php artisan deploy:hook');
 });

@@ -9,6 +9,8 @@ use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\DeploymentStep as DeploymentStepRecord;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Deployments\Services\DeploymentCancellationService;
+use App\Packages\Execution\Exceptions\DeploymentCancelledException;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
 use App\Packages\SSH\SSHResult;
@@ -42,6 +44,8 @@ class DeploymentContext
     public ?DeploymentStepRecord $currentStepRecord = null;
 
     public ?string $executingStepName = null;
+
+    public ?DeploymentCancellationService $cancellation = null;
 
     public function __construct(
         Deployment $deployment,
@@ -149,9 +153,32 @@ class DeploymentContext
         $this->logBuffer = [];
     }
 
+    public function assertNotCancelled(): void
+    {
+        if ($this->cancellation === null) {
+            return;
+        }
+
+        if ($this->cancellation->isRequested((string) $this->deployment->getKey())) {
+            $this->ssh->interrupt();
+            throw new DeploymentCancelledException();
+        }
+    }
+
     public function run(string $command, ?int $timeout = null): SSHResult
     {
-        $result = $this->ssh->run($command, fn (string $line): mixed => $this->log($line), $timeout);
+        $this->assertNotCancelled();
+
+        $result = $this->ssh->run(
+            $command,
+            function (string $line): void {
+                $this->assertNotCancelled();
+                $this->log($line);
+            },
+            $timeout,
+        );
+
+        $this->assertNotCancelled();
 
         if ($result->failed()) {
             $stepName = $this->executingStepName

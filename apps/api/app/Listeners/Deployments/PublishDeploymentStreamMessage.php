@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Listeners\Deployments;
 
+use App\Modules\Deployments\Events\DeploymentCancelled;
 use App\Modules\Deployments\Events\DeploymentCompleted;
 use App\Modules\Deployments\Events\DeploymentLogLine;
 use App\Modules\Deployments\Events\DeploymentRolledBack;
@@ -17,8 +18,19 @@ final class PublishDeploymentStreamMessage
     ) {
     }
 
-    public function handle(DeploymentLogLine|DeploymentStepUpdated|DeploymentCompleted|DeploymentRolledBack $event): void
-    {
+    public function handle(
+        DeploymentLogLine|DeploymentStepUpdated|DeploymentCompleted|DeploymentRolledBack|DeploymentCancelled $event,
+    ): void {
+        if ($event instanceof DeploymentCancelled) {
+            $this->publisher->publish(
+                (string) $event->deployment->getKey(),
+                'deployment.cancelled',
+                $event->broadcastWith(),
+            );
+
+            return;
+        }
+
         if ($event instanceof DeploymentLogLine) {
             $this->publisher->publish(
                 (string) $event->deployment->getKey(),

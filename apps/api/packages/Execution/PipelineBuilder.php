@@ -36,7 +36,8 @@ use App\Packages\Execution\Steps\Shared\CleanupOldReleasesStep;
 use App\Packages\Execution\Steps\Shared\CloneRepositoryStep;
 use App\Packages\Execution\Steps\Shared\CreateReleaseDirectoryStep;
 use App\Packages\Execution\Steps\Shared\LinkSharedDirectoriesStep;
-use App\Packages\Execution\Steps\Shared\RunCustomScriptStep;
+use App\Packages\Execution\Steps\Shared\RunPostDeployScriptStep;
+use App\Packages\Execution\Steps\Shared\RunPreDeployScriptStep;
 use App\Packages\Execution\Steps\Shared\ReloadServicesStep;
 use App\Packages\Execution\Steps\Shared\ReloadNginxStep;
 use App\Packages\Execution\Steps\Shared\SyncEnvVarsStep;
@@ -99,10 +100,11 @@ final class PipelineBuilder
             new LinkSharedDirectoriesStep(),
             new RunMigrationsStep(),
             new ClearCacheStep(),
+            new RunPreDeployScriptStep(),
             new ActivateReleaseStep(),
             new ReloadPHPFPMStep(),
             new RestartWorkersStep(),
-            new RunCustomScriptStep(),
+            new RunPostDeployScriptStep(),
             new CleanupOldReleasesStep(),
         ];
     }
@@ -120,9 +122,10 @@ final class PipelineBuilder
             new BuildNodeAssetsStep(),
             new SyncEnvVarsStep(),
             new LinkSharedDirectoriesStep(),
+            new RunPreDeployScriptStep(),
             new ActivateReleaseStep(),
             new ReloadPM2Step(),
-            new RunCustomScriptStep(),
+            new RunPostDeployScriptStep(),
             new CleanupOldReleasesStep(),
         ];
     }
@@ -140,9 +143,10 @@ final class PipelineBuilder
             new CollectStaticStep(),
             new SyncEnvVarsStep(),
             new LinkSharedDirectoriesStep(),
+            new RunPreDeployScriptStep(),
             new ActivateReleaseStep(),
             new ReloadPythonProcessStep(),
-            new RunCustomScriptStep(),
+            new RunPostDeployScriptStep(),
             new CleanupOldReleasesStep(),
         ];
     }
@@ -159,10 +163,11 @@ final class PipelineBuilder
             new DownloadBinaryStep(),
             new SyncEnvVarsStep(),
             new LinkSharedDirectoriesStep(),
+            new RunPreDeployScriptStep(),
             new ActivateReleaseStep(),
             new ReplaceBinaryStep(),
             new RestartGoServiceStep(),
-            new RunCustomScriptStep(),
+            new RunPostDeployScriptStep(),
             new CleanupOldReleasesStep(),
         ];
     }
@@ -179,9 +184,10 @@ final class PipelineBuilder
             new BuildStaticAssetsStep(),
             new SyncEnvVarsStep(),
             new LinkSharedDirectoriesStep(),
+            new RunPreDeployScriptStep(),
             new ActivateReleaseStep(),
             new ReloadNginxStep(),
-            new RunCustomScriptStep(),
+            new RunPostDeployScriptStep(),
             new CleanupOldReleasesStep(),
         ];
     }

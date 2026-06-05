@@ -14,6 +14,8 @@ use App\Modules\Deployments\Models\DeploymentStep;
 use App\Modules\Deployments\Models\Release;
 use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
 use App\Packages\Execution\DeploymentContext;
+use App\Modules\Deployments\Services\DeploymentCancellationService;
+use App\Packages\Execution\Exceptions\DeploymentCancelledException;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
 use App\Modules\Sites\Services\Git\AuthenticatedGitCloneUrlResolver;
 use App\Packages\Execution\PipelineBuilder;
@@ -59,6 +61,7 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
         SSHManager $sshManager,
         CredentialVault $credentialVault,
         AuthenticatedGitCloneUrlResolver $cloneUrlResolver,
+        DeploymentCancellationService $cancellationService,
     ): void {
         $deployment = Deployment::query()
             ->withoutGlobalScope('owned_by_organization')
@@ -123,6 +126,7 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
                 $connection,
                 repositoryCloneUrl: $repositoryCloneUrl,
             );
+            $ctx->cancellation = $cancellationService;
 
             $runner->run($ctx, $pipelineSteps);
 
@@ -155,6 +159,13 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
                 $deployment,
                 $activeRelease !== null ? (string) $activeRelease->getKey() : null,
             ));
+        } catch (DeploymentCancelledException) {
+            if (isset($ctx)) {
+                $ctx->flushLog();
+            }
+
+            $this->markRunningStepCancelled($deployment);
+            event(new DeploymentCompleted($deployment->refresh()));
         } catch (DeploymentStepFailedException $exception) {
             if (isset($ctx)) {
                 $ctx->flushLog();
@@ -173,8 +184,20 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
             throw $exception;
         } finally {
+            $cancellationService->clear((string) $deployment->getKey());
             $connection->disconnect();
         }
+    }
+
+    private function markRunningStepCancelled(Deployment $deployment): void
+    {
+        DeploymentStep::query()
+            ->where('deployment_id', (string) $deployment->getKey())
+            ->where('status', DeploymentStepStatus::RUNNING->value)
+            ->update([
+                'status' => DeploymentStepStatus::FAILED->value,
+                'finished_at' => now(),
+            ]);
     }
 
     public function failed(Throwable $exception): void

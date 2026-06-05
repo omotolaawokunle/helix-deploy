@@ -27,6 +27,8 @@ class FakeSSHConnection implements SSHConnectionInterface
 
     private bool $connected = false;
 
+    public bool $interrupted = false;
+
     public function connect(): static
     {
         $this->connected = true;
@@ -98,6 +100,12 @@ class FakeSSHConnection implements SSHConnectionInterface
     public function getUploads(): array
     {
         return $this->uploads;
+    }
+
+    public function interrupt(): void
+    {
+        $this->interrupted = true;
+        $this->disconnect();
     }
 
     public function disconnect(): void

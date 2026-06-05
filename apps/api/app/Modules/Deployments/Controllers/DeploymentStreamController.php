@@ -107,7 +107,7 @@ final class DeploymentStreamController extends Controller
 
             $this->writeSseEvent((string) $payload['event'], (array) $payload['data']);
 
-            if (in_array($payload['event'], ['deployment.completed', 'deployment.rolled_back'], true)) {
+            if (in_array($payload['event'], ['deployment.completed', 'deployment.rolled_back', 'deployment.cancelled'], true)) {
                 $redis->unsubscribe([$channel]);
             }
         });

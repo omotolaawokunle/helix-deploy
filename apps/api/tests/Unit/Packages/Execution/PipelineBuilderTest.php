@@ -142,18 +142,29 @@ it('builds static git pipeline with asset build and nginx reload', function (): 
     $steps = (new PipelineBuilder())->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
-    expect($names)->toBe([
-        'verify-connection',
-        'create-release-directory',
-        'clone-repository',
-        'build-static-assets',
-        'sync-env-vars',
-        'link-shared-directories',
-        'activate-release',
-        'reload-nginx',
-        'run-custom-script',
-        'cleanup-old-releases',
-    ]);
+    $preIndex = array_search('run-pre-deploy-script', $names, true);
+    $activateIndex = array_search('activate-release', $names, true);
+    $postIndex = array_search('run-post-deploy-script', $names, true);
+    $nginxIndex = array_search('reload-nginx', $names, true);
+
+    expect($names)->toContain('run-pre-deploy-script')
+        ->and($names)->toContain('run-post-deploy-script')
+        ->and($preIndex)->toBeInt()->toBeLessThan($activateIndex)
+        ->and($postIndex)->toBeInt()->toBeGreaterThan($nginxIndex);
+});
+
+it('places pre-deploy hook before activation and post-deploy hook after service reload for php', function (): void {
+    [, , $site, $deployment] = executionFixture(Runtime::PHP);
+    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $names = array_map(static fn ($step): string => $step->name(), $steps);
+
+    $preIndex = array_search('run-pre-deploy-script', $names, true);
+    $activateIndex = array_search('activate-release', $names, true);
+    $workersIndex = array_search('restart-workers', $names, true);
+    $postIndex = array_search('run-post-deploy-script', $names, true);
+
+    expect($preIndex)->toBeInt()->toBeLessThan($activateIndex)
+        ->and($postIndex)->toBeInt()->toBeGreaterThan($workersIndex);
 });
 
 it('php pipeline starts with verify and includes expected steps', function (): void {

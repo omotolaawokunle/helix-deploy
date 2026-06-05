@@ -80,6 +80,39 @@ it('requires confirmation for warn commands on production servers', function ():
     Queue::assertNothingPushed();
 });
 
+it('returns queued command record with id for streaming', function (): void {
+    Queue::fake();
+
+    [$server, $owner] = commandApiFixture();
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/servers/{$server->id}/commands", [
+            'command' => 'uptime',
+            'timeout' => 90,
+        ])
+        ->assertAccepted()
+        ->assertJsonPath('status', 'queued')
+        ->assertJsonPath('data.command', 'uptime')
+        ->assertJsonPath('data.status', 'pending')
+        ->assertJsonPath('data.timeoutSeconds', 90)
+        ->assertJsonStructure(['data' => ['id']]);
+
+    Queue::assertPushed(RunCommandJob::class);
+});
+
+it('cancels a pending command', function (): void {
+    [$server, $owner, $organization] = commandApiFixture(returnOrg: true);
+
+    $record = app(CommandService::class)->queue($server, 'uptime', $owner, $organization);
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/commands/{$record->id}/cancel")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'cancelled');
+
+    expect($record->refresh()->status->value)->toBe('cancelled');
+});
+
 it('executes confirmed warn commands and omits output from audit log', function (): void {
     [$server, $owner, $organization] = commandApiFixture(returnOrg: true);
 
@@ -96,7 +129,9 @@ it('executes confirmed warn commands and omits output from audit log', function 
         $mock->shouldReceive('connect')->once()->andReturn($fake);
     });
 
-    app(CommandService::class)->run($server, 'sudo hostname', $owner, $organization);
+    $service = app(CommandService::class);
+    $queued = $service->queue($server, 'sudo hostname', $owner, $organization);
+    $service->execute($queued);
 
     $command = Command::query()->latest('executed_at')->first();
     expect($command?->output)->toContain('prod-host');

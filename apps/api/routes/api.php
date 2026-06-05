@@ -6,6 +6,7 @@ use App\Modules\Audit\Controllers\AuditLogController;
 use App\Modules\Auth\Controllers\ApiTokenController;
 use App\Modules\Auth\Controllers\AuthController;
 use App\Modules\Commands\Controllers\CommandController;
+use App\Modules\Commands\Controllers\CommandStreamController;
 use App\Modules\Organizations\Controllers\InvitationAcceptRedirectController;
 use App\Modules\Organizations\Controllers\OrganizationController;
 use App\Modules\Organizations\Controllers\OrganizationInvitationController;
@@ -108,6 +109,8 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::post('/servers/{server}/test-connection', [ServerController::class, 'testConnection']);
     Route::get('/servers/{server}/commands', [CommandController::class, 'index']);
     Route::post('/servers/{server}/commands', [CommandController::class, 'store']);
+    Route::get('/commands/{command}/stream', [CommandStreamController::class, 'stream']);
+    Route::post('/commands/{command}/cancel', [CommandController::class, 'cancel']);
     Route::get('/servers/{server}/audit-logs', [AuditLogController::class, 'indexForServer']);
     Route::post('/servers/{server}/provision', [ProvisioningController::class, 'provision']);
     Route::get('/organizations/{org}/provisioning-templates', [ProvisioningTemplateController::class, 'index']);

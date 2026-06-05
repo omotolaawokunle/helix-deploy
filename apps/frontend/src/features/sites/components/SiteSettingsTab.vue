@@ -57,7 +57,8 @@ const isLoadingBranches = ref(false)
 const isSavingProviderToken = ref(false)
 const gitCredentialConfigured = ref(false)
 const pipelineId = ref<string | null>(null)
-const deployScript = ref('')
+const preDeployScript = ref('')
+const postDeployScript = ref('')
 const runMigrations = ref(false)
 const dockerImage = ref('')
 const dockerRegistry = ref('')
@@ -81,7 +82,8 @@ watch(
   () => props.site,
   (site) => {
     deployBranch.value = site.deployBranch
-    deployScript.value = site.deployScript ?? ''
+    preDeployScript.value = site.preDeployScript ?? ''
+    postDeployScript.value = site.postDeployScript ?? ''
     runMigrations.value = site.runMigrations
     dockerImage.value = site.dockerImage ?? ''
     dockerRegistry.value = site.dockerRegistry ?? ''
@@ -250,7 +252,8 @@ async function handleSave(): Promise<void> {
   try {
     const updated = await updateSite(props.site.id, {
       deployBranch: deployBranch.value,
-      deployScript: deployScript.value,
+      preDeployScript: preDeployScript.value,
+      postDeployScript: postDeployScript.value,
       runMigrations: runMigrations.value,
       dockerImage: dockerImage.value || null,
       dockerRegistry: dockerRegistry.value || null,
@@ -415,8 +418,18 @@ async function handleDelete(): Promise<void> {
         Deployment
       </h2>
       <div class="space-y-2">
-        <Label for="deploy-script">Deploy script</Label>
-        <Textarea id="deploy-script" v-model="deployScript" rows="8" class="font-mono text-sm" />
+        <Label for="pre-deploy-script">Pre-deploy script</Label>
+        <p class="text-sm text-muted-foreground">
+          Runs after the release is built and before it goes live.
+        </p>
+        <Textarea id="pre-deploy-script" v-model="preDeployScript" rows="6" class="font-mono text-sm" />
+      </div>
+      <div class="space-y-2">
+        <Label for="post-deploy-script">Post-deploy script</Label>
+        <p class="text-sm text-muted-foreground">
+          Runs after the release is activated and services are reloaded.
+        </p>
+        <Textarea id="post-deploy-script" v-model="postDeployScript" rows="6" class="font-mono text-sm" />
       </div>
       <label class="flex items-center gap-2 text-sm">
         <input v-model="runMigrations" type="checkbox" class="rounded border-input">

@@ -115,8 +115,12 @@ class SiteController extends Controller
             $siteModel->deploy_branch = (string) $validated['deployBranch'];
         }
 
-        if (array_key_exists('deployScript', $validated)) {
-            $siteModel->deploy_script = $validated['deployScript'];
+        if (array_key_exists('preDeployScript', $validated)) {
+            $siteModel->pre_deploy_script = $validated['preDeployScript'];
+        }
+
+        if (array_key_exists('postDeployScript', $validated)) {
+            $siteModel->post_deploy_script = $validated['postDeployScript'];
         }
 
         if (array_key_exists('runMigrations', $validated)) {

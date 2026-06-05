@@ -22,7 +22,8 @@ final class UpdateSiteRequest extends FormRequest
     {
         return [
             'deployBranch' => ['sometimes', 'string', 'max:255'],
-            'deployScript' => ['sometimes', 'nullable', 'string', 'max:65535'],
+            'preDeployScript' => ['sometimes', 'nullable', 'string', 'max:65535'],
+            'postDeployScript' => ['sometimes', 'nullable', 'string', 'max:65535'],
             'runMigrations' => ['sometimes', 'boolean'],
             'dockerImage' => ['sometimes', 'nullable', 'string', 'max:255'],
             'dockerRegistry' => ['sometimes', 'nullable', 'string', 'max:255'],

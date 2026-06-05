@@ -202,7 +202,8 @@ export interface Site {
   repositoryProvider: GitProviderType | null
   gitCredentialConfigured: boolean
   deployBranch: string
-  deployScript: string | null
+  preDeployScript: string | null
+  postDeployScript: string | null
   runMigrations: boolean
   dockerImage: string | null
   dockerRegistry: string | null
@@ -257,14 +258,21 @@ export interface DaemonRecord {
   updatedAt: string
 }
 
+export type CommandStatus = 'pending' | 'running' | 'completed' | 'cancelled' | 'failed'
+
 export interface CommandRecord {
   id: string
   serverId: string
   userId: string
   command: string
+  status: CommandStatus
+  timeoutSeconds: number
   output: string | null
   exitCode: number | null
   executedAt: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  duration: number | null
   user?: {
     id: string
     name: string

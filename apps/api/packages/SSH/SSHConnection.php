@@ -128,6 +128,19 @@ class SSHConnection implements SSHConnectionInterface
         return $this->run($command)->successful();
     }
 
+    public function interrupt(): void
+    {
+        if (! $this->connected || ! isset($this->ssh)) {
+            return;
+        }
+
+        if (method_exists($this->ssh, 'write')) {
+            $this->ssh->write("\x03");
+        }
+
+        $this->disconnect();
+    }
+
     public function disconnect(): void
     {
         if (! isset($this->ssh)) {

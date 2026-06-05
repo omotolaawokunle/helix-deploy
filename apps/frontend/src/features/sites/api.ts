@@ -105,7 +105,8 @@ export async function updateSite(
   payload: Partial<Pick<
     Site,
     | 'deployBranch'
-    | 'deployScript'
+    | 'preDeployScript'
+    | 'postDeployScript'
     | 'runMigrations'
     | 'dockerImage'
     | 'dockerRegistry'

@@ -50,12 +50,7 @@ it('runs full php deployment pipeline with ordered steps and release activation'
     });
 
     $job = new RunDeploymentJob((string) $deployment->getKey(), (string) $deployment->triggered_by);
-    $job->handle(
-        new PipelineBuilder(),
-        new DeploymentRunner(),
-        app(SSHManager::class),
-        app(\App\Modules\Credentials\CredentialVault::class),
-    );
+    invokeRunDeploymentJob($job);
 
     $deployment->refresh();
 
@@ -120,12 +115,7 @@ it('runs full static deployment pipeline with nginx reload', function (): void {
     });
 
     $job = new RunDeploymentJob((string) $deployment->getKey(), (string) $deployment->triggered_by);
-    $job->handle(
-        new PipelineBuilder(),
-        new DeploymentRunner(),
-        app(SSHManager::class),
-        app(\App\Modules\Credentials\CredentialVault::class),
-    );
+    invokeRunDeploymentJob($job);
 
     $deployment->refresh();
 
@@ -170,13 +160,7 @@ it('leaves later steps pending and skips symlink when a step fails', function ()
     });
 
     $job = new RunDeploymentJob((string) $deployment->getKey(), (string) $deployment->triggered_by);
-
-    $job->handle(
-        new PipelineBuilder(),
-        new DeploymentRunner(),
-        app(SSHManager::class),
-        app(\App\Modules\Credentials\CredentialVault::class),
-    );
+    invokeRunDeploymentJob($job);
 
     $deployment->refresh();
     expect($deployment->status)->toBe(DeploymentStatus::FAILED);
@@ -207,15 +191,22 @@ it('returns early when deployment is not pending', function (): void {
     });
 
     $job = new RunDeploymentJob((string) $deployment->getKey(), (string) $deployment->triggered_by);
+    invokeRunDeploymentJob($job);
+
+    expect(DeploymentStep::query()->where('deployment_id', $deployment->getKey())->count())->toBe(0);
+});
+
+function invokeRunDeploymentJob(RunDeploymentJob $job): void
+{
     $job->handle(
         new PipelineBuilder(),
         new DeploymentRunner(),
         app(SSHManager::class),
         app(\App\Modules\Credentials\CredentialVault::class),
+        app(\App\Modules\Sites\Services\Git\AuthenticatedGitCloneUrlResolver::class),
+        app(\App\Modules\Deployments\Services\DeploymentCancellationService::class),
     );
-
-    expect(DeploymentStep::query()->where('deployment_id', $deployment->getKey())->count())->toBe(0);
-});
+}
 
 it('throws conflict when triggering a second deployment for the same site', function (): void {
     [, , $site, $deployment] = executionFixture(Runtime::PHP);
