@@ -1,12 +1,22 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, ref, watch } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useActiveOrg } from '@/composables/useActiveOrg'
+import { fetchPipelines } from '@/features/pipelines/api'
+import type { PipelineRecord } from '@/features/pipelines/types'
 import { deleteSite, updateSite } from '@/features/sites/api'
 import type { Site } from '@/types'
 
@@ -21,8 +31,12 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { orgId } = useActiveOrg()
 
 const deployBranch = ref('')
+const pipelineId = ref<string | null>(null)
+const pipelines = ref<PipelineRecord[]>([])
+const isLoadingPipelines = ref(false)
 const deployScript = ref('')
 const runMigrations = ref(false)
 const dockerImage = ref('')
@@ -40,9 +54,28 @@ watch(
     dockerImage.value = site.dockerImage ?? ''
     dockerRegistry.value = site.dockerRegistry ?? ''
     dockerComposePath.value = site.dockerComposePath ?? ''
+    pipelineId.value = site.pipelineId
   },
   { immediate: true },
 )
+
+async function loadPipelines(): Promise<void> {
+  const activeOrgId = orgId.value
+
+  if (activeOrgId === null) {
+    return
+  }
+
+  isLoadingPipelines.value = true
+
+  try {
+    pipelines.value = await fetchPipelines(activeOrgId)
+  } catch {
+    pipelines.value = []
+  } finally {
+    isLoadingPipelines.value = false
+  }
+}
 
 async function handleSave(): Promise<void> {
   isSaving.value = true
@@ -55,6 +88,7 @@ async function handleSave(): Promise<void> {
       dockerImage: dockerImage.value || null,
       dockerRegistry: dockerRegistry.value || null,
       dockerComposePath: dockerComposePath.value || null,
+      pipelineId: pipelineId.value,
     })
     emit('updated', updated)
     toast.success('Site settings saved.')
@@ -74,6 +108,10 @@ async function handleDelete(): Promise<void> {
     toast.error('Unable to delete site.')
   }
 }
+
+onMounted(() => {
+  void loadPipelines()
+})
 </script>
 
 <template>
@@ -94,6 +132,37 @@ async function handleDelete(): Promise<void> {
         <input v-model="runMigrations" type="checkbox" class="rounded border-input">
         Run migrations on deploy
       </label>
+
+      <div class="space-y-2 pt-2">
+        <Label for="site-pipeline">Pipeline</Label>
+        <Select
+          :model-value="pipelineId ?? 'none'"
+          :disabled="isLoadingPipelines"
+          @update:model-value="(value) => { pipelineId = value === 'none' ? null : String(value) }"
+        >
+          <SelectTrigger id="site-pipeline">
+            <SelectValue placeholder="No pipeline" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">
+              No pipeline
+            </SelectItem>
+            <SelectItem
+              v-for="pipeline in pipelines"
+              :key="pipeline.id"
+              :value="pipeline.id"
+            >
+              {{ pipeline.name }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p class="text-sm text-muted-foreground">
+          Optional custom pipeline for this site.
+          <RouterLink to="/pipelines" class="text-primary hover:underline">
+            Manage pipelines
+          </RouterLink>
+        </p>
+      </div>
 
       <h2 class="section-label pt-4">
         Docker

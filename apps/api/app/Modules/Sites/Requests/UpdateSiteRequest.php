@@ -25,6 +25,7 @@ final class UpdateSiteRequest extends FormRequest
             'dockerImage' => ['sometimes', 'nullable', 'string', 'max:255'],
             'dockerRegistry' => ['sometimes', 'nullable', 'string', 'max:255'],
             'dockerComposePath' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'pipelineId' => ['sometimes', 'nullable', 'uuid'],
         ];
     }
 }

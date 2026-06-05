@@ -35,7 +35,7 @@ export async function fetchSite(siteId: string): Promise<Site> {
 
 export async function updateSite(
   siteId: string,
-  payload: Partial<Pick<Site, 'deployBranch' | 'deployScript' | 'runMigrations' | 'dockerImage' | 'dockerRegistry' | 'dockerComposePath'>>,
+  payload: Partial<Pick<Site, 'deployBranch' | 'deployScript' | 'runMigrations' | 'dockerImage' | 'dockerRegistry' | 'dockerComposePath' | 'pipelineId'>>,
 ): Promise<Site> {
   const response = await api.patch<ResourceResponse<Site>>(`/api/v1/sites/${siteId}`, payload)
 

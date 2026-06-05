@@ -196,6 +196,7 @@ export interface Site {
   dockerImage: string | null
   dockerRegistry: string | null
   dockerComposePath: string | null
+  pipelineId: string | null
   runtime: Runtime
   status: string
   createdAt: string

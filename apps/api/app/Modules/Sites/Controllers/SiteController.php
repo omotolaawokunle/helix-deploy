@@ -133,6 +133,10 @@ class SiteController extends Controller
             $siteModel->docker_compose_path = $validated['dockerComposePath'];
         }
 
+        if (array_key_exists('pipelineId', $validated)) {
+            $siteModel->pipeline_id = $validated['pipelineId'];
+        }
+
         $siteModel->save();
 
         return SiteResource::make($siteModel->refresh());
