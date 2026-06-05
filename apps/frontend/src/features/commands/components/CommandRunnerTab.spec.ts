@@ -26,19 +26,18 @@ describe('CommandRunnerTab', () => {
   })
 
   it('shows confirmation dialog before running on production', async () => {
-    mount(CommandRunnerTab, {
+    const wrapper = mount(CommandRunnerTab, {
       props: { serverId: 'server-1', isProduction: true },
       attachTo: document.body,
     })
 
     await flushPromises()
 
-    const input = document.body.querySelector('[data-testid="command-input"]') as HTMLInputElement
-    input.value = 'php artisan cache:clear'
-    input.dispatchEvent(new Event('input', { bubbles: true }))
+    const input = wrapper.get('[data-testid="command-input"]')
+    await input.setValue('php artisan cache:clear')
 
-    const runButton = document.body.querySelector('[data-testid="command-run-button"]') as HTMLButtonElement
-    runButton.click()
+    const runButton = wrapper.get('[data-testid="command-run-button"]')
+    await runButton.trigger('click')
     await flushPromises()
 
     const dialog = document.body.querySelector('[data-testid="confirm-command-dialog"]')

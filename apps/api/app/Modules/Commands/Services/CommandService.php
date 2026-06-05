@@ -22,6 +22,8 @@ final class CommandService
 {
     private const DEFAULT_TIMEOUT_SECONDS = 60;
 
+    private const OUTPUT_FLUSH_SIZE = 10;
+
     public function __construct(
         private readonly DangerousCommandGuard $dangerousCommandGuard,
         private readonly SSHManager $sshManager,
@@ -79,12 +81,29 @@ final class CommandService
         $connection = $this->sshManager->connect($server, $this->credentialVault)->connect();
         $exitCode = null;
 
+        /** @var list<string> */
+        $outputBuffer = [];
+
+        $flushOutput = function () use (&$outputBuffer, $command): void {
+            if ($outputBuffer === []) {
+                return;
+            }
+
+            $this->appendOutputChunk($command, $outputBuffer);
+            $outputBuffer = [];
+        };
+
         try {
             $result = $connection->run(
                 $command->command,
-                function (string $line) use ($command, $connection): void {
-                    $this->appendOutput($command, $line);
-                    event(new CommandLogLine($command->refresh(), $line));
+                function (string $line) use ($command, $connection, &$outputBuffer, $flushOutput): void {
+                    $outputBuffer[] = $line;
+
+                    if (count($outputBuffer) >= self::OUTPUT_FLUSH_SIZE) {
+                        $flushOutput();
+                    }
+
+                    event(new CommandLogLine($command, $line));
 
                     if ($this->cancellationService->isRequested((string) $command->getKey())) {
                         $connection->interrupt();
@@ -113,6 +132,7 @@ final class CommandService
                 'finished_at' => now(),
             ])->save();
         } finally {
+            $flushOutput();
             $connection->disconnect();
             $this->cancellationService->clear((string) $command->getKey());
         }
@@ -140,9 +160,12 @@ final class CommandService
         return $this->dangerousCommandGuard->warn($command);
     }
 
-    private function appendOutput(Command $command, string $line): void
+    /**
+     * @param list<string> $lines
+     */
+    private function appendOutputChunk(Command $command, array $lines): void
     {
-        $chunk = $line."\n";
+        $chunk = implode("\n", $lines)."\n";
         $quoted = DB::connection()->getPdo()->quote($chunk);
 
         $command->newQueryWithoutScopes()

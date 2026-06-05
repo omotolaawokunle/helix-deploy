@@ -1,7 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { ChevronDownIcon } from '@lucide/vue'
+import { nextTick, onMounted, ref } from 'vue'
+import { useBatchedUpdates } from '@/composables/useBatchedUpdates'
+import {
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  CircleIcon,
+  LoaderCircleIcon,
+  MinusIcon,
+  XCircleIcon,
+} from '@lucide/vue'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDurationSeconds } from '@/lib/format'
 import { fetchDeployment } from '@/features/deployments/api'
@@ -30,6 +39,7 @@ const emit = defineEmits<{
 const SCROLL_THRESHOLD_PX = 50
 
 const steps = ref<DeploymentLogStep[]>([])
+const stepIndexById = new Map<string, number>()
 const isLoading = ref(true)
 const loadError = ref<string | null>(null)
 const scrollContainerRef = ref<HTMLElement | null>(null)
@@ -37,10 +47,20 @@ const userExpandedSteps = ref<Set<string>>(new Set())
 const userCollapsedSteps = ref<Set<string>>(new Set())
 const autoScrollEnabled = ref(props.autoScroll)
 const showJumpToLatest = ref(false)
+let scrollRafId: number | null = null
 
-const sortedSteps = computed(() =>
-  [...steps.value].sort((left, right) => left.order - right.order),
-)
+function rebuildStepIndex(): void {
+  stepIndexById.clear()
+
+  steps.value.forEach((step, index) => {
+    stepIndexById.set(step.id, index)
+  })
+}
+
+function sortStepsInPlace(): void {
+  steps.value.sort((left, right) => left.order - right.order)
+  rebuildStepIndex()
+}
 
 function mapApiStep(step: DeploymentStepResource): DeploymentLogStep {
   return {
@@ -57,48 +77,68 @@ function upsertStep(
   stepId: string,
   patch: Partial<DeploymentLogStep> & { name?: string; order?: number },
 ): void {
-  const index = steps.value.findIndex(step => step.id === stepId)
+  const index = stepIndexById.get(stepId)
 
-  if (index === -1) {
-    steps.value = [
-      ...steps.value,
-      {
-        id: stepId,
-        name: patch.name ?? 'Step',
-        order: patch.order ?? steps.value.length + 1,
-        status: patch.status ?? 'pending',
-        duration: patch.duration ?? null,
-        lines: patch.lines ?? [],
-      },
-    ]
-
-    return
-  }
-
-  const current = steps.value[index]
-  const updated = { ...current, ...patch }
-  const next = [...steps.value]
-  next[index] = updated
-  steps.value = next
-}
-
-function appendLogLine(stepId: string, line: string, timestamp: string): void {
-  const index = steps.value.findIndex(step => step.id === stepId)
-
-  if (index === -1) {
-    upsertStep(stepId, {
-      status: 'running',
-      lines: [{ timestamp, content: line }],
+  if (index === undefined) {
+    steps.value.push({
+      id: stepId,
+      name: patch.name ?? 'Step',
+      order: patch.order ?? steps.value.length + 1,
+      status: patch.status ?? 'pending',
+      duration: patch.duration ?? null,
+      lines: patch.lines ?? [],
     })
+    sortStepsInPlace()
 
     return
   }
 
   const current = steps.value[index]
-  upsertStep(stepId, {
-    lines: [...current.lines, { timestamp, content: line }],
-  })
+  steps.value[index] = { ...current, ...patch }
 }
+
+interface PendingLogLine {
+  stepId: string
+  line: string
+  timestamp: string
+}
+
+function appendLogLines(batch: readonly PendingLogLine[]): void {
+  const linesByStep = new Map<string, Array<{ timestamp: string; content: string }>>()
+
+  for (const item of batch) {
+    const existing = linesByStep.get(item.stepId) ?? []
+    existing.push({ timestamp: item.timestamp, content: item.line })
+    linesByStep.set(item.stepId, existing)
+  }
+
+  for (const [stepId, newLines] of linesByStep) {
+    const index = stepIndexById.get(stepId)
+
+    if (index === undefined) {
+      upsertStep(stepId, {
+        status: 'running',
+        lines: newLines,
+      })
+
+      continue
+    }
+
+    const current = steps.value[index]
+    steps.value[index] = {
+      ...current,
+      lines: [...current.lines, ...newLines],
+    }
+  }
+}
+
+const { push: queueLogLine } = useBatchedUpdates<PendingLogLine>((batch) => {
+  appendLogLines(batch)
+
+  if (props.autoScroll && autoScrollEnabled.value) {
+    void scrollToBottom()
+  }
+})
 
 function isNearBottom(element: HTMLElement): boolean {
   const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
@@ -117,21 +157,38 @@ async function scrollToBottom(): Promise<void> {
 }
 
 function handleScroll(): void {
-  const element = scrollContainerRef.value
+  const updateScrollState = (): void => {
+    const element = scrollContainerRef.value
 
-  if (element === null || !props.autoScroll) {
+    if (element === null || !props.autoScroll) {
+      return
+    }
+
+    if (isNearBottom(element)) {
+      autoScrollEnabled.value = true
+      showJumpToLatest.value = false
+
+      return
+    }
+
+    autoScrollEnabled.value = false
+    showJumpToLatest.value = true
+  }
+
+  if (import.meta.env.MODE === 'test') {
+    updateScrollState()
+
     return
   }
 
-  if (isNearBottom(element)) {
-    autoScrollEnabled.value = true
-    showJumpToLatest.value = false
-
+  if (scrollRafId !== null) {
     return
   }
 
-  autoScrollEnabled.value = false
-  showJumpToLatest.value = true
+  scrollRafId = requestAnimationFrame(() => {
+    scrollRafId = null
+    updateScrollState()
+  })
 }
 
 async function jumpToLatest(): Promise<void> {
@@ -151,11 +208,13 @@ function toggleStep(stepId: string): void {
 }
 
 function isStepExpanded(stepId: string): boolean {
-  const step = steps.value.find(item => item.id === stepId)
+  const index = stepIndexById.get(stepId)
 
-  if (step === undefined) {
+  if (index === undefined) {
     return false
   }
+
+  const step = steps.value[index]
 
   if (userCollapsedSteps.value.has(stepId)) {
     return false
@@ -184,28 +243,28 @@ function stepHeaderClass(status: DeploymentStepStatus): string {
   return ''
 }
 
+function statusIcon(status: DeploymentStepStatus) {
+  const icons = {
+    pending: CircleIcon,
+    running: LoaderCircleIcon,
+    success: CheckCircle2Icon,
+    failed: XCircleIcon,
+    skipped: MinusIcon,
+  }
+
+  return icons[status]
+}
+
 function statusIconClass(status: DeploymentStepStatus): string {
   const classes: Record<DeploymentStepStatus, string> = {
     pending: 'text-zinc-500',
-    running: 'animate-spin text-blue-400',
+    running: 'animate-spin text-blue-400 motion-reduce:animate-none',
     success: 'text-green-400',
     failed: 'text-red-400',
     skipped: 'text-zinc-600',
   }
 
   return classes[status]
-}
-
-function statusIconLabel(status: DeploymentStepStatus): string {
-  const labels: Record<DeploymentStepStatus, string> = {
-    pending: '○',
-    running: '◌',
-    success: '✓',
-    failed: '✗',
-    skipped: '—',
-  }
-
-  return labels[status]
 }
 
 function statusScreenReaderLabel(status: DeploymentStepStatus): string {
@@ -251,6 +310,7 @@ async function loadInitialSteps(): Promise<void> {
   try {
     const deployment = await fetchDeployment(props.deploymentId)
     steps.value = deployment.steps.map(mapApiStep)
+    sortStepsInPlace()
   } catch {
     loadError.value = 'Unable to load deployment logs.'
   } finally {
@@ -260,7 +320,7 @@ async function loadInitialSteps(): Promise<void> {
 
 useDeploymentStream(props.deploymentId, {
   onLogLine: (stepId, line, timestamp) => {
-    appendLogLine(stepId, line, timestamp)
+    queueLogLine({ stepId, line, timestamp })
   },
   onStepStarted: (stepId, name, order, status) => {
     upsertStep(stepId, {
@@ -283,17 +343,6 @@ useDeploymentStream(props.deploymentId, {
   },
 })
 
-watch(
-  () => steps.value.map(step => step.lines.length).join(','),
-  async () => {
-    if (!props.autoScroll || !autoScrollEnabled.value) {
-      return
-    }
-
-    await scrollToBottom()
-  },
-)
-
 onMounted(async () => {
   await loadInitialSteps()
   await scrollToBottom()
@@ -308,9 +357,23 @@ onMounted(async () => {
       <Skeleton class="min-h-96 w-full rounded-lg" />
     </div>
 
-    <p v-else-if="loadError !== null" class="text-sm text-destructive">
-      {{ loadError }}
-    </p>
+    <div
+      v-else-if="loadError !== null"
+      class="flex flex-col items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+      data-testid="deployment-log-error"
+    >
+      <p class="text-sm text-destructive">
+        {{ loadError }}
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        @click="loadInitialSteps"
+      >
+        Try again
+      </Button>
+    </div>
 
     <div
       v-else
@@ -320,28 +383,30 @@ onMounted(async () => {
       @scroll="handleScroll"
     >
       <div
-        v-for="step in sortedSteps"
+        v-for="step in steps"
         :key="step.id"
         class="border-b border-zinc-800 last:border-b-0"
         :data-testid="`deployment-step-${step.id}`"
       >
         <button
           type="button"
-          class="flex w-full items-center gap-3 px-4 py-3 text-left"
+          class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-900/70"
           :class="stepHeaderClass(step.status)"
+          :aria-expanded="isStepExpanded(step.id)"
           @click="toggleStep(step.id)"
         >
           <ChevronDownIcon
-            class="size-4 shrink-0 text-zinc-500 transition-transform"
+            class="size-4 shrink-0 text-zinc-500 transition-transform duration-200 motion-reduce:transition-none"
             :class="isStepExpanded(step.id) ? 'rotate-180' : ''"
+            aria-hidden="true"
           />
-          <span class="relative w-4 shrink-0 text-center text-sm">
-            <span
-              :class="[statusIconClass(step.status), 'motion-reduce:animate-none']"
+          <span class="relative flex size-4 shrink-0 items-center justify-center">
+            <component
+              :is="statusIcon(step.status)"
+              class="size-4"
+              :class="statusIconClass(step.status)"
               aria-hidden="true"
-            >
-              {{ statusIconLabel(step.status) }}
-            </span>
+            />
             <span class="sr-only">{{ statusScreenReaderLabel(step.status) }}</span>
           </span>
           <span class="flex-1 text-sm font-medium">{{ step.name }}</span>
@@ -380,21 +445,24 @@ onMounted(async () => {
       </div>
 
       <p
-        v-if="sortedSteps.length === 0"
+        v-if="steps.length === 0"
         class="px-4 py-8 text-center text-sm text-zinc-500"
       >
         Waiting for deployment output…
       </p>
     </div>
 
-    <button
+    <Button
       v-if="showJumpToLatest"
       type="button"
-      class="absolute bottom-4 right-4 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-100 shadow-lg hover:bg-zinc-800"
+      variant="outline"
+      size="sm"
+      class="absolute bottom-4 right-4 gap-1.5 border-zinc-700 bg-zinc-900 text-zinc-100 shadow-lg hover:bg-zinc-800"
       data-testid="jump-to-latest"
       @click="jumpToLatest"
     >
-      ↓ Jump to latest
-    </button>
+      <ChevronDownIcon class="size-3.5" aria-hidden="true" />
+      Jump to latest
+    </Button>
   </div>
 </template>
