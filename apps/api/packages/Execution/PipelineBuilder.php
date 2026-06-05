@@ -38,7 +38,10 @@ use App\Packages\Execution\Steps\Shared\CreateReleaseDirectoryStep;
 use App\Packages\Execution\Steps\Shared\LinkSharedDirectoriesStep;
 use App\Packages\Execution\Steps\Shared\RunCustomScriptStep;
 use App\Packages\Execution\Steps\Shared\ReloadServicesStep;
+use App\Packages\Execution\Steps\Shared\ReloadNginxStep;
+use App\Packages\Execution\Steps\Shared\SyncEnvVarsStep;
 use App\Packages\Execution\Steps\Shared\VerifyConnectionStep;
+use App\Packages\Execution\Steps\Static\BuildStaticAssetsStep;
 use App\Packages\Execution\Steps\Shared\VerifyReleaseExistsStep;
 use InvalidArgumentException;
 
@@ -75,6 +78,7 @@ final class PipelineBuilder
             Runtime::NODEJS => $this->nodeGitPipeline(),
             Runtime::PYTHON => $this->pythonGitPipeline(),
             Runtime::GO => $this->goGitPipeline(),
+            Runtime::STATIC => $this->staticGitPipeline(),
             default => throw new InvalidArgumentException('Unsupported runtime: '.$site->runtime->value),
         };
     }
@@ -91,6 +95,7 @@ final class PipelineBuilder
             new InstallComposerDepsStep(),
             new InstallNpmDepsStep(),
             new BuildAssetsStep(),
+            new SyncEnvVarsStep(),
             new LinkSharedDirectoriesStep(),
             new RunMigrationsStep(),
             new ClearCacheStep(),
@@ -113,6 +118,7 @@ final class PipelineBuilder
             new CloneRepositoryStep(),
             new InstallNpmDepsNodeStep(),
             new BuildNodeAssetsStep(),
+            new SyncEnvVarsStep(),
             new LinkSharedDirectoriesStep(),
             new ActivateReleaseStep(),
             new ReloadPM2Step(),
@@ -132,6 +138,7 @@ final class PipelineBuilder
             new CloneRepositoryStep(),
             new InstallPythonDepsStep(),
             new CollectStaticStep(),
+            new SyncEnvVarsStep(),
             new LinkSharedDirectoriesStep(),
             new ActivateReleaseStep(),
             new ReloadPythonProcessStep(),
@@ -150,10 +157,30 @@ final class PipelineBuilder
             new CreateReleaseDirectoryStep(),
             new CloneRepositoryStep(),
             new DownloadBinaryStep(),
+            new SyncEnvVarsStep(),
             new LinkSharedDirectoriesStep(),
             new ActivateReleaseStep(),
             new ReplaceBinaryStep(),
             new RestartGoServiceStep(),
+            new RunCustomScriptStep(),
+            new CleanupOldReleasesStep(),
+        ];
+    }
+
+    /**
+     * @return list<DeploymentStepInterface>
+     */
+    private function staticGitPipeline(): array
+    {
+        return [
+            new VerifyConnectionStep(),
+            new CreateReleaseDirectoryStep(),
+            new CloneRepositoryStep(),
+            new BuildStaticAssetsStep(),
+            new SyncEnvVarsStep(),
+            new LinkSharedDirectoriesStep(),
+            new ActivateReleaseStep(),
+            new ReloadNginxStep(),
             new RunCustomScriptStep(),
             new CleanupOldReleasesStep(),
         ];
@@ -170,6 +197,7 @@ final class PipelineBuilder
                 new CreateReleaseDirectoryStep(),
                 new CloneRepositoryStep(),
                 new DockerBuildStep(),
+                new SyncEnvVarsStep(),
                 new DockerComposeUpStep(),
                 new DockerCleanupStep(),
             ];
@@ -179,6 +207,7 @@ final class PipelineBuilder
             new VerifyConnectionStep(),
             new DockerLoginStep(),
             new DockerPullStep(),
+            new SyncEnvVarsStep(),
             new DockerComposeUpStep(),
             new DockerCleanupStep(),
         ];

@@ -9,6 +9,7 @@ use App\Modules\Credentials\CredentialVault;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentStepStatus;
 use App\Modules\Deployments\Events\DeploymentCompleted;
+use App\Modules\Deployments\Events\DeploymentRolledBack;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\DeploymentStep;
 use App\Modules\Deployments\Models\Release;
@@ -127,7 +128,7 @@ class RunRollbackJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
                 ]),
             );
 
-            event(new DeploymentCompleted(
+            event(new DeploymentRolledBack(
                 $deployment,
                 $activeRelease !== null ? (string) $activeRelease->getKey() : null,
             ));

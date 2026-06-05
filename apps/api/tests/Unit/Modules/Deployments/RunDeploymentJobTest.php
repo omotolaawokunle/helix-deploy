@@ -81,6 +81,7 @@ it('runs full php deployment pipeline with ordered steps and release activation'
 
     expect(AuditLog::query()->where('operation', 'deployment.started')->exists())->toBeTrue();
     expect(AuditLog::query()->where('operation', 'deployment.completed')->exists())->toBeTrue();
+    expect(AuditLog::query()->where('operation', 'env_vars.synced')->exists())->toBeTrue();
 
     $commands = $fake->getExecutedCommands();
     $composerIndex = findCommandIndex($commands, '*composer install*');
@@ -88,6 +89,50 @@ it('runs full php deployment pipeline with ordered steps and release activation'
 
     expect($composerIndex)->toBeGreaterThan(-1)
         ->and($symlinkIndex)->toBeGreaterThan($composerIndex);
+
+    Event::assertDispatched(DeploymentCompleted::class);
+});
+
+it('runs full static deployment pipeline with nginx reload', function (): void {
+    Event::fake([DeploymentCompleted::class]);
+
+    [, $server, $site, $deployment] = executionFixture(Runtime::STATIC);
+
+    $credential = \App\Modules\Credentials\Models\Credential::query()->create([
+        'organization_id' => (string) $site->organization_id,
+        'credentialable_type' => null,
+        'credentialable_id' => null,
+        'type' => 'ssh_private_key',
+        'name' => 'Static Deploy Key',
+        'encrypted_value' => 'ciphertext',
+        'nonce' => 'nonce',
+        'key_fingerprint' => 'fp',
+        'created_by' => $deployment->triggered_by,
+        'last_used_at' => null,
+    ]);
+    $server->forceFill(['credential_id' => (string) $credential->getKey()])->save();
+    $deployment->forceFill(['status' => DeploymentStatus::PENDING])->save();
+
+    $fake = stubStaticDeploymentSsh($site->domain, (string) $deployment->getKey());
+
+    $this->mock(SSHManager::class, function ($mock) use ($fake): void {
+        $mock->shouldReceive('connect')->once()->andReturn($fake);
+    });
+
+    $job = new RunDeploymentJob((string) $deployment->getKey(), (string) $deployment->triggered_by);
+    $job->handle(
+        new PipelineBuilder(),
+        new DeploymentRunner(),
+        app(SSHManager::class),
+        app(\App\Modules\Credentials\CredentialVault::class),
+    );
+
+    $deployment->refresh();
+
+    expect($deployment->status)->toBe(DeploymentStatus::SUCCESS);
+
+    $fake->assertCommandExecuted('sudo nginx -t');
+    $fake->assertCommandExecuted('sudo systemctl reload nginx');
 
     Event::assertDispatched(DeploymentCompleted::class);
 });
@@ -200,6 +245,18 @@ function findCommandIndex(array $commands, string $pattern): int
 /**
  * @return FakeSSHConnection
  */
+function stubStaticDeploymentSsh(string $domain, string $deploymentId): FakeSSHConnection
+{
+    $fake = stubDeploymentSsh($domain, $deploymentId);
+    $success = static fn (): SSHResult => sshSuccess();
+
+    $fake->addSequence('test -f *', sshFailure());
+    $fake->addSequence('sudo nginx -t', $success());
+    $fake->addSequence('sudo systemctl reload nginx', $success());
+
+    return $fake;
+}
+
 function stubDeploymentSsh(string $domain, string $deploymentId): FakeSSHConnection
 {
     $fake = (new FakeSSHConnection())->connect();
@@ -215,6 +272,8 @@ function stubDeploymentSsh(string $domain, string $deploymentId): FakeSSHConnect
         'git -C * log -1 *' => sshSuccess('Deploy commit'),
         '*composer install*' => $success(),
         'test -f *' => array_fill(0, 10, sshFailure()),
+        'chmod 640 *' => $success(),
+        'chown deploy:www-data *' => $success(),
         'ln -sfn *' => [$success(), $success(), $success()],
         'rm -rf *' => [$success(), $success(), $success()],
         '*php artisan config:cache*' => $success(),

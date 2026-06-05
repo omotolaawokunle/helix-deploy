@@ -61,9 +61,12 @@ export function useDeploymentChannel(
   }
 
   if (callbacks.onCompleted !== undefined) {
-    channel.listen(DEPLOYMENT_BROADCAST_EVENTS.completed, (payload: unknown) => {
+    const handleCompleted = (payload: unknown): void => {
       callbacks.onCompleted?.(payload as DeploymentCompletedPayload)
-    })
+    }
+
+    channel.listen(DEPLOYMENT_BROADCAST_EVENTS.completed, handleCompleted)
+    channel.listen(DEPLOYMENT_BROADCAST_EVENTS.rolledBack, handleCompleted)
   }
 
   if (callbacks.onFailed !== undefined) {

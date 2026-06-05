@@ -87,7 +87,7 @@ export function useDeploymentStream(
       callbacks.onStepUpdate(data.stepId, data.status, data.duration ?? null)
     })
 
-    eventSource.addEventListener('deployment.completed', (event: MessageEvent<string>) => {
+    const handleTerminalEvent = (event: MessageEvent<string>): void => {
       const data = parseEventData<DeploymentCompletedPayload>(event.data)
 
       if (data === null) {
@@ -96,7 +96,10 @@ export function useDeploymentStream(
 
       callbacks.onComplete(data)
       teardown()
-    })
+    }
+
+    eventSource.addEventListener('deployment.completed', handleTerminalEvent)
+    eventSource.addEventListener('deployment.rolled_back', handleTerminalEvent)
 
     eventSource.addEventListener('deployment.approval_required', (event: MessageEvent<string>) => {
       const data = parseEventData<Record<string, unknown>>(event.data)

@@ -4,6 +4,7 @@ export const DEPLOYMENT_BROADCAST_EVENTS = {
   stepFinished: 'deployment.step.finished',
   logLine: 'deployment.log_line',
   completed: 'deployment.completed',
+  rolledBack: 'deployment.rolled_back',
   failed: 'deployment.failed',
 } as const
 

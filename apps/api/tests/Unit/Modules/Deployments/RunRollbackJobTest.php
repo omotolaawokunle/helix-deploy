@@ -6,7 +6,7 @@ use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentType;
 use App\Modules\Deployments\Enums\TriggerType;
-use App\Modules\Deployments\Events\DeploymentCompleted;
+use App\Modules\Deployments\Events\DeploymentRolledBack;
 use App\Modules\Deployments\Jobs\RunRollbackJob;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\DeploymentStep;
@@ -19,7 +19,7 @@ use App\Packages\SSH\SSHResult;
 use Illuminate\Support\Facades\Event;
 
 it('executes symlink rollback with original release path', function (): void {
-    Event::fake([DeploymentCompleted::class]);
+    Event::fake([DeploymentRolledBack::class]);
 
     [$rollback, $original, $releasePath, $site] = rollbackJobFixture();
 
@@ -53,11 +53,11 @@ it('executes symlink rollback with original release path', function (): void {
 
     expect(AuditLog::query()->where('operation', 'deployment.rollback_completed')->exists())->toBeTrue();
 
-    Event::assertDispatched(DeploymentCompleted::class);
+    Event::assertDispatched(DeploymentRolledBack::class);
 });
 
 it('creates ordered rollback pipeline steps', function (): void {
-    Event::fake([DeploymentCompleted::class]);
+    Event::fake([DeploymentRolledBack::class]);
 
     [$rollback, , $releasePath, $site] = rollbackJobFixture();
 

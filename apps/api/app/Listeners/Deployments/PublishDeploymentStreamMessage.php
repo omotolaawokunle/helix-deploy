@@ -6,6 +6,7 @@ namespace App\Listeners\Deployments;
 
 use App\Modules\Deployments\Events\DeploymentCompleted;
 use App\Modules\Deployments\Events\DeploymentLogLine;
+use App\Modules\Deployments\Events\DeploymentRolledBack;
 use App\Modules\Deployments\Events\DeploymentStepUpdated;
 use App\Packages\Realtime\DeploymentStreamPublisher;
 
@@ -16,7 +17,7 @@ final class PublishDeploymentStreamMessage
     ) {
     }
 
-    public function handle(DeploymentLogLine|DeploymentStepUpdated|DeploymentCompleted $event): void
+    public function handle(DeploymentLogLine|DeploymentStepUpdated|DeploymentCompleted|DeploymentRolledBack $event): void
     {
         if ($event instanceof DeploymentLogLine) {
             $this->publisher->publish(
@@ -33,6 +34,16 @@ final class PublishDeploymentStreamMessage
                 (string) $event->deployment->getKey(),
                 $event->sseEventName(),
                 $event->streamPayload(),
+            );
+
+            return;
+        }
+
+        if ($event instanceof DeploymentRolledBack) {
+            $this->publisher->publish(
+                (string) $event->deployment->getKey(),
+                'deployment.rolled_back',
+                $event->broadcastWith(),
             );
 
             return;

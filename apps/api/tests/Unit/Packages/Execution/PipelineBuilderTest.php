@@ -11,6 +11,7 @@ use App\Packages\Execution\Steps\PHP\RunMigrationsStep;
 use App\Packages\Execution\Steps\Shared\ActivateReleaseStep;
 use App\Packages\Execution\Steps\Shared\CloneRepositoryStep;
 use App\Packages\Execution\Steps\Shared\ReloadServicesStep;
+use App\Packages\Execution\Steps\Shared\SyncEnvVarsStep;
 use App\Packages\Execution\Steps\Shared\VerifyConnectionStep;
 use App\Packages\Execution\Steps\Shared\VerifyReleaseExistsStep;
 
@@ -55,6 +56,7 @@ it('runs all pre-activation steps before activate for php', function (): void {
         'create-release-directory',
         'clone-repository',
         'install-composer-deps',
+        'sync-env-vars',
         'link-shared-directories',
         'run-migrations',
         'clear-cache',
@@ -79,6 +81,7 @@ it('builds docker pull pipeline without git clone', function (): void {
         'verify-connection',
         'docker-login',
         'docker-pull',
+        'sync-env-vars',
         'docker-compose-up',
         'docker-cleanup',
     ]);
@@ -98,6 +101,59 @@ it('builds docker build pipeline with clone', function (): void {
         ->and($names)->toContain('clone-repository')
         ->and($names)->toContain('docker-build')
         ->and($names)->not->toContain('docker-pull');
+});
+
+it('places sync-env-vars before link-shared-directories for php', function (): void {
+    [, , $site, $deployment] = executionFixture(Runtime::PHP);
+    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $names = array_map(static fn ($step): string => $step->name(), $steps);
+
+    $syncIndex = array_search('sync-env-vars', $names, true);
+    $linkIndex = array_search('link-shared-directories', $names, true);
+    $activateIndex = array_search('activate-release', $names, true);
+
+    expect($syncIndex)->toBeInt()
+        ->and($linkIndex)->toBeInt()
+        ->and($syncIndex)->toBeLessThan($linkIndex)
+        ->and($syncIndex)->toBeLessThan($activateIndex)
+        ->and($steps[$syncIndex])->toBeInstanceOf(SyncEnvVarsStep::class);
+});
+
+it('includes sync-env-vars in docker pull pipeline before compose up', function (): void {
+    [, , $site, $deployment] = executionFixture(Runtime::DOCKER, [
+        'deploy_mode' => DeployMode::DOCKER,
+        'docker_build_mode' => DockerBuildMode::PULL,
+        'docker_image' => 'ghcr.io/helix/app:latest',
+    ]);
+
+    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $names = array_map(static fn ($step): string => $step->name(), $steps);
+
+    $syncIndex = array_search('sync-env-vars', $names, true);
+    $composeIndex = array_search('docker-compose-up', $names, true);
+
+    expect($syncIndex)->toBeInt()
+        ->and($composeIndex)->toBeInt()
+        ->and($syncIndex)->toBeLessThan($composeIndex);
+});
+
+it('builds static git pipeline with asset build and nginx reload', function (): void {
+    [, , $site, $deployment] = executionFixture(Runtime::STATIC);
+    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $names = array_map(static fn ($step): string => $step->name(), $steps);
+
+    expect($names)->toBe([
+        'verify-connection',
+        'create-release-directory',
+        'clone-repository',
+        'build-static-assets',
+        'sync-env-vars',
+        'link-shared-directories',
+        'activate-release',
+        'reload-nginx',
+        'run-custom-script',
+        'cleanup-old-releases',
+    ]);
 });
 
 it('php pipeline starts with verify and includes expected steps', function (): void {

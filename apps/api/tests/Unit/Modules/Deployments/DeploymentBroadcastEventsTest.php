@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentStepStatus;
 use App\Modules\Deployments\Events\DeploymentCompleted;
+use App\Modules\Deployments\Events\DeploymentRolledBack;
+use App\Modules\Deployments\Enums\DeploymentType;
 use App\Modules\Deployments\Events\DeploymentLogLine;
 use App\Modules\Deployments\Events\DeploymentStepUpdated;
 use App\Modules\Deployments\Models\DeploymentStep;
@@ -41,6 +43,26 @@ it('deployment step updated maps running status to step.started sse event', func
     expect($event->broadcastAs())->toBe('deployment.step.updated')
         ->and($event->sseEventName())->toBe('step.started')
         ->and($event->broadcastWith()['status'])->toBe('running');
+});
+
+it('deployment rolled back exposes rollback payload fields', function (): void {
+    [, , , $deployment] = executionFixture();
+    $deployment->forceFill([
+        'type' => DeploymentType::ROLLBACK,
+        'status' => DeploymentStatus::SUCCESS,
+        'release_path' => '/var/www/app.example.test/releases/target',
+        'rollback_target_id' => 'target-deployment-id',
+        'started_at' => now()->subMinutes(1),
+        'finished_at' => now(),
+    ]);
+
+    $rolledBack = new DeploymentRolledBack($deployment, 'release-id');
+
+    expect($rolledBack->broadcastAs())->toBe('deployment.rolled_back')
+        ->and($rolledBack->broadcastWith()['status'])->toBe('success')
+        ->and($rolledBack->broadcastWith()['releaseId'])->toBe('release-id')
+        ->and($rolledBack->broadcastWith()['rollbackTargetId'])->toBe('target-deployment-id')
+        ->and($rolledBack->broadcastWith()['releasePath'])->toBe('/var/www/app.example.test/releases/target');
 });
 
 it('deployment completed exposes terminal payload fields', function (): void {

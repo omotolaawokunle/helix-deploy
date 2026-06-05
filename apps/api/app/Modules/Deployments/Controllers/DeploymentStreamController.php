@@ -6,6 +6,7 @@ namespace App\Modules\Deployments\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Deployments\Enums\DeploymentStatus;
+use App\Modules\Deployments\Enums\DeploymentType;
 use App\Modules\Deployments\Enums\DeploymentStepStatus;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\DeploymentStep;
@@ -27,7 +28,7 @@ final class DeploymentStreamController extends Controller
                 $this->emitCatchUp($deploymentModel);
 
                 if ($deploymentModel->status->isTerminal()) {
-                    $this->emitDeploymentCompleted($deploymentModel);
+                    $this->emitTerminalEvent($deploymentModel);
 
                     return;
                 }
@@ -106,10 +107,35 @@ final class DeploymentStreamController extends Controller
 
             $this->writeSseEvent((string) $payload['event'], (array) $payload['data']);
 
-            if ($payload['event'] === 'deployment.completed') {
+            if (in_array($payload['event'], ['deployment.completed', 'deployment.rolled_back'], true)) {
                 $redis->unsubscribe([$channel]);
             }
         });
+    }
+
+    private function emitTerminalEvent(Deployment $deployment): void
+    {
+        if (
+            $deployment->type === DeploymentType::ROLLBACK
+            && $deployment->status === DeploymentStatus::SUCCESS
+        ) {
+            $activeRelease = $deployment->releases()->where('is_active', true)->first();
+
+            $this->writeSseEvent('deployment.rolled_back', [
+                'deploymentId' => (string) $deployment->getKey(),
+                'siteId' => (string) $deployment->site_id,
+                'rollbackTargetId' => $deployment->rollback_target_id,
+                'status' => $deployment->status->value,
+                'duration' => $deployment->duration(),
+                'releaseId' => $activeRelease !== null ? (string) $activeRelease->getKey() : null,
+                'releasePath' => $deployment->release_path,
+                'commitHash' => $deployment->commit_hash,
+            ]);
+
+            return;
+        }
+
+        $this->emitDeploymentCompleted($deployment);
     }
 
     private function emitDeploymentCompleted(Deployment $deployment): void

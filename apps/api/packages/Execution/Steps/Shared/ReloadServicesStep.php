@@ -9,6 +9,7 @@ use App\Packages\Execution\Contracts\DeploymentStepInterface;
 use App\Packages\Execution\DeploymentContext;
 use App\Packages\Execution\Steps\BaseDeploymentStep;
 use App\Packages\Execution\Steps\Docker\DockerComposeUpStep;
+use App\Packages\Execution\Steps\Shared\ReloadNginxStep;
 use App\Packages\Execution\Steps\Go\RestartGoServiceStep;
 use App\Packages\Execution\Steps\NodeJS\ReloadPM2Step;
 use App\Packages\Execution\Steps\PHP\ReloadPHPFPMStep;
@@ -45,6 +46,7 @@ final class ReloadServicesStep extends BaseDeploymentStep
             Runtime::PYTHON => [new ReloadPythonProcessStep()],
             Runtime::GO => [new RestartGoServiceStep()],
             Runtime::DOCKER => [new DockerComposeUpStep()],
+            Runtime::STATIC => [new ReloadNginxStep()],
             default => throw new InvalidArgumentException('Unsupported runtime for rollback reload: '.$ctx->site->runtime->value),
         };
     }
