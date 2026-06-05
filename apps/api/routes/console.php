@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Modules\BuildRunners\Jobs\PingBuildRunnersJob;
+use App\Modules\BuildRunners\Jobs\StuckBuildWatchdogJob;
 use App\Modules\Deployments\Jobs\StuckDeploymentWatchdogJob;
 use App\Modules\Monitoring\Jobs\CollectServerMetricsJob;
 use App\Modules\Servers\Jobs\PingServersJob;
@@ -17,6 +19,10 @@ Schedule::job(new PingServersJob())
     ->everyFiveMinutes()
     ->onOneServer();
 
+Schedule::job(new PingBuildRunnersJob())
+    ->everyFiveMinutes()
+    ->onOneServer();
+
 Schedule::job(new CollectServerMetricsJob())
     ->everyFiveMinutes()
     ->onOneServer();
@@ -25,6 +31,7 @@ Schedule::job(new StuckDeploymentWatchdogJob())
     ->everyTenMinutes()
     ->onOneServer();
 
-if (class_exists(\Laravel\Telescope\Telescope::class)) {
-    Schedule::command('telescope:prune --hours=48')->daily();
-}
+Schedule::job(new StuckBuildWatchdogJob())
+    ->everyTenMinutes()
+    ->onOneServer();
+

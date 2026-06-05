@@ -27,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         __DIR__.'/../app/Modules/Credentials/Commands',
         __DIR__.'/../app/Modules/CronJobs/Commands',
         __DIR__.'/../app/Modules/Deployments/Commands',
+        __DIR__.'/../app/Modules/BuildRunners/Commands',
         __DIR__.'/../app/Modules/Servers/Commands',
     ])
     ->withMiddleware(function (Middleware $middleware): void {

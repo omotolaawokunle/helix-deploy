@@ -75,6 +75,29 @@ final class RunnerSlotManager
         return $this->activeBuildCount($runner) > 0;
     }
 
+    /**
+     * @return list<array{slot: int, buildId: string}>
+     */
+    public function activeSlotEntries(BuildRunner $runner): array
+    {
+        $maxConcurrent = max(1, (int) $runner->max_concurrent_builds);
+        $entries = [];
+
+        for ($slot = 0; $slot < $maxConcurrent; $slot++) {
+            $key = $this->slotKey((string) $runner->getKey(), $slot);
+            $buildId = $this->store->get($key);
+
+            if ($buildId !== null && $buildId !== '') {
+                $entries[] = [
+                    'slot' => $slot,
+                    'buildId' => $buildId,
+                ];
+            }
+        }
+
+        return $entries;
+    }
+
     private function slotKey(string $runnerId, int $slot): string
     {
         return sprintf('runner:%s:slot:%d', $runnerId, $slot);
