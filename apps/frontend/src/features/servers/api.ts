@@ -57,27 +57,19 @@ export async function provisionServer(
 }
 
 export async function fetchProjects(organizationId: string): Promise<ProjectOption[]> {
-  try {
-    const response = await api.get<PaginatedResponse<ProjectOption>>(
-      `/api/v1/organizations/${organizationId}/projects`,
-      { params: { per_page: 100 } },
-    )
+  const response = await api.get<PaginatedResponse<ProjectOption>>(
+    `/api/v1/organizations/${organizationId}/projects`,
+    { params: { per_page: 100 } },
+  )
 
-    return response.data.data
-  } catch {
-    return []
-  }
+  return response.data.data
 }
 
 export async function fetchProjectEnvironments(projectId: string): Promise<EnvironmentOption[]> {
-  try {
-    const response = await api.get<PaginatedResponse<EnvironmentOption>>(
-      `/api/v1/projects/${projectId}/environments`,
-      { params: { per_page: 100 } },
-    )
+  const response = await api.get<PaginatedResponse<EnvironmentOption>>(
+    `/api/v1/projects/${projectId}/environments`,
+    { params: { per_page: 100 } },
+  )
 
-    return response.data.data
-  } catch {
-    return []
-  }
+  return response.data.data
 }
