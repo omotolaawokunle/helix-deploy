@@ -16,7 +16,7 @@ class InstallCertbot extends BaseProvisioningScript
 
     public function description(): string
     {
-        return 'Installs Certbot with the Cloudflare DNS plugin for Let\'s Encrypt certificates.';
+        return 'Installs Certbot with Cloudflare and DigitalOcean DNS plugins for Let\'s Encrypt certificates.';
     }
 
     public function estimatedMinutes(): int
@@ -40,7 +40,7 @@ class InstallCertbot extends BaseProvisioningScript
         $this->runStep($ssh, $this->apt('apt-get update -y'), 'apt-update');
         $this->runStep(
             $ssh,
-            $this->apt('apt-get install -y certbot python3-certbot-dns-cloudflare'),
+            $this->apt('apt-get install -y certbot python3-certbot-dns-cloudflare python3-certbot-dns-digitalocean'),
             'install-certbot',
         );
     }

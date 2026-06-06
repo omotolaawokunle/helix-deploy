@@ -4,6 +4,8 @@ import { RefreshCwIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
+import { dnsRecordDescription } from '@/features/integrations/lib/dnsProviderConfig'
+import { DNS_PROVIDER_LABELS, dnsProviderLabel, type DnsProvider } from '@/features/integrations/types'
 import { retrySiteDns, retrySiteSsl } from '@/features/integrations/api'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import type { Site } from '@/types'
@@ -48,9 +50,19 @@ const sslCanRetry = computed(
     && props.site.sslStatus !== 'pending',
 )
 
+const dnsDescription = computed(() =>
+  dnsRecordDescription(props.site.dnsProvider as DnsProvider | null),
+)
+
 const sslChallengeLabel = computed(() => {
   if (props.site.sslChallenge === 'dns-01') {
-    return 'DNS-01 (Cloudflare)'
+    const provider = props.site.dnsProvider as DnsProvider | null
+
+    if (provider !== null && provider in DNS_PROVIDER_LABELS) {
+      return `DNS-01 (${DNS_PROVIDER_LABELS[provider]})`
+    }
+
+    return 'DNS-01 (DNS provider)'
   }
 
   if (props.site.sslChallenge === 'http-01') {
@@ -120,10 +132,11 @@ async function handleRetrySsl(): Promise<void> {
             DNS
           </h2>
           <p class="text-sm text-muted-foreground">
-            Cloudflare A record pointing to the server IP (grey cloud, not proxied).
+            {{ dnsDescription }}
           </p>
         </div>
         <StatusBadge
+          :key="`dns-${site.dnsStatus ?? 'none'}`"
           :status="site.dnsStatus ?? 'none'"
           type="dns"
         />
@@ -150,8 +163,8 @@ async function handleRetrySsl(): Promise<void> {
           <dt class="text-muted-foreground">
             Provider
           </dt>
-          <dd class="font-medium capitalize">
-            {{ site.dnsProvider }}
+          <dd class="font-medium">
+            {{ dnsProviderLabel(site.dnsProvider) }}
           </dd>
         </div>
         <div v-if="site.dnsRecordIds.length > 0">
@@ -164,13 +177,16 @@ async function handleRetrySsl(): Promise<void> {
         </div>
       </dl>
 
-      <div
-        v-if="site.dnsError !== null && site.dnsError !== ''"
-        class="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-        role="alert"
-      >
-        {{ site.dnsError }}
-      </div>
+      <Transition name="fade-up">
+        <div
+          v-if="site.dnsError !== null && site.dnsError !== ''"
+          key="dns-error"
+          class="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          role="alert"
+        >
+          {{ site.dnsError }}
+        </div>
+      </Transition>
 
       <div v-if="dnsCanRetry" class="flex items-center gap-3">
         <Button
@@ -201,6 +217,7 @@ async function handleRetrySsl(): Promise<void> {
           </p>
         </div>
         <StatusBadge
+          :key="`ssl-${site.sslStatus ?? 'none'}`"
           :status="site.sslStatus ?? 'none'"
           type="ssl"
         />
@@ -227,19 +244,22 @@ async function handleRetrySsl(): Promise<void> {
           <dt class="text-muted-foreground">
             Provider
           </dt>
-          <dd class="font-medium capitalize">
+          <dd class="font-medium">
             {{ site.sslProvider }}
           </dd>
         </div>
       </dl>
 
-      <div
-        v-if="site.sslError !== null && site.sslError !== ''"
-        class="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-        role="alert"
-      >
-        {{ site.sslError }}
-      </div>
+      <Transition name="fade-up">
+        <div
+          v-if="site.sslError !== null && site.sslError !== ''"
+          key="ssl-error"
+          class="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          role="alert"
+        >
+          {{ site.sslError }}
+        </div>
+      </Transition>
 
       <div v-if="sslCanRetry" class="flex items-center gap-3">
         <Button
@@ -254,12 +274,15 @@ async function handleRetrySsl(): Promise<void> {
         </Button>
       </div>
 
-      <p
-        v-if="site.sslStatus === 'active'"
-        class="text-xs text-muted-foreground"
-      >
-        HTTP requests redirect to HTTPS when the certificate is active.
-      </p>
+      <Transition name="fade-up">
+        <p
+          v-if="site.sslStatus === 'active'"
+          key="ssl-active-hint"
+          class="text-xs text-muted-foreground"
+        >
+          HTTP requests redirect to HTTPS when the certificate is active.
+        </p>
+      </Transition>
     </section>
   </div>
 </template>

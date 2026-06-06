@@ -8,7 +8,8 @@ use App\Models\User;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Integrations\Contracts\SiteDnsProvisionerInterface;
 use App\Modules\Integrations\DTOs\SiteDnsConfigurationDTO;
-use App\Modules\Integrations\Enums\DnsStatus;
+use App\Modules\Integrations\Models\ProjectDnsZone;
+use App\Modules\Integrations\Enums\DnsProvider;
 use App\Modules\Integrations\Exceptions\DnsRecordAlreadyExistsException;
 use App\Modules\Integrations\Exceptions\SiteDnsValidationException;
 use App\Modules\Organizations\Models\Organization;
@@ -68,6 +69,7 @@ class CreateSiteAction
         }
 
         $dnsAttributes = $this->siteDnsProvisioner->resolveSiteAttributes($org, $dnsConfiguration);
+        $dnsAttributes = array_merge($dnsAttributes, $this->resolveSslDnsAttributes($dto, $org));
 
         if (($dnsAttributes['is_apex'] ?? false) === true) {
             $this->assertApexAvailable($org, (string) ($dnsAttributes['dns_zone_id'] ?? ''), $dto->domain);
@@ -234,5 +236,37 @@ class CreateSiteAction
         }
 
         return $environment;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveSslDnsAttributes(CreateSiteDTO $dto, Organization $org): array
+    {
+        if (! $dto->enableSsl || $dto->sslChallenge !== SslChallenge::DNS_01 || $dto->projectDnsZoneId === null) {
+            return [];
+        }
+
+        if ($dto->autoCreateDns) {
+            return [];
+        }
+
+        $projectDnsZone = ProjectDnsZone::query()
+            ->withoutGlobalScope('owned_by_organization')
+            ->whereKey($dto->projectDnsZoneId)
+            ->where('organization_id', (string) $org->getKey())
+            ->first();
+
+        if ($projectDnsZone === null) {
+            throw (new ModelNotFoundException())->setModel(ProjectDnsZone::class, [$dto->projectDnsZoneId]);
+        }
+
+        $provider = $projectDnsZone->dns_provider;
+        $providerValue = $provider instanceof DnsProvider ? $provider->value : (string) $provider;
+
+        return [
+            'project_dns_zone_id' => (string) $projectDnsZone->getKey(),
+            'dns_provider' => $providerValue,
+        ];
     }
 }

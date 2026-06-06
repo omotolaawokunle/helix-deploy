@@ -38,3 +38,15 @@ export const DNS_PROVIDER_LABELS: Record<DnsProvider, string> = {
   cloudflare: 'Cloudflare',
   digitalocean: 'DigitalOcean',
 }
+
+export function dnsProviderLabel(provider: DnsProvider | string | null | undefined): string {
+  if (provider === null || provider === undefined || provider === '') {
+    return '—'
+  }
+
+  if (provider in DNS_PROVIDER_LABELS) {
+    return DNS_PROVIDER_LABELS[provider as DnsProvider]
+  }
+
+  return provider
+}

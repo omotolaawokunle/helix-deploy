@@ -19,16 +19,21 @@ const canManage = computed(() => authStore.isAdmin)
       description="Connect external services your organization uses for DNS, credentials, and deployment workflows."
     />
 
-    <CloudflareConnectionPanel
+    <div
       v-if="orgId !== null"
-      :organization-id="orgId"
-      :can-manage="canManage"
-    />
+      class="grid gap-6 lg:grid-cols-2"
+    >
+      <CloudflareConnectionPanel
+        class="animate-panel-in"
+        :organization-id="orgId"
+        :can-manage="canManage"
+      />
 
-    <DigitalOceanConnectionPanel
-      v-if="orgId !== null"
-      :organization-id="orgId"
-      :can-manage="canManage"
-    />
+      <DigitalOceanConnectionPanel
+        class="animate-panel-in animate-panel-in-delay-1"
+        :organization-id="orgId"
+        :can-manage="canManage"
+      />
+    </div>
   </div>
 </template>

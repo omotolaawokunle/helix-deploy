@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { PlusIcon } from '@lucide/vue'
+import { ChevronDownIcon, PlusIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
@@ -33,9 +33,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useActiveOrg } from '@/composables/useActiveOrg'
+import { useDnsProviderConnections } from '@/features/integrations/composables/useDnsProviderConnections'
 import {
   buildHostnameFromPrefix,
-  fetchCloudflareConnection,
   fetchProjectDnsZones,
 } from '@/features/integrations/api'
 import { DNS_PROVIDER_LABELS } from '@/features/integrations/types'
@@ -60,12 +60,13 @@ const props = defineProps<Props>()
 
 const { orgId } = useActiveOrg()
 const realtimeStore = useRealtimeStore()
+const { ensureLoaded: ensureDnsConnectionsLoaded, connectionFlags: dnsProviderConnected } =
+  useDnsProviderConnections(orgId)
 
 const sites = ref<Site[]>([])
 const projects = ref<ProjectOption[]>([])
 const selectedProjectId = ref<string | undefined>(undefined)
 const projectDnsZones = ref<ProjectDnsZone[]>([])
-const cloudflareConnected = ref(false)
 const isLoading = ref(true)
 const isAddOpen = ref(false)
 const isSubmitting = ref(false)
@@ -124,7 +125,25 @@ const resolvedDomain = computed(() => {
   return domain.value.trim()
 })
 
-const canUseDns01 = computed(() => cloudflareConnected.value)
+const canUseDns01 = computed(
+  () => dnsProviderConnected.value.cloudflare || dnsProviderConnected.value.digitalocean,
+)
+
+const dns01Label = computed(() => {
+  if (selectedZone.value !== null) {
+    return `DNS-01 (${DNS_PROVIDER_LABELS[selectedZone.value.dnsProvider]})`
+  }
+
+  if (dnsProviderConnected.value.digitalocean && !dnsProviderConnected.value.cloudflare) {
+    return 'DNS-01 (DigitalOcean)'
+  }
+
+  if (dnsProviderConnected.value.cloudflare && !dnsProviderConnected.value.digitalocean) {
+    return 'DNS-01 (Cloudflare)'
+  }
+
+  return 'DNS-01 (DNS provider)'
+})
 
 const canSubmit = computed(() => {
   if (resolvedDomain.value === '') {
@@ -140,7 +159,6 @@ const canSubmit = computed(() => {
 
 async function loadProjectDnsContext(): Promise<void> {
   projectDnsZones.value = []
-  cloudflareConnected.value = false
 
   const projectId = effectiveProjectId.value
 
@@ -150,16 +168,16 @@ async function loadProjectDnsContext(): Promise<void> {
   }
 
   try {
-    projectDnsZones.value = await fetchProjectDnsZones(projectId)
-    projectDnsZoneId.value = projectDnsZones.value[0]?.id
+    const [zones] = await Promise.all([
+      fetchProjectDnsZones(projectId),
+      orgId.value !== null ? ensureDnsConnectionsLoaded() : Promise.resolve(null),
+    ])
 
-    if (projectDnsZones.value.length > 0) {
+    projectDnsZones.value = zones
+    projectDnsZoneId.value = zones[0]?.id
+
+    if (zones.length > 0) {
       domainInputMode.value = 'prefix'
-    }
-
-    if (orgId.value !== null) {
-      const connection = await fetchCloudflareConnection(orgId.value)
-      cloudflareConnected.value = connection.connected
     }
   } catch {
     projectDnsZones.value = []
@@ -290,7 +308,9 @@ watch(isAddOpen, (open) => {
 watch(
   () => [props.projectId, selectedProjectId.value],
   () => {
-    void loadProjectDnsContext()
+    if (isAddOpen.value) {
+      void loadProjectDnsContext()
+    }
   },
 )
 
@@ -322,14 +342,20 @@ watch(enableSsl, (enabled) => {
   }
 })
 
+watch(canUseDns01, (enabled) => {
+  if (!enabled && sslChallenge.value === 'dns-01') {
+    sslChallenge.value = 'http-01'
+  }
+})
+
 onMounted(() => {
   void loadSites()
-  void loadProjects()
-  void loadProjectDnsContext()
 
   useSiteProvisioningChannel(props.serverId, {
     onDnsSslStatusChanged: (payload) => {
-      for (const site of sites.value) {
+      const site = sites.value.find((entry) => entry.id === payload.siteId)
+
+      if (site !== undefined) {
         patchSiteDnsSslFromBroadcast(site, payload)
       }
     },
@@ -397,6 +423,7 @@ onMounted(() => {
             <TableCell>
               <StatusBadge
                 v-if="site.autoCreateDns && site.dnsStatus"
+                :key="`dns-${site.id}-${site.dnsStatus}`"
                 :status="site.dnsStatus"
                 type="dns"
               />
@@ -405,6 +432,7 @@ onMounted(() => {
             <TableCell>
               <StatusBadge
                 v-if="site.enableSsl && site.sslStatus"
+                :key="`ssl-${site.id}-${site.sslStatus}`"
                 :status="site.sslStatus"
                 type="ssl"
               />
@@ -590,35 +618,41 @@ onMounted(() => {
             <div v-if="enableSsl" class="ml-6 space-y-3 border-l pl-4">
               <button
                 type="button"
-                class="text-xs font-medium text-primary hover:underline"
+                class="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors duration-200 hover:underline"
                 @click="showAdvancedSsl = !showAdvancedSsl"
               >
+                <ChevronDownIcon
+                  class="size-3.5 transition-transform duration-200"
+                  :class="{ 'rotate-180': showAdvancedSsl }"
+                />
                 {{ showAdvancedSsl ? 'Hide advanced' : 'Advanced validation' }}
               </button>
 
-              <div v-if="showAdvancedSsl" class="space-y-2">
-                <Label>Challenge type</Label>
-                <Select v-model="sslChallenge">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="http-01">
-                      HTTP-01 (webroot)
-                    </SelectItem>
-                    <SelectItem value="dns-01" :disabled="!canUseDns01">
-                      DNS-01 (Cloudflare)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p v-if="!canUseDns01" class="text-xs text-muted-foreground">
-                  Connect Cloudflare under
-                  <RouterLink to="/settings/integrations" class="text-primary hover:underline">
-                    Integrations
-                  </RouterLink>
-                  to use DNS-01 validation.
-                </p>
-              </div>
+              <Transition name="collapse-down">
+                <div v-if="showAdvancedSsl" class="space-y-2">
+                  <Label>Challenge type</Label>
+                  <Select v-model="sslChallenge">
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="http-01">
+                        HTTP-01 (webroot)
+                      </SelectItem>
+                      <SelectItem value="dns-01" :disabled="!canUseDns01">
+                        {{ dns01Label }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p v-if="!canUseDns01" class="text-xs text-muted-foreground">
+                    Connect Cloudflare or DigitalOcean under
+                    <RouterLink to="/settings/integrations" class="text-primary hover:underline">
+                      Integrations
+                    </RouterLink>
+                    to use DNS-01 validation.
+                  </p>
+                </div>
+              </Transition>
             </div>
           </div>
 

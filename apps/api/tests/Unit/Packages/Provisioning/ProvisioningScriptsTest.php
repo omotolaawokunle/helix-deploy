@@ -86,7 +86,7 @@ it('install certbot installs packages when missing', function (): void {
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands()[2])->toContain('certbot');
+    expect($connection->getExecutedCommands()[2])->toContain('python3-certbot-dns-digitalocean');
 });
 
 it('install php 8.1 installs version-specific packages', function (): void {

@@ -81,6 +81,18 @@ class StoreSiteRequest extends FormRequest
             if ((bool) $this->input('autoCreateDns', false) && $this->input('projectDnsZoneId') === null) {
                 $validator->errors()->add('projectDnsZoneId', 'A project DNS zone is required when auto-create DNS is enabled.');
             }
+
+            $sslChallenge = $this->input('sslChallenge');
+            $enableSsl = (bool) $this->input('enableSsl', false);
+
+            if ($enableSsl && $sslChallenge === SslChallenge::DNS_01->value) {
+                if ($this->input('projectDnsZoneId') === null && ! (bool) $this->input('autoCreateDns', false)) {
+                    $validator->errors()->add(
+                        'sslChallenge',
+                        'Select a project DNS zone when using DNS-01 validation.',
+                    );
+                }
+            }
         });
     }
 

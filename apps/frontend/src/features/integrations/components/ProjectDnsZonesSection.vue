@@ -32,9 +32,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useActiveOrg } from '@/composables/useActiveOrg'
+import { useDnsProviderConnections } from '@/features/integrations/composables/useDnsProviderConnections'
 import {
   assignProjectDnsZone,
-  fetchDnsProviderConnections,
   fetchDnsProviderZones,
   fetchProjectDnsZones,
   removeProjectDnsZone,
@@ -55,13 +55,16 @@ interface Props {
 const props = defineProps<Props>()
 
 const { orgId } = useActiveOrg()
+const { ensureLoaded: ensureDnsConnectionsLoaded, connectedProviders } = useDnsProviderConnections(orgId)
 
 const assignedZones = ref<ProjectDnsZone[]>([])
 const availableZonesByProvider = ref<Record<DnsProvider, DnsProviderZone[]>>({
   cloudflare: [],
   digitalocean: [],
 })
-const connectedProviders = ref<DnsProvider[]>([])
+const connectedProvidersList = connectedProviders
+const hasAnyProviderConnected = computed(() => connectedProvidersList.value.length > 0)
+
 const isLoading = ref(true)
 const loadError = ref<string | null>(null)
 
@@ -72,8 +75,6 @@ const isAssigning = ref(false)
 const removeTarget = ref<ProjectDnsZone | null>(null)
 const isRemoveOpen = ref(false)
 const isRemoving = ref(false)
-
-const hasAnyProviderConnected = computed(() => connectedProviders.value.length > 0)
 
 const availableZones = computed(
   () => (selectedProvider.value === undefined
@@ -104,7 +105,7 @@ const canAssignZone = computed(() => {
     return false
   }
 
-  return connectedProviders.value.some((provider) => {
+  return connectedProvidersList.value.some((provider) => {
     const assignedKeys = new Set(
       assignedZones.value
         .filter((zone) => zone.dnsProvider === provider)
@@ -126,22 +127,27 @@ async function load(): Promise<void> {
   loadError.value = null
 
   try {
-    assignedZones.value = await fetchProjectDnsZones(props.projectId)
+    const [zones] = await Promise.all([
+      fetchProjectDnsZones(props.projectId),
+      orgId.value !== null ? ensureDnsConnectionsLoaded() : Promise.resolve(null),
+    ])
+
+    assignedZones.value = zones
 
     if (orgId.value !== null) {
-      const connections = await fetchDnsProviderConnections(orgId.value)
-      const providers: DnsProvider[] = []
+      const providers = connectedProvidersList.value
+      const zoneResults = await Promise.all(
+        providers.map((provider) => fetchDnsProviderZones(orgId.value as string, provider)),
+      )
 
-      for (const provider of Object.keys(connections) as DnsProvider[]) {
-        if (connections[provider].connected) {
-          providers.push(provider)
-          availableZonesByProvider.value[provider] = await fetchDnsProviderZones(orgId.value, provider)
-        } else {
-          availableZonesByProvider.value[provider] = []
-        }
+      availableZonesByProvider.value = {
+        cloudflare: [],
+        digitalocean: [],
       }
 
-      connectedProviders.value = providers
+      providers.forEach((provider, index) => {
+        availableZonesByProvider.value[provider] = zoneResults[index] ?? []
+      })
     }
   } catch {
     loadError.value = 'Unable to load DNS zones for this project.'
@@ -151,7 +157,7 @@ async function load(): Promise<void> {
 }
 
 function openAssignSheet(): void {
-  selectedProvider.value = connectedProviders.value[0]
+  selectedProvider.value = connectedProvidersList.value[0]
   selectedZoneId.value = assignableZones.value[0]?.id
   isAssignOpen.value = true
 }
@@ -345,7 +351,7 @@ onMounted(() => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem
-                  v-for="provider in connectedProviders"
+                  v-for="provider in connectedProvidersList"
                   :key="provider"
                   :value="provider"
                 >

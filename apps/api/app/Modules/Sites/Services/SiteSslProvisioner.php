@@ -7,7 +7,7 @@ namespace App\Modules\Sites\Services;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Credentials\CredentialVault;
 use App\Modules\Integrations\Enums\DnsProvider;
-use App\Modules\Integrations\Services\CloudflareConnectionService;
+use App\Modules\Integrations\Services\DnsProviderRegistry;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Contracts\NginxConfigGeneratorInterface;
 use App\Modules\Sites\Contracts\SiteSslProvisionerInterface;
@@ -28,7 +28,7 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
         private readonly CredentialVault $credentialVault,
         private readonly NginxConfigGeneratorInterface $nginxConfigGenerator,
         private readonly SiteNginxProvisioner $siteNginxProvisioner,
-        private readonly CloudflareConnectionService $cloudflareConnectionService,
+        private readonly DnsProviderRegistry $dnsProviderRegistry,
     ) {
     }
 
@@ -53,7 +53,7 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
                 $this->ensureCertbotInstalled($connection);
 
                 if ($challenge === SslChallenge::DNS_01) {
-                    $this->issueViaDnsCloudflare($connection, $site);
+                    $this->issueViaDns01($connection, $site);
                 } else {
                     $this->issueViaWebroot($connection, $site);
                 }
@@ -147,34 +147,136 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
         $connection->run($this->buildCertbotWebrootCommand($site))->throw();
     }
 
-    private function issueViaDnsCloudflare(SSHConnectionInterface $connection, Site $site): void
+    private function issueViaDns01(SSHConnectionInterface $connection, Site $site): void
     {
+        $provider = $this->resolveDnsProviderForSsl($site);
+
+        match ($provider) {
+            DnsProvider::CLOUDFLARE => $this->issueViaDnsCloudflare($connection, $site, $provider),
+            DnsProvider::DIGITALOCEAN => $this->issueViaDnsDigitalOcean($connection, $site, $provider),
+        };
+    }
+
+    private function issueViaDnsCloudflare(
+        SSHConnectionInterface $connection,
+        Site $site,
+        DnsProvider $provider,
+    ): void {
+        $this->issueViaDnsPlugin(
+            connection: $connection,
+            site: $site,
+            provider: $provider,
+            credentialsPathPrefix: 'helix-cf-',
+            credentialsContent: fn (string $token): string => 'dns_cloudflare_api_token = '.$token,
+            certbotCommandBuilder: fn (Site $siteModel, string $credentialsPath): string => $this->buildCertbotDnsCloudflareCommand($siteModel, $credentialsPath),
+        );
+    }
+
+    private function issueViaDnsDigitalOcean(
+        SSHConnectionInterface $connection,
+        Site $site,
+        DnsProvider $provider,
+    ): void {
+        $this->issueViaDnsPlugin(
+            connection: $connection,
+            site: $site,
+            provider: $provider,
+            credentialsPathPrefix: 'helix-do-',
+            credentialsContent: fn (string $token): string => 'dns_digitalocean_token = '.$token,
+            certbotCommandBuilder: fn (Site $siteModel, string $credentialsPath): string => $this->buildCertbotDnsDigitalOceanCommand($siteModel, $credentialsPath),
+        );
+    }
+
+    /**
+     * @param callable(string): string $credentialsContent
+     * @param callable(Site, string): string $certbotCommandBuilder
+     */
+    private function issueViaDnsPlugin(
+        SSHConnectionInterface $connection,
+        Site $site,
+        DnsProvider $provider,
+        string $credentialsPathPrefix,
+        callable $credentialsContent,
+        callable $certbotCommandBuilder,
+    ): void {
         $organization = $site->organization;
         abort_if($organization === null, 404);
 
-        if (! $this->cloudflareConnectionService->isConnected($organization)) {
-            throw new SiteSslException('Cloudflare must be connected to use DNS-01 validation.');
+        if (! $this->dnsProviderRegistry->isConnected($organization, $provider)) {
+            throw new SiteSslException(sprintf(
+                '%s must be connected to use DNS-01 validation.',
+                $provider->label(),
+            ));
         }
 
-        $token = $this->credentialVault->getDnsProviderCredential(
-            $organization,
-            DnsProvider::CLOUDFLARE->credentialName(),
-        );
-
-        $credentialsPath = '/tmp/helix-cf-'.Str::uuid()->toString().'.ini';
-        $credentialsContent = 'dns_cloudflare_api_token = '.$token;
+        $token = $this->dnsProviderRegistry->getCredential($organization, $provider);
+        $credentialsPath = '/tmp/'.$credentialsPathPrefix.Str::uuid()->toString().'.ini';
 
         try {
-            if (! $connection->upload($credentialsContent, $credentialsPath)) {
-                throw new SiteSslException('Failed to upload Cloudflare credentials for certbot.');
+            if (! $connection->upload($credentialsContent($token), $credentialsPath)) {
+                throw new SiteSslException(sprintf(
+                    'Failed to upload %s credentials for certbot.',
+                    $provider->label(),
+                ));
             }
 
             $connection->run(sprintf('chmod 600 %s', escapeshellarg($credentialsPath)))->throw();
-            $connection->run($this->buildCertbotDnsCloudflareCommand($site, $credentialsPath))->throw();
+            $connection->run($certbotCommandBuilder($site, $credentialsPath))->throw();
         } finally {
             sodium_memzero($token);
             $connection->run(sprintf('rm -f %s', escapeshellarg($credentialsPath)));
         }
+    }
+
+    private function buildCertbotDnsDigitalOceanCommand(Site $site, string $credentialsPath): string
+    {
+        $domains = $this->domainFlags($site);
+
+        return sprintf(
+            'sudo certbot certonly --dns-digitalocean --dns-digitalocean-credentials %s %s --non-interactive --agree-tos --email %s --no-eff-email',
+            escapeshellarg($credentialsPath),
+            $domains,
+            escapeshellarg($this->certificateEmail($site)),
+        );
+    }
+
+    private function resolveDnsProviderForSsl(Site $site): DnsProvider
+    {
+        $provider = $site->dns_provider;
+
+        if ($provider instanceof DnsProvider) {
+            return $provider;
+        }
+
+        if (is_string($provider) && $provider !== '') {
+            $resolved = DnsProvider::tryFrom($provider);
+
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        $projectDnsZone = $site->projectDnsZone;
+
+        if ($projectDnsZone !== null) {
+            $zoneProvider = $projectDnsZone->dns_provider;
+
+            if ($zoneProvider instanceof DnsProvider) {
+                return $zoneProvider;
+            }
+
+            if (is_string($zoneProvider) && $zoneProvider !== '') {
+                $resolved = DnsProvider::tryFrom($zoneProvider);
+
+                if ($resolved !== null) {
+                    return $resolved;
+                }
+            }
+        }
+
+        throw new SiteSslException(
+            'DNS-01 validation requires a DNS provider. Enable auto-create DNS or select a project DNS zone.',
+        );
     }
 
     private function buildCertbotWebrootCommand(Site $site): string
