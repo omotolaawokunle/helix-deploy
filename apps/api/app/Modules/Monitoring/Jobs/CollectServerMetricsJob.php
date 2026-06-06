@@ -8,6 +8,7 @@ use App\Modules\Credentials\CredentialVault;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Monitoring\Contracts\ServerMetricsCollectorInterface;
+use App\Modules\Monitoring\Events\ServerMetricsUpdated;
 use App\Modules\Servers\Enums\ServerStatus;
 use App\Modules\Servers\Models\Server;
 use App\Packages\SSH\SSHManager;
@@ -55,6 +56,7 @@ class CollectServerMetricsJob implements ShouldQueue
 
             if ($metrics !== null) {
                 $server->forceFill(['health_status' => $metrics])->save();
+                event(new ServerMetricsUpdated($server->refresh()));
             }
         } catch (Throwable) {
             return;

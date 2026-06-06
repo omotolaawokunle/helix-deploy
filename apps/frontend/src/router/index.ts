@@ -108,6 +108,12 @@ const authenticatedRoutes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, title: 'Team' },
   },
   {
+    path: '/settings/provisioning-templates',
+    name: 'provisioning-templates',
+    component: () => import('@/features/provisioning/views/ProvisioningTemplatesView.vue'),
+    meta: { requiresAuth: true, title: 'Provisioning Templates' },
+  },
+  {
     path: "/settings/team",
     name: "team-settings",
     component: () =>

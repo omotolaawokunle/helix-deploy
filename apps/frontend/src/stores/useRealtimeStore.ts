@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { BuildRunnerLivePatch } from '@/features/build-runners/lib/patchBuildRunnerInList'
+import type { ServerMetricsLivePatch } from '@/features/monitoring/lib/patchServerMetricsInList'
 
 export type RealtimeConnectionStatus =
   | 'unconfigured'
@@ -13,6 +14,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
   const dashboardRefreshToken = ref(0)
   const buildRunnerPatchSeq = ref(0)
   const buildRunnerPatch = ref<BuildRunnerLivePatch | null>(null)
+  const serverMetricsPatchSeq = ref(0)
+  const serverMetricsPatch = ref<ServerMetricsLivePatch | null>(null)
   const deletedServerId = ref<string | null>(null)
   const serverInventoryRefreshId = ref<string | null>(null)
   const connectionStatus = ref<RealtimeConnectionStatus>('unconfigured')
@@ -24,6 +27,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
   function emitBuildRunnerPatch(patch: BuildRunnerLivePatch): void {
     buildRunnerPatch.value = patch
     buildRunnerPatchSeq.value += 1
+  }
+
+  function emitServerMetricsPatch(patch: ServerMetricsLivePatch): void {
+    serverMetricsPatch.value = patch
+    serverMetricsPatchSeq.value += 1
   }
 
   function signalServerDeleted(serverId: string): void {
@@ -66,11 +74,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
     dashboardRefreshToken,
     buildRunnerPatchSeq,
     buildRunnerPatch,
+    serverMetricsPatchSeq,
+    serverMetricsPatch,
     deletedServerId,
     serverInventoryRefreshId,
     connectionStatus,
     requestDashboardRefresh,
     emitBuildRunnerPatch,
+    emitServerMetricsPatch,
     signalServerDeleted,
     consumeServerDeleted,
     signalServerInventoryRefresh,

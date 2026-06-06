@@ -9,6 +9,7 @@ import {
   FolderKanbanIcon,
   GitBranchIcon,
   HexagonIcon,
+  LayersIcon,
   ServerIcon,
   UserCircleIcon,
   UsersIcon,
@@ -47,6 +48,12 @@ const primaryNavItems = computed<NavItem[]>(() => [
 const settingsNavItems = computed<NavItem[]>(() => [
   { label: 'Profile Settings', to: '/settings/team', icon: UserCircleIcon, visible: true },
   { label: 'Teams', to: '/settings/teams', icon: UsersIcon, visible: true },
+  {
+    label: 'Provisioning Templates',
+    to: '/settings/provisioning-templates',
+    icon: LayersIcon,
+    visible: true,
+  },
   {
     label: 'Organization Settings',
     to: '/settings/organization',

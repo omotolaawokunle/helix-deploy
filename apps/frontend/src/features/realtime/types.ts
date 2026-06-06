@@ -11,6 +11,7 @@ export const ORGANIZATION_BROADCAST_EVENTS = {
   buildRunnerOnline: 'build_runner.online',
   buildRunnerOffline: 'build_runner.offline',
   buildRunnerSlotsUpdated: 'build_runner.slots_updated',
+  serverMetricsUpdated: 'server.metrics_updated',
   daemonChanged: 'daemon.changed',
 } as const
 
@@ -47,6 +48,14 @@ export interface ServerHealthChangedPayload {
   serverId: string
   previousStatus: string
   currentStatus: string
+}
+
+export interface ServerMetricsUpdatedPayload {
+  serverId: string
+  cpuPercent?: number | null
+  memoryUsedPercent?: number | null
+  diskUsedPercent?: number | null
+  lastCheckedAt?: string | null
 }
 
 export interface ServerDeletedPayload {

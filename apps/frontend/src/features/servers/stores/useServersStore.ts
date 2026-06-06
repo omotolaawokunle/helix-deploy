@@ -88,6 +88,35 @@ export const useServersStore = defineStore('servers', () => {
     installedServices?: Server['installedServices'] | Record<string, { installed?: boolean }>
   }
 
+  interface ServerMetricsUpdatePayload {
+    serverId: string
+    cpuPercent?: number | null
+    memoryUsedPercent?: number | null
+    diskUsedPercent?: number | null
+    lastCheckedAt?: string | null
+  }
+
+  function applyServerMetricsUpdate(payload: ServerMetricsUpdatePayload): void {
+    const index = servers.value.findIndex(server => server.id === payload.serverId)
+
+    if (index === -1) {
+      return
+    }
+
+    const current = servers.value[index]
+
+    servers.value[index] = {
+      ...current,
+      healthStatus: {
+        ...current.healthStatus,
+        cpuPercent: payload.cpuPercent ?? current.healthStatus?.cpuPercent,
+        memoryUsedPercent: payload.memoryUsedPercent ?? current.healthStatus?.memoryUsedPercent,
+        diskUsedPercent: payload.diskUsedPercent ?? current.healthStatus?.diskUsedPercent,
+        lastCheckedAt: payload.lastCheckedAt ?? current.healthStatus?.lastCheckedAt,
+      },
+    }
+  }
+
   function applyServerUpdate(payload: ServerUpdatePayload): void {
     const index = servers.value.findIndex(server => server.id === payload.serverId)
 
@@ -144,6 +173,7 @@ export const useServersStore = defineStore('servers', () => {
     getById,
     invalidateCache,
     applyServerUpdate,
+    applyServerMetricsUpdate,
     removeServer,
     handleServerConnected,
   }

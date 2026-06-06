@@ -210,27 +210,6 @@ export async function deleteServerGroup(serverGroupId: string): Promise<void> {
   await api.delete(`/api/v1/server-groups/${serverGroupId}`)
 }
 
-export interface ProvisioningTemplateRecord {
-  id: string
-  organizationId: string | null
-  name: string
-  description: string | null
-  services: string[]
-  options: Record<string, unknown>
-  isSystem: boolean
-}
-
-export async function fetchProvisioningTemplates(
-  organizationId: string,
-): Promise<ProvisioningTemplateRecord[]> {
-  const response = await api.get<PaginatedResponse<ProvisioningTemplateRecord>>(
-    `/api/v1/organizations/${organizationId}/provisioning-templates`,
-    { params: { per_page: 100 } },
-  )
-
-  return response.data.data
-}
-
 export async function syncServerGroupServers(
   serverGroupId: string,
   serverIds: string[],

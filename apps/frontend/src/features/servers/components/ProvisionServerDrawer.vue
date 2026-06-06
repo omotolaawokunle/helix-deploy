@@ -23,8 +23,11 @@ import {
 } from '@/components/ui/sheet'
 import {
   fetchProvisioningTemplates,
+} from '@/features/provisioning/api'
+import type { ProvisioningTemplateRecord } from '@/features/provisioning/types'
+import { formatProvisioningTemplateName } from '@/features/provisioning/constants'
+import {
   provisionServer,
-  type ProvisioningTemplateRecord,
 } from '@/features/servers/api'
 import {
   NODE_VERSIONS,
@@ -121,10 +124,7 @@ async function loadTemplates(): Promise<void> {
 }
 
 function templateLabel(template: ProvisioningTemplateRecord): string {
-  return template.name
-    .split('-')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
+  return formatProvisioningTemplateName(template.name)
 }
 
 function applyTemplate(template: ProvisioningTemplateRecord): void {

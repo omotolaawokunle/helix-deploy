@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DeploymentDetailPage from '@/features/deployments/pages/DeploymentDetailPage.vue'
 import type { DeploymentDetail } from '@/features/deployments/types'
@@ -80,6 +81,7 @@ function buildDeployment(overrides: Partial<DeploymentDetail> = {}): DeploymentD
 
 describe('DeploymentDetailPage', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     fetchDeploymentMock.mockResolvedValue(buildDeployment())
   })

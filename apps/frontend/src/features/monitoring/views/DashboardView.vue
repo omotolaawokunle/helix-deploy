@@ -28,6 +28,7 @@ import {
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { triggerDeployment } from '@/features/deployments/api'
 import { loadDashboardData } from '@/features/monitoring/api'
+import { patchServerMetricsInList } from '@/features/monitoring/lib/patchServerMetricsInList'
 import { fetchOrgSites } from '@/features/sites/api'
 import { formatDurationSeconds, formatRelativeTime } from '@/lib/format'
 import { useRealtimeStore } from '@/stores/useRealtimeStore'
@@ -150,6 +151,29 @@ async function loadInitial(): Promise<void> {
   await refreshDashboard()
   isLoading.value = false
 }
+
+function applyServerMetricsPatch(): void {
+  const patch = realtimeStore.serverMetricsPatch
+
+  if (patch === null) {
+    return
+  }
+
+  const result = patchServerMetricsInList(servers.value, patch)
+
+  if (result === 'missing') {
+    return
+  }
+
+  servers.value = result
+}
+
+watch(
+  () => realtimeStore.serverMetricsPatchSeq,
+  () => {
+    applyServerMetricsPatch()
+  },
+)
 
 watch(
   () => realtimeStore.dashboardRefreshToken,

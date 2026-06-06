@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 use App\Modules\Credentials\CredentialVault;
 use App\Modules\Monitoring\Contracts\ServerMetricsCollectorInterface;
+use App\Modules\Monitoring\Events\ServerMetricsUpdated;
 use App\Modules\Monitoring\Jobs\CollectServerMetricsJob;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Servers\Enums\ServerStatus;
@@ -13,8 +14,11 @@ use App\Modules\Teams\Enums\TeamRole;
 use App\Packages\SSH\FakeSSHConnection;
 use App\Packages\SSH\SSHManager;
 use App\Packages\SSH\SSHResult;
+use Illuminate\Support\Facades\Event;
 
 it('stores collected metrics on active servers', function (): void {
+    Event::fake([ServerMetricsUpdated::class]);
+
     $organization = Organization::query()->create([
         'name' => 'Metrics Org',
         'slug' => 'metrics-org',
@@ -60,4 +64,8 @@ it('stores collected metrics on active servers', function (): void {
     expect($server->health_status)->not->toBeNull()
         ->and($server->health_status['cpuPercent'])->toEqual(10)
         ->and($server->health_status['diskUsedPercent'])->toEqual(30);
+
+    Event::assertDispatched(ServerMetricsUpdated::class, function (ServerMetricsUpdated $event) use ($server): bool {
+        return (string) $event->server->getKey() === (string) $server->getKey();
+    });
 });

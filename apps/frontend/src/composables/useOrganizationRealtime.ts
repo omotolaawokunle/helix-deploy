@@ -97,6 +97,10 @@ export function useOrganizationRealtime(): void {
         status: payload.currentStatus,
       })
     },
+    onServerMetricsUpdated: (payload) => {
+      serversStore.applyServerMetricsUpdate(payload)
+      realtimeStore.emitServerMetricsPatch(payload)
+    },
     onServerDeleted: (payload) => {
       serversStore.removeServer(payload.serverId)
       realtimeStore.signalServerDeleted(payload.serverId)

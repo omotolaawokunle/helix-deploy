@@ -18,6 +18,9 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({
     push: routerPush,
   }),
+  useRoute: () => ({
+    query: {},
+  }),
 }))
 
 import { loginRequest } from '@/features/auth/api'
