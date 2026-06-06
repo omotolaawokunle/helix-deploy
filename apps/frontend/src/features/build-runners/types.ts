@@ -44,4 +44,13 @@ export interface BuildRunnerRegistrationResponse {
   publicKey: string | null
 }
 
+export interface UpdateBuildRunnerPayload {
+  name: string
+  maxConcurrentBuilds: number
+  cpuCores?: number | null
+  ramGb?: number | null
+  supportedRuntimes: BuildRunnerRuntime[]
+  projectId?: string | null
+}
+
 export type BuildStrategy = 'on_server' | 'runner' | 'external'

@@ -1,30 +1,33 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { LoaderCircleIcon, PlugIcon, SettingsIcon, Trash2Icon } from '@lucide/vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import ConnectionWaitStrip from '@/components/common/ConnectionWaitStrip.vue'
 import { Badge } from '@/components/ui/badge'
-import type { BuildRunner, BuildRunnerRuntime } from '@/features/build-runners/types'
+import { Button } from '@/components/ui/button'
+import { buildRunnerRuntimeLabel } from '@/features/build-runners/constants'
+import type { BuildRunner } from '@/features/build-runners/types'
 
 interface Props {
   runner: BuildRunner
+  canManage?: boolean
+  isTestingConnection?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  canManage: false,
+  isTestingConnection: false,
+})
 
-const isConnecting = computed(() => props.runner.status === 'connecting')
+const emit = defineEmits<{
+  edit: []
+  delete: []
+  'test-connection': []
+}>()
 
-const runtimeLabels: Record<BuildRunnerRuntime, string> = {
-  php: 'PHP',
-  nodejs: 'Node.js',
-  python: 'Python',
-  go: 'Go',
-  static: 'Static',
-  docker: 'Docker',
-}
-
-function runtimeLabel(runtime: BuildRunnerRuntime): string {
-  return runtimeLabels[runtime] ?? runtime
-}
+const isConnecting = computed(
+  () => props.runner.status === 'connecting' || props.isTestingConnection,
+)
 
 const slotSummary = computed(
   () => `${props.runner.activeBuilds} / ${props.runner.maxConcurrentBuilds} slots in use`,
@@ -43,6 +46,8 @@ const hardwareSummary = computed((): string | null => {
 
   return parts.length > 0 ? parts.join(' · ') : null
 })
+
+const hasActiveSlots = computed(() => props.runner.activeBuilds > 0)
 </script>
 
 <template>
@@ -70,7 +75,7 @@ const hardwareSummary = computed((): string | null => {
         variant="secondary"
         class="text-xs font-normal"
       >
-        {{ runtimeLabel(runtime) }}
+        {{ buildRunnerRuntimeLabel(runtime) }}
       </Badge>
       <Badge
         v-if="runner.project"
@@ -91,6 +96,54 @@ const hardwareSummary = computed((): string | null => {
       <span v-if="hardwareSummary !== null" class="text-xs">
         {{ hardwareSummary }}
       </span>
+    </div>
+
+    <div
+      v-if="canManage"
+      class="mt-4 flex flex-wrap gap-2 border-t pt-4"
+      data-testid="build-runner-actions"
+    >
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        @click="emit('edit')"
+      >
+        <SettingsIcon class="mr-1.5 size-3.5" aria-hidden="true" />
+        Edit
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        :disabled="isTestingConnection"
+        data-testid="build-runner-test-connection"
+        @click="emit('test-connection')"
+      >
+        <LoaderCircleIcon
+          v-if="isTestingConnection"
+          class="mr-1.5 size-3.5 animate-spin motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+        <PlugIcon
+          v-else
+          class="mr-1.5 size-3.5"
+          aria-hidden="true"
+        />
+        Test connection
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="destructive"
+        :disabled="hasActiveSlots"
+        :title="hasActiveSlots ? 'Wait for active builds to finish before deleting.' : undefined"
+        data-testid="build-runner-delete"
+        @click="emit('delete')"
+      >
+        <Trash2Icon class="mr-1.5 size-3.5" aria-hidden="true" />
+        Delete
+      </Button>
     </div>
   </article>
 </template>
