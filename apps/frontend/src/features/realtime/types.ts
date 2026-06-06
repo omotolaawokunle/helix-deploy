@@ -10,6 +10,7 @@ export const ORGANIZATION_BROADCAST_EVENTS = {
   deploymentRolledBack: 'deployment.rolled_back',
   buildRunnerOnline: 'build_runner.online',
   buildRunnerOffline: 'build_runner.offline',
+  buildRunnerSlotsUpdated: 'build_runner.slots_updated',
   daemonChanged: 'daemon.changed',
 } as const
 
@@ -55,8 +56,17 @@ export interface ServerDeletedPayload {
 
 export interface BuildRunnerStatusPayload {
   runnerId: string
-  status: string
+  status?: string
+  reason?: string | null
+  activeBuilds?: number
+  maxConcurrentBuilds?: number
+  availableSlots?: number
 }
+
+export type BuildRunnerSlotsPayload = Pick<
+  BuildRunnerStatusPayload,
+  'runnerId' | 'activeBuilds' | 'maxConcurrentBuilds' | 'availableSlots'
+>
 
 export interface DaemonChangedPayload {
   serverId: string

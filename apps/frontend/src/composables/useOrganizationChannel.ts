@@ -3,6 +3,7 @@ import { DEPLOYMENT_BROADCAST_EVENTS } from '@/features/deployments/types'
 import {
   ORGANIZATION_BROADCAST_EVENTS,
   privateOrganizationChannel,
+  type BuildRunnerSlotsPayload,
   type BuildRunnerStatusPayload,
   type DaemonChangedPayload,
   type ServerConnectedPayload,
@@ -21,6 +22,7 @@ export interface OrganizationChannelCallbacks {
   onServerInventoryDiscovered?: (payload: ServerInventoryDiscoveredPayload) => void
   onDeploymentActivity?: () => void
   onBuildRunnerStatus?: (payload: BuildRunnerStatusPayload) => void
+  onBuildRunnerSlotsUpdated?: (payload: BuildRunnerSlotsPayload) => void
   onDaemonChanged?: (payload: DaemonChangedPayload) => void
 }
 
@@ -116,6 +118,15 @@ export function useOrganizationChannel(
 
       channel.listen(`.${ORGANIZATION_BROADCAST_EVENTS.buildRunnerOnline}`, handle)
       channel.listen(`.${ORGANIZATION_BROADCAST_EVENTS.buildRunnerOffline}`, handle)
+    }
+
+    if (callbacks.onBuildRunnerSlotsUpdated !== undefined) {
+      channel.listen(
+        `.${ORGANIZATION_BROADCAST_EVENTS.buildRunnerSlotsUpdated}`,
+        (payload: unknown) => {
+          callbacks.onBuildRunnerSlotsUpdated?.(payload as BuildRunnerSlotsPayload)
+        },
+      )
     }
 
     if (callbacks.onDaemonChanged !== undefined) {

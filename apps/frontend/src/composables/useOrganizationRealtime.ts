@@ -104,8 +104,17 @@ export function useOrganizationRealtime(): void {
     onDeploymentActivity: () => {
       realtimeStore.requestDashboardRefresh()
     },
-    onBuildRunnerStatus: () => {
-      realtimeStore.requestBuildRunnersRefresh()
+    onBuildRunnerStatus: (payload) => {
+      realtimeStore.emitBuildRunnerPatch({
+        runnerId: payload.runnerId,
+        status: payload.status,
+        activeBuilds: payload.activeBuilds,
+        maxConcurrentBuilds: payload.maxConcurrentBuilds,
+        availableSlots: payload.availableSlots,
+      })
+    },
+    onBuildRunnerSlotsUpdated: (payload) => {
+      realtimeStore.emitBuildRunnerPatch(payload)
     },
   })
 

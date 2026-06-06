@@ -12,15 +12,13 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class BuildRunnerOffline implements ShouldBroadcastNow
+class BuildRunnerSlotsUpdated implements ShouldBroadcastNow
 {
     use Dispatchable;
     use SerializesModels;
 
-    public function __construct(
-        public BuildRunner $runner,
-        public ?string $reason = null,
-    ) {
+    public function __construct(public BuildRunner $runner)
+    {
     }
 
     public function broadcastOn(): array
@@ -30,7 +28,7 @@ class BuildRunnerOffline implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        return 'build_runner.offline';
+        return 'build_runner.slots_updated';
     }
 
     /**
@@ -38,12 +36,9 @@ class BuildRunnerOffline implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
-        return array_merge(
-            BuildRunnerSlotBroadcast::payload($this->runner, app(RunnerSlotManager::class)),
-            [
-                'status' => $this->runner->status?->value,
-                'reason' => $this->reason,
-            ],
+        return BuildRunnerSlotBroadcast::payload(
+            $this->runner,
+            app(RunnerSlotManager::class),
         );
     }
 }

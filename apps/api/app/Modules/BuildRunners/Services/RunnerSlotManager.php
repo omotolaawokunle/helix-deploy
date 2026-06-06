@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\BuildRunners\Services;
 
 use App\Modules\BuildRunners\Contracts\RunnerSlotStoreInterface;
+use App\Modules\BuildRunners\Events\BuildRunnerSlotsUpdated;
 use App\Modules\BuildRunners\Models\BuildRunner;
 
 final class RunnerSlotManager
@@ -24,6 +25,8 @@ final class RunnerSlotManager
             $key = $this->slotKey((string) $runner->getKey(), $slot);
 
             if ($this->store->setIfNotExists($key, $buildId, self::SLOT_TTL_SECONDS)) {
+                $this->broadcastSlotsUpdated($runner);
+
                 return $slot;
             }
         }
@@ -34,6 +37,7 @@ final class RunnerSlotManager
     public function release(BuildRunner $runner, int $slot): void
     {
         $this->store->delete($this->slotKey((string) $runner->getKey(), $slot));
+        $this->broadcastSlotsUpdated($runner);
     }
 
     public function releaseByBuildId(BuildRunner $runner, string $buildId): void
@@ -45,6 +49,7 @@ final class RunnerSlotManager
 
             if ($this->store->get($key) === $buildId) {
                 $this->store->delete($key);
+                $this->broadcastSlotsUpdated($runner);
 
                 return;
             }
@@ -101,5 +106,10 @@ final class RunnerSlotManager
     private function slotKey(string $runnerId, int $slot): string
     {
         return sprintf('runner:%s:slot:%d', $runnerId, $slot);
+    }
+
+    private function broadcastSlotsUpdated(BuildRunner $runner): void
+    {
+        event(new BuildRunnerSlotsUpdated($runner));
     }
 }

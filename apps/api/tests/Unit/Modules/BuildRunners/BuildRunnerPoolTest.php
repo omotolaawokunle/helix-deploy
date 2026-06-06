@@ -131,43 +131,6 @@ it('prefers the site configured runner when it is available', function (): void 
         ->and((string) $selected?->getKey())->not->toBe((string) $fallbackRunner->getKey());
 });
 
-function createPoolTestRunner(
-    ?Organization $organization = null,
-    string $name = 'Pool Runner',
-    string $ipAddress = '10.0.0.1',
-    int $maxConcurrentBuilds = 1,
-    array $supportedRuntimes = ['php'],
-    ?string $projectId = null,
-): BuildRunner {
-    if ($organization === null) {
-        $organization = Organization::query()->create([
-            'name' => 'Pool Org',
-            'slug' => 'pool-org-'.Str::random(6),
-            'master_key_encrypted' => '{}',
-            'settings' => [],
-        ]);
-        $organization->generateAndStoreMasterKey();
-    }
-
-    $owner = User::factory()->create([
-        'email_verified_at' => now(),
-        'current_organization_id' => (string) $organization->getKey(),
-    ]);
-
-    return BuildRunner::query()->withoutGlobalScope('owned_by_organization')->create([
-        'organization_id' => (string) $organization->getKey(),
-        'name' => $name,
-        'ip_address' => $ipAddress,
-        'ssh_port' => 22,
-        'ssh_user' => 'deploy',
-        'status' => BuildRunnerStatus::ONLINE->value,
-        'max_concurrent_builds' => $maxConcurrentBuilds,
-        'supported_runtimes' => $supportedRuntimes,
-        'project_id' => $projectId,
-        'created_by' => (string) $owner->getKey(),
-    ]);
-}
-
 /**
  * @return array{Organization, User, Site}
  */

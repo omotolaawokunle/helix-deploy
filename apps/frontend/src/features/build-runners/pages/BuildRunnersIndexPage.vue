@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { useDocumentVisibility } from '@vueuse/core'
 import { CpuIcon, PlusIcon } from '@lucide/vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
@@ -10,6 +11,7 @@ import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchBuildRunners } from '@/features/build-runners/api'
 import BuildRunnerCard from '@/features/build-runners/components/BuildRunnerCard.vue'
+import { patchBuildRunnerInList } from '@/features/build-runners/lib/patchBuildRunnerInList'
 import PublicKeySuccessSheet from '@/features/servers/components/PublicKeySuccessSheet.vue'
 import type { BuildRunner } from '@/features/build-runners/types'
 import { useRealtimeStore } from '@/stores/useRealtimeStore'
@@ -21,6 +23,7 @@ const AddBuildRunnerModal = defineAsyncComponent(
 const authStore = useAuthStore()
 const { orgId } = useActiveOrg()
 const realtimeStore = useRealtimeStore()
+const documentVisibility = useDocumentVisibility()
 
 const runners = ref<BuildRunner[]>([])
 const isLoading = ref(false)
@@ -42,7 +45,7 @@ const isSearchEmpty = computed(
   () => hasFetched.value && !isLoading.value && runners.value.length === 0 && isSearchActive.value,
 )
 
-async function loadRunners(): Promise<void> {
+async function loadRunners(options: { silent?: boolean } = {}): Promise<void> {
   const activeOrgId = orgId.value
 
   if (activeOrgId === null) {
@@ -51,7 +54,10 @@ async function loadRunners(): Promise<void> {
     return
   }
 
-  isLoading.value = true
+  if (!options.silent) {
+    isLoading.value = true
+  }
+
   loadError.value = null
 
   try {
@@ -67,16 +73,44 @@ async function loadRunners(): Promise<void> {
   }
 }
 
+function applyLivePatch(): void {
+  const patch = realtimeStore.buildRunnerPatch
+
+  if (patch === null) {
+    return
+  }
+
+  const result = patchBuildRunnerInList(runners.value, patch)
+
+  if (result === 'missing') {
+    void loadRunners({ silent: true })
+
+    return
+  }
+
+  runners.value = result
+}
+
 onMounted(() => {
   void loadRunners()
 })
 
 watch(
-  () => realtimeStore.buildRunnersRefreshToken,
+  () => realtimeStore.buildRunnerPatchSeq,
   () => {
-    void loadRunners()
+    applyLivePatch()
   },
 )
+
+watch(documentVisibility, (visibility, previousVisibility) => {
+  if (
+    visibility === 'visible'
+    && previousVisibility === 'hidden'
+    && realtimeStore.connectionStatus !== 'connected'
+  ) {
+    void loadRunners({ silent: true })
+  }
+})
 
 async function handleSearchSubmit(): Promise<void> {
   await loadRunners()
