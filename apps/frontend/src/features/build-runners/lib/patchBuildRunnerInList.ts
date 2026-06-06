@@ -19,18 +19,15 @@ export function patchBuildRunnerInList(
   }
 
   const current = runners[index]
+  const nextRunners = [...runners]
 
-  return runners.map((runner, runnerIndex) => {
-    if (runnerIndex !== index) {
-      return runner
-    }
+  nextRunners[index] = {
+    ...current,
+    status: (patch.status ?? current.status) as BuildRunnerStatus,
+    activeBuilds: patch.activeBuilds ?? current.activeBuilds,
+    maxConcurrentBuilds: patch.maxConcurrentBuilds ?? current.maxConcurrentBuilds,
+    availableSlots: patch.availableSlots ?? current.availableSlots,
+  }
 
-    return {
-      ...current,
-      status: (patch.status ?? current.status) as BuildRunnerStatus,
-      activeBuilds: patch.activeBuilds ?? current.activeBuilds,
-      maxConcurrentBuilds: patch.maxConcurrentBuilds ?? current.maxConcurrentBuilds,
-      availableSlots: patch.availableSlots ?? current.availableSlots,
-    }
-  })
+  return nextRunners
 }

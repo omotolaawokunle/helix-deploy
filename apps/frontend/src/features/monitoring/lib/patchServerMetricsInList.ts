@@ -32,15 +32,12 @@ export function patchServerMetricsInList(
   }
 
   const current = servers[index]
+  const nextServers = [...servers]
 
-  return servers.map((server, serverIndex) => {
-    if (serverIndex !== index) {
-      return server
-    }
+  nextServers[index] = {
+    ...current,
+    healthStatus: mergeHealthStatus(current.healthStatus, patch),
+  }
 
-    return {
-      ...current,
-      healthStatus: mergeHealthStatus(current.healthStatus, patch),
-    }
-  })
+  return nextServers
 }

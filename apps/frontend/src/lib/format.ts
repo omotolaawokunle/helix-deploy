@@ -45,3 +45,27 @@ export function shortCommitHash(hash: string | null): string {
 
   return hash.slice(0, 8)
 }
+
+export function formatMetricPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return '—'
+  }
+
+  return `${Math.round(value)}%`
+}
+
+export function metricUsageClass(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return ''
+  }
+
+  if (value >= 95) {
+    return 'font-medium text-destructive'
+  }
+
+  if (value >= 85) {
+    return 'font-medium text-amber-600 dark:text-amber-500'
+  }
+
+  return ''
+}

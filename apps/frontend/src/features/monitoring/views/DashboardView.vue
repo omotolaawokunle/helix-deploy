@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useDocumentVisibility } from '@vueuse/core'
 import { toast } from 'vue-sonner'
@@ -30,7 +30,7 @@ import { triggerDeployment } from '@/features/deployments/api'
 import { loadDashboardData } from '@/features/monitoring/api'
 import { patchServerMetricsInList } from '@/features/monitoring/lib/patchServerMetricsInList'
 import { fetchOrgSites } from '@/features/sites/api'
-import { formatDurationSeconds, formatRelativeTime } from '@/lib/format'
+import { formatDurationSeconds, formatMetricPercent, formatRelativeTime, metricUsageClass } from '@/lib/format'
 import { useRealtimeStore } from '@/stores/useRealtimeStore'
 import type { DeploymentListItem } from '@/features/deployments/types'
 import type { DashboardStats } from '@/features/monitoring/api'
@@ -52,6 +52,8 @@ const quickDeploySiteId = ref('')
 defineExpose({ quickDeploySiteId })
 const quickDeployBranch = ref('')
 const isDeploying = ref(false)
+const highlightedMetricServerIds = ref<Set<string>>(new Set())
+let metricHighlightTimer: ReturnType<typeof setTimeout> | undefined
 
 const selectedSite = computed(() =>
   sites.value.find(site => site.id === quickDeploySiteId.value) ?? null,
@@ -110,6 +112,26 @@ const serverMetricRows = computed((): ServerMetricRow[] =>
     .slice(0, 6),
 )
 
+const showMetricsSection = computed(
+  () => !isLoading.value && servers.value.length > 0,
+)
+
+const metricsFootnote = computed((): string | null => {
+  const timestamps = serverMetricRows.value
+    .map(row => servers.value.find(server => server.id === row.id)?.healthStatus?.lastCheckedAt)
+    .filter((value): value is string => value !== undefined && value !== '')
+
+  if (timestamps.length === 0) {
+    return null
+  }
+
+  const latest = timestamps.reduce((left, right) =>
+    new Date(right).getTime() > new Date(left).getTime() ? right : left,
+  )
+
+  return `Last updated ${formatRelativeTime(latest)}`
+})
+
 const overviewRows = computed((): OverviewStatRow[] => {
   if (stats.value === null) {
     return []
@@ -166,6 +188,16 @@ function applyServerMetricsPatch(): void {
   }
 
   servers.value = result
+  highlightedMetricServerIds.value = new Set([patch.serverId])
+
+  if (metricHighlightTimer !== undefined) {
+    clearTimeout(metricHighlightTimer)
+  }
+
+  metricHighlightTimer = setTimeout(() => {
+    highlightedMetricServerIds.value = new Set()
+    metricHighlightTimer = undefined
+  }, 700)
 }
 
 watch(
@@ -183,7 +215,11 @@ watch(
 )
 
 watch(documentVisibility, (visibility, previousVisibility) => {
-  if (visibility === 'visible' && previousVisibility === 'hidden') {
+  if (
+    visibility === 'visible'
+    && previousVisibility === 'hidden'
+    && realtimeStore.connectionStatus !== 'connected'
+  ) {
     void refreshDashboard()
   }
 })
@@ -218,6 +254,12 @@ watch(quickDeploySiteId, (siteId) => {
 
 onMounted(() => {
   void loadInitial()
+})
+
+onUnmounted(() => {
+  if (metricHighlightTimer !== undefined) {
+    clearTimeout(metricHighlightTimer)
+  }
 })
 </script>
 
@@ -255,12 +297,20 @@ onMounted(() => {
       </dl>
     </section>
 
-    <section v-if="serverMetricRows.length > 0">
-      <h2 class="section-label">
-        Server metrics
-      </h2>
+    <section v-if="showMetricsSection">
+      <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <h2 class="section-label mb-0">
+          Server metrics
+        </h2>
+        <p
+          v-if="metricsFootnote !== null"
+          class="text-xs text-muted-foreground"
+        >
+          {{ metricsFootnote }}
+        </p>
+      </div>
       <div class="panel overflow-hidden">
-        <Table>
+        <Table v-if="serverMetricRows.length > 0">
           <TableHeader>
             <TableRow>
               <TableHead>Server</TableHead>
@@ -270,24 +320,36 @@ onMounted(() => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="row in serverMetricRows" :key="row.id">
+            <TableRow
+              v-for="row in serverMetricRows"
+              :key="row.id"
+              class="transition-colors duration-200"
+              :class="{ 'bg-primary/5': highlightedMetricServerIds.has(row.id) }"
+            >
               <TableCell>
                 <RouterLink :to="`/servers/${row.id}`" class="font-medium hover:underline">
                   {{ row.hostname }}
                 </RouterLink>
               </TableCell>
-              <TableCell class="tabular-nums">
-                {{ row.cpuPercent !== null ? `${row.cpuPercent}%` : '—' }}
+              <TableCell class="tabular-nums" :class="metricUsageClass(row.cpuPercent)">
+                {{ formatMetricPercent(row.cpuPercent) }}
               </TableCell>
-              <TableCell class="tabular-nums">
-                {{ row.memoryPercent !== null ? `${row.memoryPercent}%` : '—' }}
+              <TableCell class="tabular-nums" :class="metricUsageClass(row.memoryPercent)">
+                {{ formatMetricPercent(row.memoryPercent) }}
               </TableCell>
-              <TableCell class="tabular-nums">
-                {{ row.diskPercent !== null ? `${row.diskPercent}%` : '—' }}
+              <TableCell class="tabular-nums" :class="metricUsageClass(row.diskPercent)">
+                {{ formatMetricPercent(row.diskPercent) }}
               </TableCell>
             </TableRow>
           </TableBody>
         </Table>
+        <p
+          v-else
+          class="px-4 py-6 text-sm text-muted-foreground"
+          data-testid="dashboard-metrics-empty"
+        >
+          Metrics appear after the first collection cycle. Active servers are checked every few minutes.
+        </p>
       </div>
     </section>
 
@@ -417,7 +479,7 @@ onMounted(() => {
             :disabled="isDeploying || quickDeploySiteId === ''"
             @click="handleQuickDeploy"
           >
-            Deploy
+            {{ isDeploying ? 'Deploying…' : 'Deploy' }}
           </Button>
         </div>
       </div>

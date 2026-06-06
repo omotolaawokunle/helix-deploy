@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { fetchServer, fetchServers } from '@/features/servers/api'
+import { patchServerMetricsInList } from '@/features/monitoring/lib/patchServerMetricsInList'
 import { useActiveOrg } from '@/composables/useActiveOrg'
 import type { Server } from '@/types'
 
@@ -97,24 +98,13 @@ export const useServersStore = defineStore('servers', () => {
   }
 
   function applyServerMetricsUpdate(payload: ServerMetricsUpdatePayload): void {
-    const index = servers.value.findIndex(server => server.id === payload.serverId)
+    const result = patchServerMetricsInList(servers.value, payload)
 
-    if (index === -1) {
+    if (result === 'missing') {
       return
     }
 
-    const current = servers.value[index]
-
-    servers.value[index] = {
-      ...current,
-      healthStatus: {
-        ...current.healthStatus,
-        cpuPercent: payload.cpuPercent ?? current.healthStatus?.cpuPercent,
-        memoryUsedPercent: payload.memoryUsedPercent ?? current.healthStatus?.memoryUsedPercent,
-        diskUsedPercent: payload.diskUsedPercent ?? current.healthStatus?.diskUsedPercent,
-        lastCheckedAt: payload.lastCheckedAt ?? current.healthStatus?.lastCheckedAt,
-      },
-    }
+    servers.value = result
   }
 
   function applyServerUpdate(payload: ServerUpdatePayload): void {

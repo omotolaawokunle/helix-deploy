@@ -182,7 +182,7 @@ onMounted(() => {
           <TableRow
             v-for="team in teams"
             :key="team.id"
-            class="cursor-pointer"
+            class="cursor-pointer transition-colors hover:bg-muted/50"
             @click="$router.push(`/settings/teams/${team.id}`)"
           >
             <TableCell class="font-medium">

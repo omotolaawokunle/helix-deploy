@@ -199,6 +199,24 @@ watch(
   },
 )
 
+watch(
+  () => realtimeStore.serverMetricsPatchSeq,
+  () => {
+    if (server.value === null) {
+      return
+    }
+
+    const cached = serversStore.servers.find(entry => entry.id === serverId.value)
+
+    if (cached?.healthStatus !== undefined) {
+      server.value = {
+        ...server.value,
+        healthStatus: cached.healthStatus,
+      }
+    }
+  },
+)
+
 async function handleDeleteServer(): Promise<void> {
   if (server.value === null) {
     return

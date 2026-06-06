@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { LayersIcon, PlusIcon } from '@lucide/vue'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
@@ -24,7 +24,6 @@ import {
   fetchProvisioningTemplates,
   updateProvisioningTemplate,
 } from '@/features/provisioning/api'
-import ProvisioningTemplateSheet from '@/features/provisioning/components/ProvisioningTemplateSheet.vue'
 import {
   formatProvisioningTemplateName,
   servicesSummary,
@@ -34,6 +33,10 @@ import type {
   ProvisioningTemplateRecord,
 } from '@/features/provisioning/types'
 import { extractFieldErrors, firstFieldError } from '@/lib/validation-errors'
+
+const ProvisioningTemplateSheet = defineAsyncComponent(
+  () => import('@/features/provisioning/components/ProvisioningTemplateSheet.vue'),
+)
 
 const authStore = useAuthStore()
 const { orgId } = useActiveOrg()
@@ -255,7 +258,7 @@ onMounted(() => {
           <TableRow
             v-for="template in templates"
             :key="template.id"
-            class="cursor-pointer"
+            class="cursor-pointer transition-colors hover:bg-muted/50"
             @click="openViewSheet(template)"
           >
             <TableCell class="font-medium">
