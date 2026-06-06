@@ -24,4 +24,18 @@ readonly class CloudflareZoneDTO
             status: (string) ($payload['status'] ?? ''),
         );
     }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    public static function fromDigitalOcean(array $payload): self
+    {
+        $name = (string) ($payload['name'] ?? '');
+
+        return new self(
+            id: $name,
+            name: $name,
+            status: 'active',
+        );
+    }
 }

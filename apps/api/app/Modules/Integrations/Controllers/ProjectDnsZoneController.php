@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Integrations\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Integrations\Enums\DnsProvider;
 use App\Modules\Integrations\Models\ProjectDnsZone;
 use App\Modules\Integrations\Requests\AssignProjectDnsZoneRequest;
 use App\Modules\Integrations\Resources\ProjectDnsZoneResource;
@@ -45,6 +46,7 @@ final class ProjectDnsZoneController extends Controller
             org: $organization,
             actor: $actor,
             projectId: (string) $project->getKey(),
+            provider: DnsProvider::from((string) $request->validated('dnsProvider')),
             zoneId: (string) $request->validated('zoneId'),
             baseDomain: (string) $request->validated('baseDomain'),
         );

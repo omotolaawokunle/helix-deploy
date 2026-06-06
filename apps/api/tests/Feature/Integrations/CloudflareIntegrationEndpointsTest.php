@@ -123,6 +123,7 @@ it('assigns a dns zone to a project for org admins', function (): void {
 
     $this->actingAs($owner)
         ->postJson("/api/v1/projects/{$project->id}/dns-zones", [
+            'dnsProvider' => 'cloudflare',
             'zoneId' => 'zone-123',
             'baseDomain' => 'example.test',
         ])

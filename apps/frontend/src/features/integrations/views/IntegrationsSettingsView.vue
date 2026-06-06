@@ -4,6 +4,7 @@ import PageHeader from '@/components/layout/PageHeader.vue'
 import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import CloudflareConnectionPanel from '@/features/integrations/components/CloudflareConnectionPanel.vue'
+import DigitalOceanConnectionPanel from '@/features/integrations/components/DigitalOceanConnectionPanel.vue'
 
 const authStore = useAuthStore()
 const { orgId } = useActiveOrg()
@@ -19,6 +20,12 @@ const canManage = computed(() => authStore.isAdmin)
     />
 
     <CloudflareConnectionPanel
+      v-if="orgId !== null"
+      :organization-id="orgId"
+      :can-manage="canManage"
+    />
+
+    <DigitalOceanConnectionPanel
       v-if="orgId !== null"
       :organization-id="orgId"
       :can-manage="canManage"

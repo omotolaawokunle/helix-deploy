@@ -8,6 +8,7 @@ export const SITE_BROADCAST_EVENTS = {
   provisioningStarted: 'site.provisioning.started',
   created: 'site.created',
   provisioningFailed: 'site.provisioning.failed',
+  dnsSslStatusChanged: 'site.dns_ssl.status_changed',
 } as const
 
 export type SiteBroadcastEventName =
@@ -39,6 +40,17 @@ export interface SiteProvisioningFailedPayload {
   domain: string
   message: string
   siteRemoved: boolean
+}
+
+export interface SiteDnsSslStatusChangedPayload {
+  siteId: string
+  serverId: string
+  organizationId: string
+  domain: string
+  dnsStatus: string | null
+  dnsError: string | null
+  sslStatus: string | null
+  sslError: string | null
 }
 
 export interface CreateSiteAcceptedResponse {

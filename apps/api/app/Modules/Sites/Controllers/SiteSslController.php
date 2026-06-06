@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Sites\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Integrations\Events\SiteDnsSslStatusChanged;
 use App\Modules\Sites\Enums\SslStatus;
 use App\Modules\Sites\Jobs\IssueSiteSslJob;
 use App\Modules\Sites\Models\Site;
@@ -39,7 +40,9 @@ final class SiteSslController extends Controller
             'ssl_error' => null,
         ])->save();
 
-        return SiteResource::make($siteModel->refresh())
+        event(new SiteDnsSslStatusChanged($siteModel->refresh()));
+
+        return SiteResource::make($siteModel)
             ->response()
             ->setStatusCode(202);
     }

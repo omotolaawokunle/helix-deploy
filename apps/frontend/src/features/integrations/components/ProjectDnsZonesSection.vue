@@ -34,12 +34,17 @@ import {
 import { useActiveOrg } from '@/composables/useActiveOrg'
 import {
   assignProjectDnsZone,
-  fetchCloudflareConnection,
-  fetchCloudflareZones,
+  fetchDnsProviderConnections,
+  fetchDnsProviderZones,
   fetchProjectDnsZones,
   removeProjectDnsZone,
 } from '@/features/integrations/api'
-import type { CloudflareZone, ProjectDnsZone } from '@/features/integrations/types'
+import {
+  DNS_PROVIDER_LABELS,
+  type DnsProvider,
+  type DnsProviderZone,
+  type ProjectDnsZone,
+} from '@/features/integrations/types'
 import { extractFieldErrors, firstFieldError } from '@/lib/validation-errors'
 
 interface Props {
@@ -52,45 +57,91 @@ const props = defineProps<Props>()
 const { orgId } = useActiveOrg()
 
 const assignedZones = ref<ProjectDnsZone[]>([])
-const availableZones = ref<CloudflareZone[]>([])
-const cloudflareConnected = ref(false)
+const availableZonesByProvider = ref<Record<DnsProvider, DnsProviderZone[]>>({
+  cloudflare: [],
+  digitalocean: [],
+})
+const connectedProviders = ref<DnsProvider[]>([])
 const isLoading = ref(true)
 const loadError = ref<string | null>(null)
 
 const isAssignOpen = ref(false)
+const selectedProvider = ref<DnsProvider | undefined>(undefined)
 const selectedZoneId = ref<string | undefined>(undefined)
 const isAssigning = ref(false)
 const removeTarget = ref<ProjectDnsZone | null>(null)
 const isRemoveOpen = ref(false)
 const isRemoving = ref(false)
 
+const hasAnyProviderConnected = computed(() => connectedProviders.value.length > 0)
+
+const availableZones = computed(
+  () => (selectedProvider.value === undefined
+    ? []
+    : availableZonesByProvider.value[selectedProvider.value]),
+)
+
 const selectedZone = computed(
   () => availableZones.value.find((zone) => zone.id === selectedZoneId.value) ?? null,
 )
 
 const assignableZones = computed(() => {
-  const assignedZoneIds = new Set(assignedZones.value.map((zone) => zone.zoneId))
+  if (selectedProvider.value === undefined) {
+    return []
+  }
 
-  return availableZones.value.filter((zone) => !assignedZoneIds.has(zone.id))
+  const assignedKeys = new Set(
+    assignedZones.value
+      .filter((zone) => zone.dnsProvider === selectedProvider.value)
+      .map((zone) => zone.zoneId),
+  )
+
+  return availableZones.value.filter((zone) => !assignedKeys.has(zone.id))
 })
+
+const canAssignZone = computed(() => {
+  if (!hasAnyProviderConnected.value) {
+    return false
+  }
+
+  return connectedProviders.value.some((provider) => {
+    const assignedKeys = new Set(
+      assignedZones.value
+        .filter((zone) => zone.dnsProvider === provider)
+        .map((zone) => zone.zoneId),
+    )
+
+    return availableZonesByProvider.value[provider].some(
+      (zone) => !assignedKeys.has(zone.id),
+    )
+  })
+})
+
+function providerLabel(provider: DnsProvider): string {
+  return DNS_PROVIDER_LABELS[provider]
+}
 
 async function load(): Promise<void> {
   isLoading.value = true
   loadError.value = null
 
   try {
-    const zones = await fetchProjectDnsZones(props.projectId)
-    assignedZones.value = zones
+    assignedZones.value = await fetchProjectDnsZones(props.projectId)
 
     if (orgId.value !== null) {
-      const connection = await fetchCloudflareConnection(orgId.value)
-      cloudflareConnected.value = connection.connected
+      const connections = await fetchDnsProviderConnections(orgId.value)
+      const providers: DnsProvider[] = []
 
-      if (connection.connected) {
-        availableZones.value = await fetchCloudflareZones(orgId.value)
-      } else {
-        availableZones.value = []
+      for (const provider of Object.keys(connections) as DnsProvider[]) {
+        if (connections[provider].connected) {
+          providers.push(provider)
+          availableZonesByProvider.value[provider] = await fetchDnsProviderZones(orgId.value, provider)
+        } else {
+          availableZonesByProvider.value[provider] = []
+        }
       }
+
+      connectedProviders.value = providers
     }
   } catch {
     loadError.value = 'Unable to load DNS zones for this project.'
@@ -100,14 +151,20 @@ async function load(): Promise<void> {
 }
 
 function openAssignSheet(): void {
+  selectedProvider.value = connectedProviders.value[0]
   selectedZoneId.value = assignableZones.value[0]?.id
   isAssignOpen.value = true
 }
 
+watch(selectedProvider, () => {
+  selectedZoneId.value = assignableZones.value[0]?.id
+})
+
 async function handleAssign(): Promise<void> {
   const zone = selectedZone.value
+  const provider = selectedProvider.value
 
-  if (zone === null) {
+  if (zone === null || provider === undefined) {
     return
   }
 
@@ -115,6 +172,7 @@ async function handleAssign(): Promise<void> {
 
   try {
     const created = await assignProjectDnsZone(props.projectId, {
+      dnsProvider: provider,
       zoneId: zone.id,
       baseDomain: zone.name,
     })
@@ -177,11 +235,11 @@ onMounted(() => {
           DNS zones
         </h2>
         <p class="text-sm text-muted-foreground">
-          Approved Cloudflare zones developers can use when creating sites on this project.
+          Approved DNS zones developers can use when creating sites on this project.
         </p>
       </div>
       <Button
-        v-if="canManage && cloudflareConnected && assignableZones.length > 0"
+        v-if="canManage && canAssignZone"
         type="button"
         size="sm"
         @click="openAssignSheet"
@@ -192,10 +250,10 @@ onMounted(() => {
     </div>
 
     <p
-      v-if="!isLoading && !cloudflareConnected"
+      v-if="!isLoading && !hasAnyProviderConnected"
       class="rounded-lg border border-dashed p-4 text-sm text-muted-foreground"
     >
-      Connect Cloudflare under
+      Connect Cloudflare or DigitalOcean under
       <RouterLink to="/settings/integrations" class="text-primary hover:underline">
         Integrations
       </RouterLink>
@@ -226,7 +284,7 @@ onMounted(() => {
       <p class="text-sm text-muted-foreground">
         No DNS zones assigned yet.
       </p>
-      <p v-if="canManage && cloudflareConnected" class="mt-1 text-xs text-muted-foreground">
+      <p v-if="canManage && hasAnyProviderConnected" class="mt-1 text-xs text-muted-foreground">
         Assign a zone so developers can pick subdomains or apex domains when creating sites.
       </p>
     </div>
@@ -236,6 +294,7 @@ onMounted(() => {
         <TableHeader>
           <TableRow>
             <TableHead>Domain</TableHead>
+            <TableHead>Provider</TableHead>
             <TableHead>Zone ID</TableHead>
             <TableHead v-if="canManage" class="w-16" />
           </TableRow>
@@ -244,6 +303,9 @@ onMounted(() => {
           <TableRow v-for="zone in assignedZones" :key="zone.id">
             <TableCell class="font-medium">
               {{ zone.baseDomain }}
+            </TableCell>
+            <TableCell class="text-sm text-muted-foreground">
+              {{ providerLabel(zone.dnsProvider) }}
             </TableCell>
             <TableCell class="font-mono text-xs text-muted-foreground">
               {{ zone.zoneId }}
@@ -276,7 +338,25 @@ onMounted(() => {
 
         <SheetBody class="space-y-4">
           <div class="space-y-2">
-            <Label>Cloudflare zone</Label>
+            <Label>DNS provider</Label>
+            <Select v-model="selectedProvider">
+              <SelectTrigger>
+                <SelectValue placeholder="Select provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="provider in connectedProviders"
+                  :key="provider"
+                  :value="provider"
+                >
+                  {{ providerLabel(provider) }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="space-y-2">
+            <Label>Zone</Label>
             <Select v-model="selectedZoneId">
               <SelectTrigger>
                 <SelectValue placeholder="Select a zone" />

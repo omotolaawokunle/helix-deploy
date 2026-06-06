@@ -6,6 +6,7 @@ namespace App\Modules\Sites\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Integrations\Enums\DnsStatus;
+use App\Modules\Integrations\Events\SiteDnsSslStatusChanged;
 use App\Modules\Integrations\Jobs\ProvisionSiteDnsJob;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Sites\Resources\SiteResource;
@@ -39,7 +40,9 @@ final class SiteDnsController extends Controller
             'dns_error' => null,
         ])->save();
 
-        return SiteResource::make($siteModel->refresh())
+        event(new SiteDnsSslStatusChanged($siteModel->refresh()));
+
+        return SiteResource::make($siteModel)
             ->response()
             ->setStatusCode(202);
     }

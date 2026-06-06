@@ -31,10 +31,14 @@ use App\Modules\Monitoring\Services\ServerMetricsCollector;
 use App\Modules\Integrations\Contracts\CloudflareClientInterface;
 use App\Modules\Integrations\Contracts\SiteDnsProvisionerInterface;
 use App\Modules\Integrations\Models\CloudflareIntegration;
+use App\Modules\Integrations\Models\DigitalOceanIntegration;
 use App\Modules\Integrations\Models\ProjectDnsZone;
 use App\Modules\Integrations\Policies\CloudflarePolicy;
+use App\Modules\Integrations\Policies\DigitalOceanPolicy;
 use App\Modules\Integrations\Policies\ProjectDnsZonePolicy;
 use App\Modules\Integrations\Services\Cloudflare\CloudflareClient;
+use App\Modules\Integrations\Services\DigitalOcean\DigitalOceanDnsClient;
+use App\Modules\Integrations\Services\DnsProviderRegistry;
 use App\Modules\Integrations\Services\SiteDnsProvisioner;
 use App\Modules\Sites\Contracts\SiteSslProvisionerInterface;
 use App\Modules\Sites\Services\SiteSslProvisioner;
@@ -68,6 +72,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ServerMetricsCollectorInterface::class, ServerMetricsCollector::class);
         $this->app->singleton(RunnerSlotStoreInterface::class, RedisRunnerSlotStore::class);
         $this->app->singleton(CloudflareClientInterface::class, CloudflareClient::class);
+        $this->app->singleton(DigitalOceanDnsClient::class);
+        $this->app->singleton(DnsProviderRegistry::class);
         $this->app->singleton(SiteDnsProvisionerInterface::class, SiteDnsProvisioner::class);
         $this->app->singleton(SiteSslProvisionerInterface::class, SiteSslProvisioner::class);
         $this->app->singleton(PipelineStageHandlerRegistry::class, function (): PipelineStageHandlerRegistry {
@@ -94,6 +100,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(GitProviderIntegration::class, GitProviderPolicy::class);
         Gate::policy(CloudProviderIntegration::class, CloudProviderPolicy::class);
         Gate::policy(CloudflareIntegration::class, CloudflarePolicy::class);
+        Gate::policy(DigitalOceanIntegration::class, DigitalOceanPolicy::class);
         Gate::policy(ProjectDnsZone::class, ProjectDnsZonePolicy::class);
     }
 }

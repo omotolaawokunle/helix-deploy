@@ -38,8 +38,15 @@ import {
   fetchCloudflareConnection,
   fetchProjectDnsZones,
 } from '@/features/integrations/api'
+import { DNS_PROVIDER_LABELS } from '@/features/integrations/types'
 import type { ProjectDnsZone } from '@/features/integrations/types'
 import { createSite, fetchServerSites, type CreateSitePayload } from '@/features/sites/api'
+import {
+  patchSiteDnsSslFromBroadcast,
+  useSiteProvisioningChannel,
+} from '@/features/sites/composables/useSiteProvisioningChannel'
+import { fetchProjects } from '@/features/servers/api'
+import type { ProjectOption } from '@/features/servers/types'
 import { extractFieldErrors, firstFieldError } from '@/lib/validation-errors'
 import { useRealtimeStore } from '@/stores/useRealtimeStore'
 import type { Site } from '@/types'
@@ -55,6 +62,8 @@ const { orgId } = useActiveOrg()
 const realtimeStore = useRealtimeStore()
 
 const sites = ref<Site[]>([])
+const projects = ref<ProjectOption[]>([])
+const selectedProjectId = ref<string | undefined>(undefined)
 const projectDnsZones = ref<ProjectDnsZone[]>([])
 const cloudflareConnected = ref(false)
 const isLoading = ref(true)
@@ -95,6 +104,12 @@ const requiresPhpVersion = computed(() => runtime.value === 'php')
 
 const hasProjectZones = computed(() => projectDnsZones.value.length > 0)
 
+const effectiveProjectId = computed(
+  () => props.projectId ?? selectedProjectId.value ?? undefined,
+)
+
+const autoDnsDisabled = computed(() => !hasProjectZones.value)
+
 const selectedZone = computed(
   () => projectDnsZones.value.find((zone) => zone.id === projectDnsZoneId.value) ?? null,
 )
@@ -127,13 +142,15 @@ async function loadProjectDnsContext(): Promise<void> {
   projectDnsZones.value = []
   cloudflareConnected.value = false
 
-  if (props.projectId === null || props.projectId === undefined || props.projectId === '') {
+  const projectId = effectiveProjectId.value
+
+  if (projectId === undefined || projectId === '') {
     domainInputMode.value = 'fqdn'
     return
   }
 
   try {
-    projectDnsZones.value = await fetchProjectDnsZones(props.projectId)
+    projectDnsZones.value = await fetchProjectDnsZones(projectId)
     projectDnsZoneId.value = projectDnsZones.value[0]?.id
 
     if (projectDnsZones.value.length > 0) {
@@ -146,6 +163,23 @@ async function loadProjectDnsContext(): Promise<void> {
     }
   } catch {
     projectDnsZones.value = []
+  }
+}
+
+async function loadProjects(): Promise<void> {
+  if (props.projectId !== null && props.projectId !== undefined && props.projectId !== '') {
+    return
+  }
+
+  if (orgId.value === null) {
+    return
+  }
+
+  try {
+    projects.value = await fetchProjects(orgId.value)
+    selectedProjectId.value = projects.value[0]?.id
+  } catch {
+    projects.value = []
   }
 }
 
@@ -193,8 +227,8 @@ async function handleCreate(): Promise<void> {
     enableSsl: enableSsl.value,
   }
 
-  if (props.projectId !== null && props.projectId !== undefined && props.projectId !== '') {
-    payload.projectId = props.projectId
+  if (effectiveProjectId.value !== undefined && effectiveProjectId.value !== '') {
+    payload.projectId = effectiveProjectId.value
   }
 
   if (domainInputMode.value === 'prefix') {
@@ -246,6 +280,7 @@ async function handleCreate(): Promise<void> {
 
 watch(isAddOpen, (open) => {
   if (open) {
+    void loadProjects()
     void loadProjectDnsContext()
   } else {
     resetForm()
@@ -253,7 +288,7 @@ watch(isAddOpen, (open) => {
 })
 
 watch(
-  () => props.projectId,
+  () => [props.projectId, selectedProjectId.value],
   () => {
     void loadProjectDnsContext()
   },
@@ -272,6 +307,11 @@ watch(
 watch(autoCreateDns, (enabled) => {
   if (!enabled) {
     includeWwwAlias.value = false
+    return
+  }
+
+  if (autoDnsDisabled.value) {
+    autoCreateDns.value = false
   }
 })
 
@@ -284,7 +324,19 @@ watch(enableSsl, (enabled) => {
 
 onMounted(() => {
   void loadSites()
+  void loadProjects()
   void loadProjectDnsContext()
+
+  useSiteProvisioningChannel(props.serverId, {
+    onDnsSslStatusChanged: (payload) => {
+      for (const site of sites.value) {
+        patchSiteDnsSslFromBroadcast(site, payload)
+      }
+    },
+    onCreated: () => {
+      void loadSites()
+    },
+  })
 })
 </script>
 
@@ -318,12 +370,14 @@ onMounted(() => {
             <TableHead>Domain</TableHead>
             <TableHead>Branch</TableHead>
             <TableHead>Runtime</TableHead>
+            <TableHead>DNS</TableHead>
+            <TableHead>SSL</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           <TableRow v-if="isLoading">
-            <TableCell colspan="4" class="text-muted-foreground">
+            <TableCell colspan="6" class="text-muted-foreground">
               Loading…
             </TableCell>
           </TableRow>
@@ -339,6 +393,22 @@ onMounted(() => {
             <TableCell>{{ site.deployBranch }}</TableCell>
             <TableCell class="capitalize">
               {{ site.runtime }}
+            </TableCell>
+            <TableCell>
+              <StatusBadge
+                v-if="site.autoCreateDns && site.dnsStatus"
+                :status="site.dnsStatus"
+                type="dns"
+              />
+              <span v-else class="text-xs text-muted-foreground">—</span>
+            </TableCell>
+            <TableCell>
+              <StatusBadge
+                v-if="site.enableSsl && site.sslStatus"
+                :status="site.sslStatus"
+                type="ssl"
+              />
+              <span v-else class="text-xs text-muted-foreground">—</span>
             </TableCell>
             <TableCell>
               <StatusBadge :status="site.status" type="site" />
@@ -358,6 +428,30 @@ onMounted(() => {
         </SheetHeader>
 
         <SheetBody class="space-y-5">
+          <div
+            v-if="props.projectId === null || props.projectId === undefined || props.projectId === ''"
+            class="space-y-2"
+          >
+            <Label>Project</Label>
+            <Select v-model="selectedProjectId">
+              <SelectTrigger>
+                <SelectValue placeholder="Select project for DNS zones" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="project in projects"
+                  :key="project.id"
+                  :value="project.id"
+                >
+                  {{ project.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">
+              Link a project to use assigned DNS zones when creating sites.
+            </p>
+          </div>
+
           <div v-if="hasProjectZones" class="space-y-3">
             <Label>Domain input</Label>
             <div class="flex gap-2">
@@ -393,6 +487,7 @@ onMounted(() => {
                       :value="zone.id"
                     >
                       {{ zone.baseDomain }}
+                      ({{ DNS_PROVIDER_LABELS[zone.dnsProvider] }})
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -435,13 +530,20 @@ onMounted(() => {
                 v-model="autoCreateDns"
                 type="checkbox"
                 class="mt-1 rounded border-input"
+                :disabled="autoDnsDisabled"
               >
               <div class="space-y-1">
                 <Label for="site-auto-dns" class="cursor-pointer font-medium">
                   Auto-create DNS record
                 </Label>
                 <p class="text-xs text-muted-foreground">
-                  Creates a grey-cloud A record in Cloudflare pointing to this server.
+                  Creates an A record in your DNS provider pointing to this server.
+                </p>
+                <p v-if="autoDnsDisabled" class="text-xs text-muted-foreground">
+                  Assign a DNS zone to the selected project before enabling auto-create DNS.
+                </p>
+                <p v-else-if="selectedZone" class="text-xs text-muted-foreground">
+                  Provider: {{ DNS_PROVIDER_LABELS[selectedZone.dnsProvider] }}
                 </p>
               </div>
             </div>

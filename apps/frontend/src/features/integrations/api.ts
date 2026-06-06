@@ -2,6 +2,10 @@ import { api } from '@/lib/axios'
 import type {
   CloudflareConnection,
   CloudflareZone,
+  DigitalOceanConnection,
+  DnsProvider,
+  DnsProviderConnection,
+  DnsProviderZone,
   ProjectDnsZone,
 } from '@/features/integrations/types'
 import type { Site } from '@/types'
@@ -50,6 +54,42 @@ export async function fetchCloudflareZones(organizationId: string): Promise<Clou
   return response.data.data
 }
 
+export async function fetchDigitalOceanConnection(
+  organizationId: string,
+): Promise<DigitalOceanConnection> {
+  const response = await api.get<ResourceResponse<DigitalOceanConnection>>(
+    `/api/v1/organizations/${organizationId}/integrations/digitalocean`,
+  )
+
+  return response.data.data
+}
+
+export async function connectDigitalOcean(
+  organizationId: string,
+  token: string,
+): Promise<DigitalOceanConnection> {
+  const response = await api.post<ResourceResponse<DigitalOceanConnection>>(
+    `/api/v1/organizations/${organizationId}/integrations/digitalocean/connect`,
+    { token },
+  )
+
+  return response.data.data
+}
+
+export async function disconnectDigitalOcean(organizationId: string): Promise<void> {
+  await api.delete(
+    `/api/v1/organizations/${organizationId}/integrations/digitalocean/disconnect`,
+  )
+}
+
+export async function fetchDigitalOceanZones(organizationId: string): Promise<DnsProviderZone[]> {
+  const response = await api.get<CollectionResponse<DnsProviderZone>>(
+    `/api/v1/organizations/${organizationId}/integrations/digitalocean/zones`,
+  )
+
+  return response.data.data
+}
+
 export async function fetchProjectDnsZones(projectId: string): Promise<ProjectDnsZone[]> {
   const response = await api.get<CollectionResponse<ProjectDnsZone>>(
     `/api/v1/projects/${projectId}/dns-zones`,
@@ -60,7 +100,7 @@ export async function fetchProjectDnsZones(projectId: string): Promise<ProjectDn
 
 export async function assignProjectDnsZone(
   projectId: string,
-  payload: { zoneId: string; baseDomain: string },
+  payload: { dnsProvider: DnsProvider; zoneId: string; baseDomain: string },
 ): Promise<ProjectDnsZone> {
   const response = await api.post<ResourceResponse<ProjectDnsZone>>(
     `/api/v1/projects/${projectId}/dns-zones`,
@@ -97,4 +137,29 @@ export function buildHostnameFromPrefix(prefix: string, baseDomain: string): str
   }
 
   return `${trimmed}.${baseDomain}`
+}
+
+export async function fetchDnsProviderConnections(
+  organizationId: string,
+): Promise<Record<DnsProvider, DnsProviderConnection>> {
+  const [cloudflare, digitalocean] = await Promise.all([
+    fetchCloudflareConnection(organizationId),
+    fetchDigitalOceanConnection(organizationId),
+  ])
+
+  return {
+    cloudflare,
+    digitalocean,
+  }
+}
+
+export async function fetchDnsProviderZones(
+  organizationId: string,
+  provider: DnsProvider,
+): Promise<DnsProviderZone[]> {
+  if (provider === 'digitalocean') {
+    return fetchDigitalOceanZones(organizationId)
+  }
+
+  return fetchCloudflareZones(organizationId)
 }

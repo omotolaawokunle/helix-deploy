@@ -4,6 +4,7 @@ import {
   SITE_BROADCAST_EVENTS,
   privateServerSitesChannel,
   type SiteCreatedPayload,
+  type SiteDnsSslStatusChangedPayload,
   type SiteProvisioningFailedPayload,
   type SiteProvisioningStartedPayload,
 } from '@/features/sites/types'
@@ -12,6 +13,7 @@ export interface SiteProvisioningChannelCallbacks {
   onProvisioningStarted?: (payload: SiteProvisioningStartedPayload) => void
   onCreated?: (payload: SiteCreatedPayload) => void
   onProvisioningFailed?: (payload: SiteProvisioningFailedPayload) => void
+  onDnsSslStatusChanged?: (payload: SiteDnsSslStatusChangedPayload) => void
 }
 
 export function useSiteProvisioningChannel(
@@ -48,14 +50,35 @@ export function useSiteProvisioningChannel(
     })
   }
 
+  if (callbacks.onDnsSslStatusChanged !== undefined) {
+    channel.listen(SITE_BROADCAST_EVENTS.dnsSslStatusChanged, (payload: unknown) => {
+      callbacks.onDnsSslStatusChanged?.(payload as SiteDnsSslStatusChangedPayload)
+    })
+  }
+
   const disconnect = (): void => {
     channel.stopListening(SITE_BROADCAST_EVENTS.provisioningStarted)
     channel.stopListening(SITE_BROADCAST_EVENTS.created)
     channel.stopListening(SITE_BROADCAST_EVENTS.provisioningFailed)
+    channel.stopListening(SITE_BROADCAST_EVENTS.dnsSslStatusChanged)
     echo.leave(channelName)
   }
 
   onUnmounted(disconnect)
 
   return { channelName, disconnect }
+}
+
+export function patchSiteDnsSslFromBroadcast(
+  site: { id: string; dnsStatus?: string | null; dnsError?: string | null; sslStatus?: string | null; sslError?: string | null },
+  payload: SiteDnsSslStatusChangedPayload,
+): void {
+  if (site.id !== payload.siteId) {
+    return
+  }
+
+  site.dnsStatus = payload.dnsStatus
+  site.dnsError = payload.dnsError
+  site.sslStatus = payload.sslStatus
+  site.sslError = payload.sslError
 }

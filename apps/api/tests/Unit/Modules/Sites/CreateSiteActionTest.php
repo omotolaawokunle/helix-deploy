@@ -22,6 +22,7 @@ use App\Modules\Sites\Services\SiteNginxProvisioner;
 use App\Modules\Teams\Enums\TeamRole;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 it('creates a site record in provisioning status without running ssh', function (): void {
     [$organization, $owner, $server] = createSiteActionFixture();
@@ -126,6 +127,55 @@ it('forbids creating a site on another organizations server', function (): void 
         $owner,
         createSiteDto('cross-org.example.test', Runtime::PHP, '8.3'),
     ))->toThrow(AuthorizationException::class);
+});
+
+it('rejects a second apex site in the same dns zone', function (): void {
+    [$organization, $owner, $server] = createSiteActionFixture();
+
+    Site::query()->create([
+        'server_id' => (string) $server->getKey(),
+        'organization_id' => (string) $organization->getKey(),
+        'domain' => 'example.test',
+        'aliases' => [],
+        'webroot' => '/var/www/example.test/current/public',
+        'runtime' => 'php',
+        'deploy_mode' => 'git',
+        'deploy_branch' => 'main',
+        'run_migrations' => true,
+        'docker_compose_path' => 'docker-compose.yml',
+        'status' => SiteStatus::ACTIVE->value,
+        'is_apex' => true,
+        'dns_zone_id' => 'zone-apex-1',
+        'auto_create_dns' => true,
+    ]);
+
+    $dnsProvisioner = \Mockery::mock(SiteDnsProvisionerInterface::class);
+    $dnsProvisioner->shouldReceive('validateForCreate');
+    $dnsProvisioner->shouldReceive('resolveSiteAttributes')->andReturn([
+        'auto_create_dns' => true,
+        'is_apex' => true,
+        'dns_zone_id' => 'zone-apex-1',
+        'dns_status' => 'pending',
+        'dns_provider' => 'cloudflare',
+        'dns_record_ids' => [],
+        'dns_error' => null,
+        'project_dns_zone_id' => 'zone-assignment-1',
+        'aliases' => [],
+    ]);
+
+    $action = new CreateSiteAction(
+        new NginxConfigGenerator(),
+        \Mockery::mock(SiteNginxProvisioner::class),
+        $dnsProvisioner,
+        mockSiteSslProvisioner(),
+    );
+
+    expect(fn () => $action->execute(
+        $server,
+        $organization,
+        $owner,
+        createSiteDto('example.test', Runtime::PHP, '8.3'),
+    ))->toThrow(ValidationException::class);
 });
 
 /**

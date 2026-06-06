@@ -11,6 +11,10 @@ import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchCurrentMemberRole } from '@/features/organizations/api'
 import { fetchServer } from '@/features/servers/api'
 import { fetchSite } from '@/features/sites/api'
+import {
+  patchSiteDnsSslFromBroadcast,
+  useSiteProvisioningChannel,
+} from '@/features/sites/composables/useSiteProvisioningChannel'
 import { TeamRole, type Server, type Site } from '@/types'
 
 const DeploymentsTab = defineAsyncComponent(
@@ -95,6 +99,14 @@ function handleSiteUpdated(updated: Site): void {
 
 onMounted(() => {
   void loadPage()
+
+  useSiteProvisioningChannel(serverId.value, {
+    onDnsSslStatusChanged: (payload) => {
+      if (site.value !== null) {
+        patchSiteDnsSslFromBroadcast(site.value, payload)
+      }
+    },
+  })
 })
 </script>
 

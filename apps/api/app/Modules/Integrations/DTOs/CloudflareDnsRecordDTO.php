@@ -28,4 +28,21 @@ final readonly class CloudflareDnsRecordDTO
             proxied: (bool) ($record['proxied'] ?? false),
         );
     }
+
+    /**
+     * @param array<string, mixed> $record
+     */
+    public static function fromDigitalOcean(array $record, string $zoneId): self
+    {
+        $name = (string) ($record['name'] ?? '');
+        $hostname = $name === '@' ? $zoneId : $name.'.'.$zoneId;
+
+        return new self(
+            id: (string) ($record['id'] ?? ''),
+            name: $hostname,
+            type: (string) ($record['type'] ?? ''),
+            content: (string) ($record['data'] ?? ''),
+            proxied: false,
+        );
+    }
 }

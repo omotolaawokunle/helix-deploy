@@ -6,12 +6,12 @@ namespace App\Modules\Integrations\Services;
 
 use App\Models\User;
 use App\Modules\Audit\Models\AuditLog;
-use App\Modules\Credentials\CredentialVault;
-use App\Modules\Integrations\Contracts\CloudflareClientInterface;
+use App\Modules\Integrations\Contracts\DnsZoneClientInterface;
 use App\Modules\Integrations\Contracts\SiteDnsProvisionerInterface;
 use App\Modules\Integrations\DTOs\SiteDnsConfigurationDTO;
 use App\Modules\Integrations\Enums\DnsProvider;
 use App\Modules\Integrations\Enums\DnsStatus;
+use App\Modules\Integrations\Events\SiteDnsSslStatusChanged;
 use App\Modules\Integrations\Exceptions\DnsRecordAlreadyExistsException;
 use App\Modules\Integrations\Exceptions\SiteDnsValidationException;
 use App\Modules\Integrations\Models\ProjectDnsZone;
@@ -22,9 +22,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
 {
     public function __construct(
-        private readonly CredentialVault $credentialVault,
-        private readonly CloudflareClientInterface $cloudflareClient,
-        private readonly CloudflareConnectionService $cloudflareConnectionService,
+        private readonly DnsProviderRegistry $dnsProviderRegistry,
         private readonly CloudflareHostnameResolver $hostnameResolver,
     ) {
     }
@@ -40,6 +38,7 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
         }
 
         $projectDnsZone = $this->resolveProjectDnsZone($org, $configuration);
+        $provider = $this->resolveProviderFromZone($projectDnsZone);
         $domain = $configuration->domain;
         $aliases = $configuration->aliases;
 
@@ -68,7 +67,7 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
             'project_dns_zone_id' => (string) $projectDnsZone->getKey(),
             'dns_zone_id' => $projectDnsZone->zone_id,
             'dns_status' => DnsStatus::PENDING->value,
-            'dns_provider' => DnsProvider::CLOUDFLARE->value,
+            'dns_provider' => $provider->value,
             'dns_record_ids' => [],
             'dns_error' => null,
         ];
@@ -80,12 +79,16 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
             return;
         }
 
-        if (! $this->cloudflareConnectionService->isConnected($org)) {
-            throw new SiteDnsValidationException('Cloudflare is not connected for this organization.');
-        }
-
         $projectDnsZone = $this->resolveProjectDnsZone($org, $configuration);
+        $provider = $this->resolveProviderFromZone($projectDnsZone);
         $domain = $configuration->domain;
+
+        if (! $this->dnsProviderRegistry->isConnected($org, $provider)) {
+            throw new SiteDnsValidationException(sprintf(
+                '%s is not connected for this organization.',
+                $provider->label(),
+            ));
+        }
 
         if (! $this->hostnameResolver->belongsToZone($domain, $projectDnsZone->base_domain)) {
             throw new SiteDnsValidationException(sprintf(
@@ -101,10 +104,8 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
             throw new SiteDnsValidationException('The www alias option is only available for apex domains.');
         }
 
-        $token = $this->credentialVault->getDnsProviderCredential(
-            $org,
-            DnsProvider::CLOUDFLARE->credentialName(),
-        );
+        $token = $this->dnsProviderRegistry->getCredential($org, $provider);
+        $client = $this->dnsProviderRegistry->client($provider);
 
         try {
             $hostnames = [$domain];
@@ -114,10 +115,11 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
             }
 
             foreach ($hostnames as $hostname) {
-                if ($this->cloudflareClient->recordExists($token, $projectDnsZone->zone_id, $hostname)) {
+                if ($client->recordExists($token, $projectDnsZone->zone_id, $hostname)) {
                     throw new DnsRecordAlreadyExistsException(sprintf(
-                        'A DNS record for [%s] already exists in Cloudflare.',
+                        'A DNS record for [%s] already exists in %s.',
                         $hostname,
+                        $provider->label(),
                     ));
                 }
             }
@@ -136,10 +138,7 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
         $server = $site->server;
 
         if ($organization === null || $server === null || $site->dns_zone_id === null) {
-            $site->forceFill([
-                'dns_status' => DnsStatus::FAILED->value,
-                'dns_error' => 'Missing organization, server, or DNS zone configuration.',
-            ])->save();
+            $this->markDnsFailed($site, 'Missing organization, server, or DNS zone configuration.');
 
             return;
         }
@@ -147,19 +146,14 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
         $projectDnsZone = $site->projectDnsZone;
 
         if ($projectDnsZone === null) {
-            $site->forceFill([
-                'dns_status' => DnsStatus::FAILED->value,
-                'dns_error' => 'Project DNS zone assignment was not found.',
-            ])->save();
+            $this->markDnsFailed($site, 'Project DNS zone assignment was not found.');
 
             return;
         }
 
-        $token = $this->credentialVault->getDnsProviderCredential(
-            $organization,
-            DnsProvider::CLOUDFLARE->credentialName(),
-        );
-
+        $provider = $this->resolveProviderFromSite($site);
+        $token = $this->dnsProviderRegistry->getCredential($organization, $provider);
+        $client = $this->dnsProviderRegistry->client($provider);
         $recordIds = [];
 
         try {
@@ -174,6 +168,8 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
             foreach (array_unique($hostnames) as $hostname) {
                 $recordName = $this->hostnameResolver->recordName($hostname, $projectDnsZone->base_domain);
                 $recordId = $this->resolveOrCreateARecord(
+                    client: $client,
+                    provider: $provider,
                     token: $token,
                     zoneId: $site->dns_zone_id,
                     hostname: $hostname,
@@ -196,20 +192,20 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
                     'domain' => $site->domain,
                     'recordIds' => $recordIds,
                     'zoneId' => $site->dns_zone_id,
+                    'provider' => $provider->value,
                 ],
             );
+
+            event(new SiteDnsSslStatusChanged($site->refresh()));
         } catch (\Throwable $exception) {
             foreach ($recordIds as $recordId) {
                 try {
-                    $this->cloudflareClient->deleteRecord($token, $site->dns_zone_id, $recordId);
+                    $client->deleteRecord($token, $site->dns_zone_id, $recordId);
                 } catch (\Throwable) {
                 }
             }
 
-            $site->forceFill([
-                'dns_status' => DnsStatus::FAILED->value,
-                'dns_error' => $exception->getMessage(),
-            ])->save();
+            $this->markDnsFailed($site, $exception->getMessage());
 
             AuditLog::record(
                 operation: 'site.dns_record.failed',
@@ -243,10 +239,9 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
             return;
         }
 
-        $token = $this->credentialVault->getDnsProviderCredential(
-            $organization,
-            DnsProvider::CLOUDFLARE->credentialName(),
-        );
+        $provider = $this->resolveProviderFromSite($site);
+        $token = $this->dnsProviderRegistry->getCredential($organization, $provider);
+        $client = $this->dnsProviderRegistry->client($provider);
 
         try {
             foreach ($recordIds as $recordId) {
@@ -254,7 +249,7 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
                     continue;
                 }
 
-                $this->cloudflareClient->deleteRecord($token, $site->dns_zone_id, $recordId);
+                $client->deleteRecord($token, $site->dns_zone_id, $recordId);
             }
 
             AuditLog::record(
@@ -274,25 +269,16 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
         Organization $org,
         User $actor,
         string $projectId,
+        DnsProvider $provider,
         string $zoneId,
         string $baseDomain,
     ): ProjectDnsZone {
-        if (! $this->cloudflareConnectionService->isConnected($org)) {
-            throw new SiteDnsValidationException('Cloudflare is not connected for this organization.');
-        }
-
-        $zones = $this->cloudflareConnectionService->listZones($org);
-        $allowed = collect($zones)->contains(
-            static fn ($zone): bool => $zone->id === $zoneId && $zone->name === $baseDomain,
-        );
-
-        if (! $allowed) {
-            throw new SiteDnsValidationException('The selected zone is not available for this Cloudflare token.');
-        }
+        $this->dnsProviderRegistry->assertZoneAvailable($org, $provider, $zoneId, $baseDomain);
 
         $projectDnsZone = ProjectDnsZone::query()->updateOrCreate(
             [
                 'project_id' => $projectId,
+                'dns_provider' => $provider->value,
                 'zone_id' => $zoneId,
             ],
             [
@@ -307,6 +293,7 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
             resource: $projectDnsZone,
             afterState: [
                 'projectId' => $projectId,
+                'provider' => $provider->value,
                 'zoneId' => $zoneId,
                 'baseDomain' => $baseDomain,
             ],
@@ -319,6 +306,7 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
     {
         $beforeState = [
             'projectId' => $projectDnsZone->project_id,
+            'provider' => $projectDnsZone->dns_provider,
             'zoneId' => $projectDnsZone->zone_id,
             'baseDomain' => $projectDnsZone->base_domain,
         ];
@@ -357,31 +345,82 @@ final class SiteDnsProvisioner implements SiteDnsProvisionerInterface
     }
 
     private function resolveOrCreateARecord(
+        DnsZoneClientInterface $client,
+        DnsProvider $provider,
         string $token,
         string $zoneId,
         string $hostname,
         string $recordName,
         string $ipAddress,
     ): string {
-        $existing = $this->cloudflareClient->findARecord($token, $zoneId, $hostname);
+        $existing = $client->findARecord($token, $zoneId, $hostname);
 
         if ($existing !== null) {
             if ($existing->type !== 'A' || $existing->content !== $ipAddress) {
                 throw new DnsRecordAlreadyExistsException(sprintf(
-                    'A DNS record for [%s] already exists in Cloudflare with a different target.',
+                    'A DNS record for [%s] already exists in %s with a different target.',
                     $hostname,
+                    $provider->label(),
                 ));
             }
 
             return $existing->id;
         }
 
-        return $this->cloudflareClient->createARecord(
+        return $client->createARecord(
             token: $token,
             zoneId: $zoneId,
             recordName: $recordName,
             ipAddress: $ipAddress,
             proxied: false,
         );
+    }
+
+    private function resolveProviderFromZone(ProjectDnsZone $projectDnsZone): DnsProvider
+    {
+        $provider = $projectDnsZone->dns_provider;
+
+        if ($provider instanceof DnsProvider) {
+            return $provider;
+        }
+
+        if (is_string($provider) && $provider !== '') {
+            $resolved = DnsProvider::tryFrom($provider);
+
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        return DnsProvider::CLOUDFLARE;
+    }
+
+    private function resolveProviderFromSite(Site $site): DnsProvider
+    {
+        $provider = $site->dns_provider;
+
+        if ($provider instanceof DnsProvider) {
+            return $provider;
+        }
+
+        if (is_string($provider) && $provider !== '') {
+            $resolved = DnsProvider::tryFrom($provider);
+
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        return DnsProvider::CLOUDFLARE;
+    }
+
+    private function markDnsFailed(Site $site, string $message): void
+    {
+        $site->forceFill([
+            'dns_status' => DnsStatus::FAILED->value,
+            'dns_error' => $message,
+        ])->save();
+
+        event(new SiteDnsSslStatusChanged($site->refresh()));
     }
 }

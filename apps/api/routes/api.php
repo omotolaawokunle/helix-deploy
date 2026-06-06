@@ -8,6 +8,7 @@ use App\Modules\Auth\Controllers\AuthController;
 use App\Modules\Commands\Controllers\CommandController;
 use App\Modules\Commands\Controllers\CommandStreamController;
 use App\Modules\Integrations\Controllers\CloudflareController;
+use App\Modules\Integrations\Controllers\DigitalOceanController;
 use App\Modules\Integrations\Controllers\ProjectDnsZoneController;
 use App\Modules\Organizations\Controllers\InvitationAcceptRedirectController;
 use App\Modules\Organizations\Controllers\OrganizationController;
@@ -145,6 +146,10 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::post('/organizations/{org}/integrations/cloudflare/connect', [CloudflareController::class, 'connect']);
     Route::delete('/organizations/{org}/integrations/cloudflare/disconnect', [CloudflareController::class, 'disconnect']);
     Route::get('/organizations/{org}/integrations/cloudflare/zones', [CloudflareController::class, 'zones']);
+    Route::get('/organizations/{org}/integrations/digitalocean', [DigitalOceanController::class, 'show']);
+    Route::post('/organizations/{org}/integrations/digitalocean/connect', [DigitalOceanController::class, 'connect']);
+    Route::delete('/organizations/{org}/integrations/digitalocean/disconnect', [DigitalOceanController::class, 'disconnect']);
+    Route::get('/organizations/{org}/integrations/digitalocean/zones', [DigitalOceanController::class, 'zones']);
     Route::get('/projects/{project}/dns-zones', [ProjectDnsZoneController::class, 'index']);
     Route::post('/projects/{project}/dns-zones', [ProjectDnsZoneController::class, 'store']);
     Route::delete('/projects/{project}/dns-zones/{projectDnsZone}', [ProjectDnsZoneController::class, 'destroy']);

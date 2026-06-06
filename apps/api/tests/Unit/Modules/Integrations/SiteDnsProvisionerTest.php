@@ -46,10 +46,16 @@ it('adopts an existing matching cloudflare a record during dns provision', funct
     $vault = \Mockery::mock(\App\Modules\Credentials\CredentialVault::class);
     $vault->shouldReceive('getDnsProviderCredential')->andReturn('fake-cloudflare-token');
 
-    $provisioner = new \App\Modules\Integrations\Services\SiteDnsProvisioner(
+    $registry = new \App\Modules\Integrations\Services\DnsProviderRegistry(
         $vault,
         $fakeClient,
+        new \App\Modules\Integrations\Services\DigitalOcean\DigitalOceanDnsClient(),
         app(\App\Modules\Integrations\Services\CloudflareConnectionService::class),
+        app(\App\Modules\Integrations\Services\DigitalOceanConnectionService::class),
+    );
+
+    $provisioner = new \App\Modules\Integrations\Services\SiteDnsProvisioner(
+        $registry,
         app(\App\Modules\Integrations\Services\CloudflareHostnameResolver::class),
     );
 
@@ -106,6 +112,7 @@ function siteDnsProvisionerFixture(): array
     $projectDnsZone = \App\Modules\Integrations\Models\ProjectDnsZone::query()->create([
         'organization_id' => (string) $organization->getKey(),
         'project_id' => (string) $project->getKey(),
+        'dns_provider' => \App\Modules\Integrations\Enums\DnsProvider::CLOUDFLARE->value,
         'zone_id' => 'zone-dns-123',
         'base_domain' => 'secure.example.test',
         'assigned_by' => (string) $owner->getKey(),

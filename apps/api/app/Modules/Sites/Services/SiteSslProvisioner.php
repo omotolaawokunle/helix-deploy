@@ -11,6 +11,7 @@ use App\Modules\Integrations\Services\CloudflareConnectionService;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Contracts\NginxConfigGeneratorInterface;
 use App\Modules\Sites\Contracts\SiteSslProvisionerInterface;
+use App\Modules\Integrations\Events\SiteDnsSslStatusChanged;
 use App\Modules\Sites\Enums\SslChallenge;
 use App\Modules\Sites\Enums\SslProvider;
 use App\Modules\Sites\Enums\SslStatus;
@@ -64,6 +65,8 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
                 'ssl_challenge' => $challenge->value,
                 'ssl_error' => null,
             ])->save();
+
+            event(new SiteDnsSslStatusChanged($site->refresh()));
 
             $config = $this->nginxConfigGenerator->generate($site->refresh());
             $this->siteNginxProvisioner->apply($server, $site, $config);
@@ -241,6 +244,8 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
             'ssl_status' => SslStatus::FAILED->value,
             'ssl_error' => $message,
         ])->save();
+
+        event(new SiteDnsSslStatusChanged($site->refresh()));
     }
 
     private function ensureCertbotInstalled(SSHConnectionInterface $connection): void
