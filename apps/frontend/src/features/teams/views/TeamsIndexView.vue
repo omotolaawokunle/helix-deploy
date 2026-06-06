@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { PlusIcon, UsersIcon } from '@lucide/vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import LoadErrorPanel from '@/components/common/LoadErrorPanel.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -133,18 +134,12 @@ onMounted(() => {
       <Skeleton class="h-12 w-full rounded-lg" />
     </div>
 
-    <div
+    <LoadErrorPanel
       v-else-if="loadError !== null"
-      class="panel border-dashed p-8 text-center"
+      :message="loadError"
       data-testid="teams-error"
-    >
-      <p class="text-muted-foreground">
-        {{ loadError }}
-      </p>
-      <Button type="button" variant="outline" class="mt-4" @click="loadTeams">
-        Try again
-      </Button>
-    </div>
+      @retry="loadTeams"
+    />
 
     <EmptyState
       v-else-if="isEmpty"

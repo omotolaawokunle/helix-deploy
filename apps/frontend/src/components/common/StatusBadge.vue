@@ -203,9 +203,10 @@ const config = computed<StatusConfig>(() => {
 
 <template>
   <Badge
+    :key="`${type}-${status}`"
     data-testid="status-badge"
     variant="outline"
-    :class="cn('border-transparent capitalize', config.className)"
+    :class="cn('border-transparent capitalize transition-colors duration-200', config.className)"
   >
     <span
       v-if="config.pulse"

@@ -45,7 +45,11 @@ useOrganizationRealtime()
 
       <main class="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">
         <div class="mx-auto w-full max-w-6xl">
-          <RouterView />
+          <RouterView v-slot="{ Component, route: activeRoute }">
+            <Transition name="page" mode="out-in">
+              <component :is="Component" :key="activeRoute.path" />
+            </Transition>
+          </RouterView>
         </div>
       </main>
     </div>

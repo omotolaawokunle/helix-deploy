@@ -4,7 +4,9 @@ import { RouterLink } from 'vue-router'
 import { ChevronDownIcon, PlusIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import EmptyState from '@/components/common/EmptyState.vue'
+import LoadErrorPanel from '@/components/common/LoadErrorPanel.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -68,6 +70,7 @@ const projects = ref<ProjectOption[]>([])
 const selectedProjectId = ref<string | undefined>(undefined)
 const projectDnsZones = ref<ProjectDnsZone[]>([])
 const isLoading = ref(true)
+const loadError = ref<string | null>(null)
 const isAddOpen = ref(false)
 const isSubmitting = ref(false)
 const apiError = ref<string | null>(null)
@@ -203,9 +206,13 @@ async function loadProjects(): Promise<void> {
 
 async function loadSites(): Promise<void> {
   isLoading.value = true
+  loadError.value = null
 
   try {
     sites.value = await fetchServerSites(props.serverId)
+  } catch {
+    sites.value = []
+    loadError.value = 'Unable to load sites for this server.'
   } finally {
     isLoading.value = false
   }
@@ -378,8 +385,14 @@ onMounted(() => {
       </Button>
     </div>
 
+    <LoadErrorPanel
+      v-if="!isLoading && loadError !== null"
+      :message="loadError"
+      @retry="loadSites"
+    />
+
     <EmptyState
-      v-if="!isLoading && sites.length === 0"
+      v-else-if="!isLoading && sites.length === 0"
       title="No sites on this server"
       description="HelixDeploy scans nginx after SSH connects. Add a site manually if nothing was detected."
       :icon="PlusIcon"
@@ -389,7 +402,7 @@ onMounted(() => {
       Add site
     </EmptyState>
 
-    <div v-else class="panel overflow-hidden">
+    <div v-else-if="isLoading || sites.length > 0" class="panel overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -401,13 +414,13 @@ onMounted(() => {
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
-          <TableRow v-if="isLoading">
-            <TableCell colspan="6" class="text-muted-foreground">
-              Loading…
-            </TableCell>
-          </TableRow>
-          <TableRow v-for="site in sites" :key="site.id">
+        <TableSkeleton v-if="isLoading" :columns="6" :rows="4" />
+        <TableBody v-else>
+          <TableRow
+            v-for="site in sites"
+            :key="site.id"
+            class="transition-colors duration-200 hover:bg-muted/40"
+          >
             <TableCell>
               <RouterLink
                 :to="`/servers/${serverId}/sites/${site.id}`"
@@ -423,7 +436,6 @@ onMounted(() => {
             <TableCell>
               <StatusBadge
                 v-if="site.autoCreateDns && site.dnsStatus"
-                :key="`dns-${site.id}-${site.dnsStatus}`"
                 :status="site.dnsStatus"
                 type="dns"
               />
@@ -432,7 +444,6 @@ onMounted(() => {
             <TableCell>
               <StatusBadge
                 v-if="site.enableSsl && site.sslStatus"
-                :key="`ssl-${site.id}-${site.sslStatus}`"
                 :status="site.sslStatus"
                 type="ssl"
               />

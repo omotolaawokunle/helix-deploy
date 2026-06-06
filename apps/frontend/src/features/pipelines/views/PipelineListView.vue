@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { GitBranchIcon, PlusIcon } from '@lucide/vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import LoadErrorPanel from '@/components/common/LoadErrorPanel.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -130,23 +131,23 @@ onMounted(() => {
       <Skeleton class="h-10 w-full" />
     </div>
 
-    <div
+    <LoadErrorPanel
       v-else-if="fetchError !== null"
-      class="panel p-6 text-sm text-destructive"
-    >
-      {{ fetchError }}
-    </div>
+      :message="fetchError"
+      @retry="loadPipelines"
+    />
 
     <EmptyState
       v-else-if="isEmpty"
       title="No pipelines yet"
       description="Create a pipeline to orchestrate migrations, deploys, health checks, and approval gates."
       :icon="GitBranchIcon"
+      @action="canManage ? (isCreateOpen = true) : undefined"
     >
-      <Button v-if="canManage" type="button" @click="isCreateOpen = true">
+      <template v-if="canManage">
         <PlusIcon class="mr-2 size-4" />
         New Pipeline
-      </Button>
+      </template>
     </EmptyState>
 
     <div v-else class="panel overflow-hidden">

@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { FolderKanbanIcon, PlusIcon } from '@lucide/vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import LoadErrorPanel from '@/components/common/LoadErrorPanel.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -124,18 +125,12 @@ onMounted(() => {
       <Skeleton v-for="index in 4" :key="index" class="h-12 w-full rounded-md" />
     </div>
 
-    <div
+    <LoadErrorPanel
       v-else-if="fetchError !== null"
-      class="panel border-dashed p-8 text-center"
+      :message="fetchError"
       data-testid="projects-error"
-    >
-      <p class="text-muted-foreground">
-        {{ fetchError }}
-      </p>
-      <Button type="button" variant="outline" class="mt-4" @click="loadProjects">
-        Try again
-      </Button>
-    </div>
+      @retry="loadProjects"
+    />
 
     <EmptyState
       v-else-if="isEmpty"

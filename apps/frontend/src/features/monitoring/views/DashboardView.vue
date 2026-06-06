@@ -2,10 +2,15 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useDocumentVisibility } from '@vueuse/core'
+import { RocketIcon, ServerIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import LoadErrorPanel from '@/components/common/LoadErrorPanel.vue'
+import OverviewStatSkeleton from '@/components/common/OverviewStatSkeleton.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,6 +59,11 @@ const quickDeployBranch = ref('')
 const isDeploying = ref(false)
 const highlightedMetricServerIds = ref<Set<string>>(new Set())
 let metricHighlightTimer: ReturnType<typeof setTimeout> | undefined
+let refreshPromise: Promise<void> | null = null
+
+const hasDashboardData = computed(
+  () => stats.value !== null || servers.value.length > 0 || deployments.value.length > 0,
+)
 
 const selectedSite = computed(() =>
   sites.value.find(site => site.id === quickDeploySiteId.value) ?? null,
@@ -146,25 +156,38 @@ const overviewRows = computed((): OverviewStatRow[] => {
 })
 
 async function refreshDashboard(): Promise<void> {
-  const orgId = authStore.currentOrg?.id
+  if (refreshPromise !== null) {
+    await refreshPromise
 
-  if (orgId === undefined) {
     return
   }
 
+  refreshPromise = (async (): Promise<void> => {
+    const orgId = authStore.currentOrg?.id
+
+    if (orgId === undefined) {
+      return
+    }
+
+    try {
+      const [data, orgSites] = await Promise.all([
+        loadDashboardData(orgId),
+        fetchOrgSites(orgId),
+      ])
+      stats.value = data.stats
+      servers.value = data.servers
+      deployments.value = data.deployments
+      sites.value = orgSites
+      loadError.value = null
+    } catch {
+      loadError.value = 'Unable to load dashboard.'
+    }
+  })()
+
   try {
-    const [data, orgSites] = await Promise.all([
-      loadDashboardData(orgId),
-      fetchOrgSites(orgId),
-    ])
-    stats.value = data.stats
-    servers.value = data.servers
-    deployments.value = data.deployments
-    sites.value = orgSites
-    loadError.value = null
-  } catch {
-    loadError.value = 'Unable to load dashboard.'
-    toast.error('Unable to load dashboard.')
+    await refreshPromise
+  } finally {
+    refreshPromise = null
   }
 }
 
@@ -268,34 +291,44 @@ onUnmounted(() => {
     <PageHeader
       title="Dashboard"
       description="Organization overview — servers, deployments, and quick actions."
+      :loading="isLoading && !hasDashboardData"
     />
 
-    <p v-if="loadError !== null" class="text-sm text-destructive">
-      {{ loadError }}
-    </p>
+    <LoadErrorPanel
+      v-if="!isLoading && loadError !== null && !hasDashboardData"
+      :message="loadError"
+      data-testid="dashboard-error"
+      @retry="loadInitial"
+    />
 
-    <section>
-      <h2 class="section-label">
-        Overview
-      </h2>
-      <dl class="panel divide-y">
-        <div
-          v-for="row in overviewRows"
-          :key="row.label"
-          class="flex items-center justify-between gap-4 px-4 py-3"
-        >
-          <dt class="text-sm text-muted-foreground">
-            {{ row.label }}
-          </dt>
-          <dd class="text-sm font-semibold tabular-nums text-foreground">
-            {{ row.value }}
-          </dd>
-        </div>
-        <div v-if="isLoading && overviewRows.length === 0" class="px-4 py-3 text-sm text-muted-foreground">
-          Loading overview…
-        </div>
-      </dl>
-    </section>
+    <template v-else>
+      <LoadErrorPanel
+        v-if="loadError !== null && hasDashboardData"
+        :message="loadError"
+        class="py-6"
+        @retry="refreshDashboard"
+      />
+
+      <section>
+        <h2 class="section-label">
+          Overview
+        </h2>
+        <OverviewStatSkeleton v-if="isLoading && overviewRows.length === 0" />
+        <dl v-else class="panel divide-y">
+          <div
+            v-for="row in overviewRows"
+            :key="row.label"
+            class="flex items-center justify-between gap-4 px-4 py-3 transition-colors duration-200"
+          >
+            <dt class="text-sm text-muted-foreground">
+              {{ row.label }}
+            </dt>
+            <dd class="text-sm font-semibold tabular-nums text-foreground">
+              {{ row.value }}
+            </dd>
+          </div>
+        </dl>
+      </section>
 
     <section v-if="showMetricsSection">
       <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
@@ -371,20 +404,23 @@ onUnmounted(() => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-if="isLoading">
-                <TableCell colspan="6" class="text-muted-foreground">
-                  Loading…
-                </TableCell>
-              </TableRow>
+              <TableSkeleton v-if="isLoading" :columns="6" :rows="5" />
               <TableRow v-else-if="deployments.length === 0">
-                <TableCell colspan="6" class="text-muted-foreground">
-                  No deployments yet.
+                <TableCell colspan="6">
+                  <EmptyState
+                    :icon="RocketIcon"
+                    title="No deployments yet"
+                    description="Trigger a deployment from a site or use Quick Deploy when sites are configured."
+                    class="border-0 bg-transparent px-0 py-6 shadow-none hover:shadow-none"
+                  />
                 </TableCell>
               </TableRow>
-              <TableRow
-                v-for="deployment in deployments"
-                :key="deployment.id"
-              >
+              <template v-else>
+                <TableRow
+                  v-for="deployment in deployments"
+                  :key="deployment.id"
+                  class="transition-colors duration-200 hover:bg-muted/40"
+                >
                 <TableCell>
                   <RouterLink
                     :to="`/deployments/${deployment.id}`"
@@ -400,7 +436,8 @@ onUnmounted(() => {
                 <TableCell>{{ deployment.triggeredBy?.name ?? '—' }}</TableCell>
                 <TableCell>{{ formatDurationSeconds(deployment.duration) }}</TableCell>
                 <TableCell>{{ formatRelativeTime(deployment.createdAt) }}</TableCell>
-              </TableRow>
+                </TableRow>
+              </template>
             </TableBody>
           </Table>
         </div>
@@ -412,13 +449,29 @@ onUnmounted(() => {
             Server Status
           </h2>
           <ul class="panel divide-y">
-            <li v-if="isLoading" class="px-4 py-3 text-sm text-muted-foreground">
-              Loading…
+            <template v-if="isLoading">
+              <li
+                v-for="row in 4"
+                :key="row"
+                class="flex items-center justify-between gap-3 px-4 py-3"
+              >
+                <div class="min-w-0 flex-1 space-y-2">
+                  <div class="h-4 w-32 animate-pulse rounded bg-muted" />
+                  <div class="h-5 w-20 animate-pulse rounded bg-muted" />
+                </div>
+                <div class="h-5 w-16 animate-pulse rounded-full bg-muted" />
+              </li>
+            </template>
+            <li v-else-if="servers.length === 0">
+              <EmptyState
+                :icon="ServerIcon"
+                title="No servers registered"
+                description="Add a server to start provisioning sites and collecting metrics."
+                class="border-0 bg-transparent shadow-none hover:shadow-none"
+              />
             </li>
-            <li v-else-if="servers.length === 0" class="px-4 py-3 text-sm text-muted-foreground">
-              No servers registered.
-            </li>
-            <li v-for="server in servers" :key="server.id">
+            <template v-else>
+              <li v-for="server in servers" :key="server.id">
               <RouterLink
                 :to="`/servers/${server.id}`"
                 class="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
@@ -435,7 +488,8 @@ onUnmounted(() => {
                 </div>
                 <StatusBadge :status="server.status" type="server" />
               </RouterLink>
-            </li>
+              </li>
+            </template>
           </ul>
         </div>
 
@@ -484,5 +538,6 @@ onUnmounted(() => {
         </div>
       </div>
     </section>
+    </template>
   </div>
 </template>

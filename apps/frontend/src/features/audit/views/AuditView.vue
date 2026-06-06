@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
+import { ClipboardListIcon } from '@lucide/vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import LoadErrorPanel from '@/components/common/LoadErrorPanel.vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,6 +38,7 @@ const authStore = useAuthStore()
 const logs = ref<AuditLogEntry[]>([])
 const members = ref<OrganizationMemberRecord[]>([])
 const isLoading = ref(true)
+const loadError = ref<string | null>(null)
 const expandedId = ref<string | null>(null)
 
 const operationFilter = ref('')
@@ -53,6 +58,7 @@ async function loadAuditLogs(): Promise<void> {
   }
 
   isLoading.value = true
+  loadError.value = null
 
   try {
     const response = await fetchOrganizationAuditLogs(orgId, {
@@ -68,7 +74,8 @@ async function loadAuditLogs(): Promise<void> {
 
     logs.value = response.data
   } catch {
-    toast.error('Unable to load audit logs.')
+    logs.value = []
+    loadError.value = 'Unable to load audit logs.'
   } finally {
     isLoading.value = false
   }
@@ -81,7 +88,11 @@ async function loadMembers(): Promise<void> {
     return
   }
 
-  members.value = await fetchOrganizationMembers(orgId)
+  try {
+    members.value = await fetchOrganizationMembers(orgId)
+  } catch {
+    members.value = []
+  }
 }
 
 async function handleExport(): Promise<void> {
@@ -123,8 +134,8 @@ function handleRowKeydown(event: KeyboardEvent, entry: AuditLogEntry): void {
   }
 }
 
-onMounted(() => {
-  void Promise.all([loadMembers(), loadAuditLogs()])
+onMounted(async () => {
+  await Promise.all([loadMembers(), loadAuditLogs()])
 })
 </script>
 
@@ -142,7 +153,7 @@ onMounted(() => {
     </PageHeader>
 
     <div class="grid gap-6 lg:grid-cols-[240px_1fr]">
-      <aside class="panel space-y-4 p-4">
+      <aside class="panel animate-panel-in space-y-4 p-4">
         <h2 class="text-sm font-medium">
           Filters
         </h2>
@@ -187,8 +198,14 @@ onMounted(() => {
         </Button>
       </aside>
 
-      <div class="panel overflow-hidden">
-        <Table>
+      <div class="panel animate-panel-in animate-panel-in-delay-1 overflow-hidden">
+        <LoadErrorPanel
+          v-if="!isLoading && loadError !== null"
+          :message="loadError"
+          class="border-0 shadow-none"
+          @retry="loadAuditLogs"
+        />
+        <Table v-else>
           <TableHeader>
             <TableRow>
               <TableHead>Operation</TableHead>
@@ -199,14 +216,15 @@ onMounted(() => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-if="isLoading">
-              <TableCell colspan="5" class="text-muted-foreground">
-                Loading audit logs…
-              </TableCell>
-            </TableRow>
+            <TableSkeleton v-if="isLoading" :columns="5" :rows="6" />
             <TableRow v-else-if="logs.length === 0">
-              <TableCell colspan="5" class="text-muted-foreground">
-                No audit entries match your filters.
+              <TableCell colspan="5">
+                <EmptyState
+                  :icon="ClipboardListIcon"
+                  title="No audit entries"
+                  description="No operations match your filters. Adjust filters or wait for activity in your organization."
+                  class="border-0 bg-transparent px-0 py-6 shadow-none hover:shadow-none"
+                />
               </TableCell>
             </TableRow>
             <template v-else>
@@ -215,7 +233,7 @@ onMounted(() => {
                 tabindex="0"
                 role="button"
                 :aria-expanded="expandedId === entry.id"
-                class="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                class="cursor-pointer transition-colors duration-200 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 data-testid="audit-log-row"
                 @click="toggleExpanded(entry)"
                 @keydown="handleRowKeydown($event, entry)"
@@ -259,7 +277,7 @@ onMounted(() => {
                   </p>
                 </TableCell>
               </TableRow>
-            </template>
+              </template>
             </template>
           </TableBody>
         </Table>

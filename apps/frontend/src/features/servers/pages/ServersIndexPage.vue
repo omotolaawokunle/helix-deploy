@@ -42,9 +42,11 @@ const hasActiveFilters = computed(
 )
 
 onMounted(async () => {
-  await serversStore.fetch()
+  await Promise.all([
+    serversStore.fetch(),
+    loadServerGroups(),
+  ])
   tagCatalog.value = [...serversStore.servers]
-  await loadServerGroups()
 })
 
 watch(

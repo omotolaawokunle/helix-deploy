@@ -18,7 +18,7 @@ defineEmits<{
 <template>
   <div
     v-bind="$attrs"
-    class="flex flex-col items-start gap-4 rounded-lg border border-dashed bg-muted/30 px-6 py-12 sm:flex-row sm:items-center sm:justify-between"
+    class="animate-page-in flex flex-col items-start gap-4 rounded-lg border border-dashed bg-muted/30 px-6 py-12 transition-shadow duration-200 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
   >
     <div class="flex items-start gap-4">
       <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
