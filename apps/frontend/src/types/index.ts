@@ -31,7 +31,7 @@ export enum DeployMode {
   Recreate = 'recreate',
 }
 
-export type SiteBuildStrategy = 'on_server' | 'runner' | 'external'
+export type SiteBuildStrategy = 'on_server' | 'runner' | 'external' // external: API-only in v1 UI
 
 export enum DeploymentStatus {
   Pending = 'pending',

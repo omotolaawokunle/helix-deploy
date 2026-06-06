@@ -32,6 +32,11 @@ import {
   storeGitProviderToken,
   updateSite,
 } from '@/features/sites/api'
+import {
+  EXTERNAL_BUILD_STRATEGY_LABEL,
+  EXTERNAL_BUILD_STRATEGY_V2_MESSAGE,
+  SELECTABLE_SITE_BUILD_STRATEGY_OPTIONS,
+} from '@/features/sites/constants'
 import type { GitProviderType, Site, SiteBuildStrategy } from '@/types'
 
 interface Props {
@@ -83,23 +88,7 @@ const providerOptions: Array<{ value: GitProviderType; label: string }> = [
   { value: 'bitbucket', label: 'Bitbucket' },
 ]
 
-const buildStrategyOptions: Array<{ value: SiteBuildStrategy; label: string; description: string }> = [
-  {
-    value: 'on_server',
-    label: 'On server',
-    description: 'Clone and build directly on the deployment server.',
-  },
-  {
-    value: 'runner',
-    label: 'Build runner',
-    description: 'Compile on a dedicated runner, then deploy the artifact.',
-  },
-  {
-    value: 'external',
-    label: 'External artifact',
-    description: 'Supply a pre-built artifact from outside HelixDeploy.',
-  },
-]
+const isExternalBuildStrategy = computed(() => props.site.buildStrategy === 'external')
 
 const selectedRepository = computed((): string | null => {
   const match = gitRepositories.value.find(repo => repo.cloneUrl === repositoryUrl.value)
@@ -493,7 +482,22 @@ async function handleDelete(): Promise<void> {
       <h2 class="section-label pt-4">
         Build strategy
       </h2>
-      <div class="space-y-2">
+      <div
+        v-if="isExternalBuildStrategy"
+        class="space-y-3 rounded-lg border border-border bg-muted/30 p-4"
+        data-testid="external-build-strategy-locked"
+      >
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium">Where to build</span>
+          <Badge variant="secondary">
+            {{ EXTERNAL_BUILD_STRATEGY_LABEL }}
+          </Badge>
+        </div>
+        <p class="text-sm text-muted-foreground">
+          {{ EXTERNAL_BUILD_STRATEGY_V2_MESSAGE }}
+        </p>
+      </div>
+      <div v-else class="space-y-2">
         <Label for="build-strategy">Where to build</Label>
         <Select
           :model-value="buildStrategy"
@@ -504,7 +508,7 @@ async function handleDelete(): Promise<void> {
           </SelectTrigger>
           <SelectContent>
             <SelectItem
-              v-for="option in buildStrategyOptions"
+              v-for="option in SELECTABLE_SITE_BUILD_STRATEGY_OPTIONS"
               :key="option.value"
               :value="option.value"
             >
@@ -513,7 +517,7 @@ async function handleDelete(): Promise<void> {
           </SelectContent>
         </Select>
         <p class="text-sm text-muted-foreground">
-          {{ buildStrategyOptions.find(option => option.value === buildStrategy)?.description }}
+          {{ SELECTABLE_SITE_BUILD_STRATEGY_OPTIONS.find(option => option.value === buildStrategy)?.description }}
         </p>
       </div>
 
@@ -563,17 +567,6 @@ async function handleDelete(): Promise<void> {
         v-if="buildRunnerRuntimeWarning !== null"
         :warning="buildRunnerRuntimeWarning"
       />
-
-      <div
-        v-if="buildStrategy === 'external'"
-        class="rounded-lg border border-border bg-muted/30 p-4"
-        data-testid="external-build-strategy-note"
-      >
-        <p class="text-sm text-muted-foreground">
-          Deployments will expect a pre-built artifact supplied outside the normal clone-and-build flow.
-          Artifact upload via API is coming soon.
-        </p>
-      </div>
 
       <div v-if="buildStrategy === 'runner'" class="space-y-2">
         <Label for="pre-build-script">Pre-build script</Label>
