@@ -58,6 +58,7 @@ export const PROVISIONING_SCRIPTS = [
   'python',
   'supervisor',
   'docker',
+  'certbot',
 ] as const
 
 export type ProvisioningScript = (typeof PROVISIONING_SCRIPTS)[number]
@@ -98,7 +99,7 @@ export const PROVISION_TEMPLATES: ProvisionTemplate[] = [
   {
     id: 'laravel',
     label: 'Laravel Stack',
-    scripts: ['nginx', 'php', 'mysql', 'redis', 'supervisor'],
+    scripts: ['nginx', 'php', 'mysql', 'redis', 'supervisor', 'certbot'],
     phpVersion: '8.3',
   },
   {
@@ -125,6 +126,7 @@ export const SCRIPT_ESTIMATED_MINUTES: Record<ProvisioningScript, number> = {
   python: 3,
   supervisor: 2,
   docker: 5,
+  certbot: 2,
 }
 
 export const PHP_VERSIONS = ['8.1', '8.2', '8.3'] as const

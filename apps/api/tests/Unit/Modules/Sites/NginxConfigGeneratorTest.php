@@ -31,6 +31,21 @@ it('generates node nginx config with proxy_pass', function (): void {
         ->toContain('proxy_set_header Host $host;');
 });
 
+it('generates ssl nginx config with redirect and certificate paths when ssl is active', function (): void {
+    $site = siteForNginxGenerator(Runtime::PHP, [
+        'php_version' => '8.3',
+        'ssl_status' => 'active',
+        'enable_ssl' => true,
+    ]);
+
+    $config = (new NginxConfigGenerator())->generate($site);
+
+    expect($config)
+        ->toContain('listen 443 ssl http2;')
+        ->toContain('ssl_certificate /etc/letsencrypt/live/app.example.test/fullchain.pem;')
+        ->toContain('return 301 https://$host$request_uri;');
+});
+
 /**
  * @param array<string, mixed> $overrides
  */

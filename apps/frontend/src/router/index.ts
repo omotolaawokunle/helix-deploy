@@ -114,6 +114,12 @@ const authenticatedRoutes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, title: 'Provisioning Templates' },
   },
   {
+    path: '/settings/integrations',
+    name: 'integrations-settings',
+    component: () => import('@/features/integrations/views/IntegrationsSettingsView.vue'),
+    meta: { requiresAuth: true, title: 'Integrations' },
+  },
+  {
     path: "/settings/team",
     name: "team-settings",
     component: () =>

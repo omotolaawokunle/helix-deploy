@@ -9,6 +9,7 @@ use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\NodePM;
 use App\Modules\Sites\Enums\PythonWSGI;
 use App\Modules\Sites\Enums\Runtime;
+use App\Modules\Sites\Enums\SslChallenge;
 
 readonly class CreateSiteDTO
 {
@@ -40,6 +41,11 @@ readonly class CreateSiteDTO
         public ?string $projectId,
         public ?string $environmentId,
         public ?string $pipelineId,
+        public bool $autoCreateDns = false,
+        public bool $enableSsl = false,
+        public ?string $projectDnsZoneId = null,
+        public bool $includeWwwAlias = false,
+        public ?SslChallenge $sslChallenge = null,
     ) {
     }
 }

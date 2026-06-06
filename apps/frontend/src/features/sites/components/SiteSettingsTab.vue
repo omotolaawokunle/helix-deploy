@@ -90,6 +90,16 @@ const providerOptions: Array<{ value: GitProviderType; label: string }> = [
 
 const isExternalBuildStrategy = computed(() => props.site.buildStrategy === 'external')
 
+const deleteSiteDescription = computed(() => {
+  const parts = [`This will permanently delete ${props.site.domain}. This cannot be undone.`]
+
+  if (props.site.autoCreateDns && props.site.dnsRecordIds.length > 0) {
+    parts.push('Managed Cloudflare DNS records for this site will also be removed.')
+  }
+
+  return parts.join(' ')
+})
+
 const selectedRepository = computed((): string | null => {
   const match = gitRepositories.value.find(repo => repo.cloneUrl === repositoryUrl.value)
 
@@ -672,7 +682,7 @@ async function handleDelete(): Promise<void> {
     <ConfirmDestructiveDialog
       v-model:open="isDeleteDialogOpen"
       title="Delete site"
-      :description="`This will permanently delete ${site.domain}. This cannot be undone.`"
+      :description="deleteSiteDescription"
       :confirm-text="site.domain"
       confirm-button-label="Delete site"
       @confirm="handleDelete"

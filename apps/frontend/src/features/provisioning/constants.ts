@@ -11,6 +11,7 @@ export const PROVISIONING_SERVICE_LABELS: Record<ProvisioningScript, string> = {
   python: 'Python',
   supervisor: 'Supervisor',
   docker: 'Docker',
+  certbot: 'Certbot (Let\'s Encrypt)',
 }
 
 export function formatProvisioningTemplateName(name: string): string {

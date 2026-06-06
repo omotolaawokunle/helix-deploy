@@ -195,6 +195,10 @@ export interface ServerGroup {
 
 export type GitProviderType = 'github' | 'gitlab' | 'bitbucket'
 
+export type DnsStatus = 'none' | 'pending' | 'active' | 'failed'
+export type SslStatus = 'none' | 'pending' | 'active' | 'failed'
+export type SslChallenge = 'http-01' | 'dns-01'
+
 export interface Site {
   id: string
   organizationId: string
@@ -219,6 +223,20 @@ export interface Site {
   pipelineId: string | null
   runtime: Runtime
   status: string
+  autoCreateDns: boolean
+  isApex: boolean
+  projectDnsZoneId: string | null
+  dnsZoneId: string | null
+  dnsStatus: DnsStatus | null
+  dnsProvider: string | null
+  dnsRecordIds: string[]
+  dnsError: string | null
+  enableSsl: boolean
+  sslStatus: SslStatus | null
+  sslProvider: string | null
+  sslError: string | null
+  sslChallenge: SslChallenge | null
+  aliases: string[]
   createdAt: string
   updatedAt: string
 }

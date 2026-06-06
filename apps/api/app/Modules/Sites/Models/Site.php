@@ -15,12 +15,17 @@ use App\Modules\Projects\Models\Environment;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Shared\Concerns\OwnedByOrganization;
+use App\Modules\Integrations\Enums\DnsStatus;
+use App\Modules\Integrations\Models\ProjectDnsZone;
 use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\NodePM;
 use App\Modules\Sites\Enums\PythonWSGI;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Enums\SiteStatus;
+use App\Modules\Sites\Enums\SslChallenge;
+use App\Modules\Sites\Enums\SslProvider;
+use App\Modules\Sites\Enums\SslStatus;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -76,6 +81,19 @@ class Site extends Model
         'app_port',
         'status',
         'pipeline_id',
+        'auto_create_dns',
+        'is_apex',
+        'project_dns_zone_id',
+        'dns_zone_id',
+        'dns_status',
+        'dns_provider',
+        'dns_record_ids',
+        'dns_error',
+        'enable_ssl',
+        'ssl_status',
+        'ssl_provider',
+        'ssl_error',
+        'ssl_challenge',
     ];
 
     /**
@@ -92,8 +110,16 @@ class Site extends Model
             'status' => SiteStatus::class,
             'build_strategy' => BuildStrategy::class,
             'aliases' => 'array',
+            'dns_record_ids' => 'array',
             'run_migrations' => 'boolean',
+            'auto_create_dns' => 'boolean',
+            'is_apex' => 'boolean',
+            'enable_ssl' => 'boolean',
             'app_port' => 'integer',
+            'dns_status' => DnsStatus::class,
+            'ssl_status' => SslStatus::class,
+            'ssl_challenge' => SslChallenge::class,
+            'ssl_provider' => SslProvider::class,
         ];
     }
 
@@ -140,5 +166,10 @@ class Site extends Model
     public function preferredRunner(): BelongsTo
     {
         return $this->belongsTo(BuildRunner::class, 'build_runner_id');
+    }
+
+    public function projectDnsZone(): BelongsTo
+    {
+        return $this->belongsTo(ProjectDnsZone::class, 'project_dns_zone_id');
     }
 }

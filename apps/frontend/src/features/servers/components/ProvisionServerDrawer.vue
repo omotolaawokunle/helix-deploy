@@ -70,6 +70,7 @@ const scriptLabels: Record<ProvisioningScript, string> = {
   python: 'Python',
   supervisor: 'Supervisor',
   docker: 'Docker',
+  certbot: 'Certbot (Let\'s Encrypt)',
 }
 
 const estimatedMinutes = computed(() =>

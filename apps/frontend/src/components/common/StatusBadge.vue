@@ -8,7 +8,7 @@ import {
   ServerStatus,
 } from '@/types'
 
-type StatusType = 'server' | 'deployment' | 'daemon' | 'build-runner' | 'site'
+type StatusType = 'server' | 'deployment' | 'daemon' | 'build-runner' | 'site' | 'dns' | 'ssl'
 
 interface Props {
   status: string
@@ -141,6 +141,46 @@ const siteStatusMap: Record<string, StatusConfig> = {
   },
 }
 
+const dnsStatusMap: Record<string, StatusConfig> = {
+  none: {
+    label: 'Not managed',
+    className: 'bg-muted text-muted-foreground',
+  },
+  pending: {
+    label: 'Pending',
+    className: 'bg-primary/10 text-primary dark:bg-primary/20',
+    pulse: true,
+  },
+  active: {
+    label: 'Active',
+    className: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200',
+  },
+  failed: {
+    label: 'Failed',
+    className: 'bg-destructive/10 text-destructive',
+  },
+}
+
+const sslStatusMap: Record<string, StatusConfig> = {
+  none: {
+    label: 'Not enabled',
+    className: 'bg-muted text-muted-foreground',
+  },
+  pending: {
+    label: 'Pending',
+    className: 'bg-primary/10 text-primary dark:bg-primary/20',
+    pulse: true,
+  },
+  active: {
+    label: 'Active',
+    className: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200',
+  },
+  failed: {
+    label: 'Failed',
+    className: 'bg-destructive/10 text-destructive',
+  },
+}
+
 const config = computed<StatusConfig>(() => {
   const maps: Record<StatusType, Record<string, StatusConfig>> = {
     server: serverStatusMap,
@@ -148,6 +188,8 @@ const config = computed<StatusConfig>(() => {
     daemon: daemonStatusMap,
     'build-runner': buildRunnerStatusMap,
     site: siteStatusMap,
+    dns: dnsStatusMap,
+    ssl: sslStatusMap,
   }
 
   const map = maps[props.type]

@@ -10,6 +10,7 @@ import {
   GitBranchIcon,
   HexagonIcon,
   LayersIcon,
+  PlugIcon,
   ServerIcon,
   UserCircleIcon,
   UsersIcon,
@@ -52,6 +53,12 @@ const settingsNavItems = computed<NavItem[]>(() => [
     label: 'Provisioning Templates',
     to: '/settings/provisioning-templates',
     icon: LayersIcon,
+    visible: true,
+  },
+  {
+    label: 'Integrations',
+    to: '/settings/integrations',
+    icon: PlugIcon,
     visible: true,
   },
   {

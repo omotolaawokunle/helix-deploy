@@ -441,7 +441,11 @@ onMounted(() => {
         </TabsContent>
 
         <TabsContent value="sites" class="mt-6">
-          <ServerSitesTab v-if="activeTab === 'sites'" :server-id="server.id" />
+          <ServerSitesTab
+            v-if="activeTab === 'sites'"
+            :server-id="server.id"
+            :project-id="server.project?.id ?? null"
+          />
         </TabsContent>
 
         <TabsContent value="cron" class="mt-6">

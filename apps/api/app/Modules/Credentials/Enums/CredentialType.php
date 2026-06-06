@@ -13,6 +13,7 @@ enum CredentialType: string
     case REGISTRY_PASSWORD = 'registry_password';
     case GIT_PROVIDER_TOKEN = 'git_provider_token';
     case CLOUD_PROVIDER_CREDENTIAL = 'cloud_provider_credential';
+    case DNS_PROVIDER_CREDENTIAL = 'dns_provider_credential';
 
     public function label(): string
     {
@@ -24,6 +25,7 @@ enum CredentialType: string
             self::REGISTRY_PASSWORD => 'Registry Password',
             self::GIT_PROVIDER_TOKEN => 'Git Provider Token',
             self::CLOUD_PROVIDER_CREDENTIAL => 'Cloud Provider Credential',
+            self::DNS_PROVIDER_CREDENTIAL => 'DNS Provider Credential',
         };
     }
 
@@ -37,6 +39,7 @@ enum CredentialType: string
             self::REGISTRY_PASSWORD => 'danger',
             self::GIT_PROVIDER_TOKEN => 'success',
             self::CLOUD_PROVIDER_CREDENTIAL => 'success',
+            self::DNS_PROVIDER_CREDENTIAL => 'success',
         };
     }
 }

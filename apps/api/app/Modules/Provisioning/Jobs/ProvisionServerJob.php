@@ -15,6 +15,7 @@ use App\Packages\Provisioning\Enums\PhpVersion;
 use App\Packages\Provisioning\Contracts\ProvisioningScriptInterface;
 use App\Packages\Provisioning\ProvisioningOrchestrator;
 use App\Packages\Provisioning\Scripts\CreateDeployUser;
+use App\Packages\Provisioning\Scripts\InstallCertbot;
 use App\Packages\Provisioning\Scripts\InstallDocker;
 use App\Packages\Provisioning\Scripts\InstallMySQL;
 use App\Packages\Provisioning\Scripts\InstallNginx;
@@ -121,6 +122,7 @@ class ProvisionServerJob implements ShouldQueue
                 'python' => new InstallPython(),
                 'supervisor' => new InstallSupervisor(),
                 'docker' => new InstallDocker(),
+                'certbot' => new InstallCertbot(),
                 default => throw new InvalidArgumentException(sprintf('Unknown provisioning script [%s].', $script)),
             };
         }, $this->scripts);

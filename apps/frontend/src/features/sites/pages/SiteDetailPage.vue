@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
 import BackLink from '@/components/layout/BackLink.vue'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -24,6 +25,9 @@ const NginxConfigTab = defineAsyncComponent(
 const SiteSettingsTab = defineAsyncComponent(
   () => import('@/features/sites/components/SiteSettingsTab.vue'),
 )
+const SiteDnsSslTab = defineAsyncComponent(
+  () => import('@/features/sites/components/SiteDnsSslTab.vue'),
+)
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -43,6 +47,20 @@ const environmentName = computed(
 )
 
 const isProduction = computed(() => server.value?.environment?.isProduction ?? false)
+
+const showDnsBadge = computed(
+  () => site.value !== null
+    && site.value.autoCreateDns
+    && site.value.dnsStatus !== null
+    && site.value.dnsStatus !== 'none',
+)
+
+const showSslBadge = computed(
+  () => site.value !== null
+    && site.value.enableSsl
+    && site.value.sslStatus !== null
+    && site.value.sslStatus !== 'none',
+)
 
 async function loadPage(): Promise<void> {
   isLoading.value = true
@@ -117,6 +135,18 @@ onMounted(() => {
           <p class="text-sm text-muted-foreground">
             {{ site.deployBranch }} · {{ site.runtime }}
           </p>
+          <div v-if="showDnsBadge || showSslBadge" class="flex flex-wrap gap-2 pt-1">
+            <StatusBadge
+              v-if="showDnsBadge"
+              :status="site.dnsStatus ?? 'none'"
+              type="dns"
+            />
+            <StatusBadge
+              v-if="showSslBadge"
+              :status="site.sslStatus ?? 'none'"
+              type="ssl"
+            />
+          </div>
         </div>
       </div>
 
@@ -130,6 +160,9 @@ onMounted(() => {
           </TabsTrigger>
           <TabsTrigger value="nginx">
             Nginx Config
+          </TabsTrigger>
+          <TabsTrigger value="dns-ssl">
+            DNS &amp; SSL
           </TabsTrigger>
           <TabsTrigger value="settings">
             Settings
@@ -148,6 +181,13 @@ onMounted(() => {
         </TabsContent>
         <TabsContent value="nginx" class="mt-6">
           <NginxConfigTab v-if="activeTab === 'nginx'" :site-id="site.id" />
+        </TabsContent>
+        <TabsContent value="dns-ssl" class="mt-6">
+          <SiteDnsSslTab
+            v-if="activeTab === 'dns-ssl'"
+            :site="site"
+            @updated="handleSiteUpdated"
+          />
         </TabsContent>
         <TabsContent value="settings" class="mt-6">
           <SiteSettingsTab

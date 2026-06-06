@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Models\User;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Servers\Models\Server;
+use App\Modules\Integrations\Contracts\SiteDnsProvisionerInterface;
+use App\Modules\Sites\Contracts\SiteSslProvisionerInterface;
 use App\Modules\Sites\Actions\CreateSiteAction;
 use App\Modules\Sites\DTOs\CreateSiteDTO;
 use App\Modules\Sites\Enums\DeployMode;
@@ -27,7 +29,7 @@ it('creates a site record in provisioning status without running ssh', function 
     $provisioner = \Mockery::mock(SiteNginxProvisioner::class);
     $provisioner->shouldNotReceive('createWebroot');
 
-    $action = new CreateSiteAction(new NginxConfigGenerator(), $provisioner);
+    $action = new CreateSiteAction(new NginxConfigGenerator(), $provisioner, mockSiteDnsProvisioner(), mockSiteSslProvisioner());
 
     $site = $action->execute(
         $server,
@@ -48,7 +50,7 @@ it('dispatches site created event when provision succeeds', function (): void {
     $provisioner->shouldReceive('createWebroot')->once();
     $provisioner->shouldReceive('apply')->once();
 
-    $action = new CreateSiteAction(new NginxConfigGenerator(), $provisioner);
+    $action = new CreateSiteAction(new NginxConfigGenerator(), $provisioner, mockSiteDnsProvisioner(), mockSiteSslProvisioner());
 
     $site = $action->execute(
         $server,
@@ -74,7 +76,7 @@ it('rolls back site record when nginx test fails during provision', function ():
     );
     $provisioner->shouldReceive('rollbackConfig')->once();
 
-    $action = new CreateSiteAction(new NginxConfigGenerator(), $provisioner);
+    $action = new CreateSiteAction(new NginxConfigGenerator(), $provisioner, mockSiteDnsProvisioner(), mockSiteSslProvisioner());
 
     $site = $action->execute(
         $server,
@@ -116,7 +118,7 @@ it('forbids creating a site on another organizations server', function (): void 
     ]);
 
     $provisioner = \Mockery::mock(SiteNginxProvisioner::class);
-    $action = new CreateSiteAction(new NginxConfigGenerator(), $provisioner);
+    $action = new CreateSiteAction(new NginxConfigGenerator(), $provisioner, mockSiteDnsProvisioner(), mockSiteSslProvisioner());
 
     expect(fn () => $action->execute(
         $foreignServer,
@@ -194,4 +196,28 @@ function createSiteDto(string $domain, Runtime $runtime, ?string $phpVersion = n
         environmentId: null,
         pipelineId: null,
     );
+}
+
+function mockSiteDnsProvisioner(): SiteDnsProvisionerInterface
+{
+    $mock = \Mockery::mock(SiteDnsProvisionerInterface::class);
+    $mock->shouldReceive('validateForCreate')->byDefault();
+    $mock->shouldReceive('resolveSiteAttributes')->byDefault()->andReturn([
+        'auto_create_dns' => false,
+        'is_apex' => false,
+        'dns_status' => 'none',
+    ]);
+    $mock->shouldReceive('provision')->byDefault();
+
+    return $mock;
+}
+
+function mockSiteSslProvisioner(): SiteSslProvisionerInterface
+{
+    $mock = \Mockery::mock(SiteSslProvisionerInterface::class);
+    $mock->shouldReceive('issue')->byDefault();
+    $mock->shouldReceive('revoke')->byDefault();
+    $mock->shouldReceive('renew')->byDefault();
+
+    return $mock;
 }

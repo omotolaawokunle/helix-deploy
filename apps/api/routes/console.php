@@ -6,6 +6,7 @@ use App\Modules\BuildRunners\Jobs\PingBuildRunnersJob;
 use App\Modules\BuildRunners\Jobs\StuckBuildWatchdogJob;
 use App\Modules\Deployments\Jobs\StuckDeploymentWatchdogJob;
 use App\Modules\Monitoring\Jobs\CollectServerMetricsJob;
+use App\Modules\Sites\Jobs\RenewSiteCertificatesJob;
 use App\Modules\Servers\Jobs\PingServersJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -33,5 +34,9 @@ Schedule::job(new StuckDeploymentWatchdogJob())
 
 Schedule::job(new StuckBuildWatchdogJob())
     ->everyTenMinutes()
+    ->onOneServer();
+
+Schedule::job(new RenewSiteCertificatesJob())
+    ->daily()
     ->onOneServer();
 

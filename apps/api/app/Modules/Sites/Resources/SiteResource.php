@@ -8,6 +8,8 @@ use App\Modules\BuildRunners\Enums\BuildStrategy;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Sites\Enums\GitProvider;
 use App\Modules\Sites\Enums\SiteStatus;
+use App\Modules\Sites\Enums\SslProvider;
+use App\Modules\Sites\Enums\SslStatus;
 use App\Modules\Sites\Services\GitProviderService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -57,6 +59,23 @@ class SiteResource extends JsonResource
             'appPort' => $this->app_port,
             'pipelineId' => $this->pipeline_id,
             'status' => $this->status instanceof SiteStatus ? $this->status->value : $this->status,
+            'autoCreateDns' => $this->auto_create_dns,
+            'isApex' => $this->is_apex,
+            'projectDnsZoneId' => $this->project_dns_zone_id,
+            'dnsZoneId' => $this->dns_zone_id,
+            'dnsStatus' => $this->dns_status instanceof \App\Modules\Integrations\Enums\DnsStatus
+                ? $this->dns_status->value
+                : $this->dns_status,
+            'dnsProvider' => $this->dns_provider,
+            'dnsRecordIds' => $this->dns_record_ids ?? [],
+            'dnsError' => $this->dns_error,
+            'enableSsl' => $this->enable_ssl,
+            'sslStatus' => $this->ssl_status instanceof SslStatus ? $this->ssl_status->value : $this->ssl_status,
+            'sslProvider' => $this->ssl_provider instanceof SslProvider ? $this->ssl_provider->value : $this->ssl_provider,
+            'sslError' => $this->ssl_error,
+            'sslChallenge' => $this->ssl_challenge instanceof \App\Modules\Sites\Enums\SslChallenge
+                ? $this->ssl_challenge->value
+                : $this->ssl_challenge,
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];

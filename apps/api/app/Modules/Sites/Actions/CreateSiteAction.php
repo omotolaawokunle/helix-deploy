@@ -6,13 +6,21 @@ namespace App\Modules\Sites\Actions;
 
 use App\Models\User;
 use App\Modules\Audit\Models\AuditLog;
+use App\Modules\Integrations\Contracts\SiteDnsProvisionerInterface;
+use App\Modules\Integrations\DTOs\SiteDnsConfigurationDTO;
+use App\Modules\Integrations\Enums\DnsStatus;
+use App\Modules\Integrations\Exceptions\DnsRecordAlreadyExistsException;
+use App\Modules\Integrations\Exceptions\SiteDnsValidationException;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Projects\Models\Environment;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Contracts\NginxConfigGeneratorInterface;
+use App\Modules\Sites\Contracts\SiteSslProvisionerInterface;
 use App\Modules\Sites\DTOs\CreateSiteDTO;
 use App\Modules\Sites\Enums\SiteStatus;
+use App\Modules\Sites\Enums\SslChallenge;
+use App\Modules\Sites\Enums\SslStatus;
 use App\Modules\Sites\Events\SiteCreated;
 use App\Modules\Sites\Events\SiteProvisioningFailed;
 use App\Modules\Sites\Exceptions\NginxConfigInvalidException;
@@ -21,12 +29,15 @@ use App\Modules\Sites\Services\SiteNginxProvisioner;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class CreateSiteAction
 {
     public function __construct(
         private readonly NginxConfigGeneratorInterface $nginxConfigGenerator,
         private readonly SiteNginxProvisioner $siteNginxProvisioner,
+        private readonly SiteDnsProvisionerInterface $siteDnsProvisioner,
+        private readonly SiteSslProvisionerInterface $siteSslProvisioner,
     ) {
     }
 
@@ -39,14 +50,40 @@ class CreateSiteAction
         $project = $this->resolveProject($dto->projectId, $org);
         $environment = $this->resolveEnvironment($dto->environmentId, $org, $project);
 
-        return Site::query()->create([
+        $dnsConfiguration = new SiteDnsConfigurationDTO(
+            autoCreateDns: $dto->autoCreateDns,
+            includeWwwAlias: $dto->includeWwwAlias,
+            projectDnsZoneId: $dto->projectDnsZoneId,
+            domain: $dto->domain,
+            aliases: $dto->aliases,
+            projectId: $dto->projectId,
+        );
+
+        try {
+            $this->siteDnsProvisioner->validateForCreate($org, $dnsConfiguration);
+        } catch (SiteDnsValidationException|DnsRecordAlreadyExistsException $exception) {
+            throw ValidationException::withMessages([
+                'domain' => [$exception->getMessage()],
+            ]);
+        }
+
+        $dnsAttributes = $this->siteDnsProvisioner->resolveSiteAttributes($org, $dnsConfiguration);
+
+        if (($dnsAttributes['is_apex'] ?? false) === true) {
+            $this->assertApexAvailable($org, (string) ($dnsAttributes['dns_zone_id'] ?? ''), $dto->domain);
+        }
+
+        $aliases = $dnsAttributes['aliases'] ?? $dto->aliases;
+        unset($dnsAttributes['aliases']);
+
+        return Site::query()->create(array_merge([
             'id' => (string) Str::uuid(),
             'server_id' => (string) $server->getKey(),
             'organization_id' => (string) $org->getKey(),
             'project_id' => $project?->getKey(),
             'environment_id' => $environment?->getKey(),
             'domain' => $dto->domain,
-            'aliases' => $dto->aliases,
+            'aliases' => $aliases,
             'webroot' => $dto->webroot,
             'runtime' => $dto->runtime->value,
             'deploy_mode' => $dto->deployMode->value,
@@ -67,8 +104,11 @@ class CreateSiteAction
             'go_service_name' => $dto->goServiceName,
             'app_port' => $dto->appPort,
             'pipeline_id' => $dto->pipelineId,
+            'enable_ssl' => $dto->enableSsl,
+            'ssl_status' => $dto->enableSsl ? SslStatus::PENDING->value : SslStatus::NONE->value,
+            'ssl_challenge' => $dto->enableSsl ? ($dto->sslChallenge?->value ?? SslChallenge::HTTP_01->value) : null,
             'status' => SiteStatus::PROVISIONING->value,
-        ]);
+        ], $dnsAttributes));
     }
 
     public function provision(Site $site): Site
@@ -97,6 +137,14 @@ class CreateSiteAction
             throw $exception;
         }
 
+        if ($site->auto_create_dns) {
+            $this->siteDnsProvisioner->provision($site->refresh());
+        }
+
+        if ($site->enable_ssl) {
+            $this->siteSslProvisioner->issue($site->refresh());
+        }
+
         $site->forceFill(['status' => SiteStatus::ACTIVE->value])->save();
 
         $site = $site->refresh();
@@ -110,12 +158,40 @@ class CreateSiteAction
                 'runtime' => $site->runtime->value,
                 'serverId' => $site->server_id,
                 'status' => SiteStatus::ACTIVE->value,
+                'dnsStatus' => $site->dns_status instanceof DnsStatus ? $site->dns_status->value : $site->dns_status,
+                'sslStatus' => $site->ssl_status instanceof SslStatus ? $site->ssl_status->value : $site->ssl_status,
             ],
         );
 
         event(new SiteCreated($site));
 
         return $site;
+    }
+
+    private function assertApexAvailable(
+        Organization $org,
+        string $dnsZoneId,
+        string $domain,
+    ): void {
+        if ($dnsZoneId === '') {
+            return;
+        }
+
+        $exists = Site::query()
+            ->withoutGlobalScope('owned_by_organization')
+            ->where('organization_id', (string) $org->getKey())
+            ->where('is_apex', true)
+            ->where('dns_zone_id', $dnsZoneId)
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'domain' => [sprintf(
+                    'An apex site already exists for zone containing [%s].',
+                    $domain,
+                )],
+            ]);
+        }
     }
 
     private function resolveProject(?string $projectId, Organization $org): ?Project

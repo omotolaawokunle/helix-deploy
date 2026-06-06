@@ -40,6 +40,7 @@ import {
   updateEnvironment,
   updateProject,
 } from '@/features/projects/api'
+import ProjectDnsZonesSection from '@/features/integrations/components/ProjectDnsZonesSection.vue'
 import type { EnvironmentRecord, ProjectRecord } from '@/features/projects/types'
 import { extractFieldErrors, firstFieldError } from '@/lib/validation-errors'
 
@@ -429,6 +430,11 @@ onMounted(() => {
           </Table>
         </div>
       </section>
+
+      <ProjectDnsZonesSection
+        :project-id="projectId"
+        :can-manage="canManage"
+      />
     </template>
 
     <Sheet v-model:open="isEnvSheetOpen">

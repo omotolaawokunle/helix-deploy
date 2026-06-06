@@ -52,6 +52,7 @@ class StoreProvisioningTemplateRequest extends FormRequest
             'python',
             'supervisor',
             'docker',
+            'certbot',
         ];
     }
 }

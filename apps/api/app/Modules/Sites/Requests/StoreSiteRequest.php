@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Requests;
 
+use App\Modules\Integrations\Models\ProjectDnsZone;
+use App\Modules\Integrations\Services\CloudflareHostnameResolver;
 use App\Modules\Sites\DTOs\CreateSiteDTO;
 use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\NodePM;
 use App\Modules\Sites\Enums\PythonWSGI;
 use App\Modules\Sites\Enums\Runtime;
+use App\Modules\Sites\Enums\SslChallenge;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -34,7 +37,7 @@ class StoreSiteRequest extends FormRequest
         ];
 
         return [
-            'domain' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$/i'],
+            'domain' => ['required_without:subdomainPrefix', 'nullable', 'string', 'max:255', 'regex:/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$/i'],
             'aliases' => ['nullable', 'array'],
             'aliases.*' => ['string', 'max:255'],
             'webroot' => ['nullable', 'string', 'max:500'],
@@ -59,14 +62,34 @@ class StoreSiteRequest extends FormRequest
             'projectId' => ['nullable', 'uuid', 'exists:projects,id'],
             'environmentId' => ['nullable', 'uuid', 'exists:environments,id'],
             'pipelineId' => ['nullable', 'uuid'],
+            'autoCreateDns' => ['nullable', 'boolean'],
+            'enableSsl' => ['nullable', 'boolean'],
+            'projectDnsZoneId' => ['nullable', 'uuid', 'exists:project_dns_zones,id'],
+            'subdomainPrefix' => ['nullable', 'string', 'max:255', 'regex:/^(@|[a-z0-9]([a-z0-9\-]*[a-z0-9])?)$/i'],
+            'includeWwwAlias' => ['nullable', 'boolean'],
+            'sslChallenge' => ['nullable', 'string', Rule::in(array_column(SslChallenge::cases(), 'value'))],
         ];
+    }
+
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function (\Illuminate\Validation\Validator $validator): void {
+            if ((bool) $this->input('autoCreateDns', false) && $this->input('projectId') === null) {
+                $validator->errors()->add('projectId', 'A project is required when auto-create DNS is enabled.');
+            }
+
+            if ((bool) $this->input('autoCreateDns', false) && $this->input('projectDnsZoneId') === null) {
+                $validator->errors()->add('projectDnsZoneId', 'A project DNS zone is required when auto-create DNS is enabled.');
+            }
+        });
     }
 
     public function toDto(): CreateSiteDTO
     {
         $validated = $this->validated();
-        $domain = (string) $validated['domain'];
         $runtime = Runtime::from((string) $validated['runtime']);
+        $domain = $this->resolveDomain($validated);
+        $aliases = array_values($validated['aliases'] ?? []);
 
         $webroot = isset($validated['webroot']) && is_string($validated['webroot']) && $validated['webroot'] !== ''
             ? $validated['webroot']
@@ -77,7 +100,7 @@ class StoreSiteRequest extends FormRequest
 
         return new CreateSiteDTO(
             domain: $domain,
-            aliases: array_values($validated['aliases'] ?? []),
+            aliases: $aliases,
             webroot: $webroot,
             runtime: $runtime,
             deployMode: DeployMode::from((string) ($validated['deployMode'] ?? DeployMode::GIT->value)),
@@ -102,6 +125,38 @@ class StoreSiteRequest extends FormRequest
             projectId: isset($validated['projectId']) ? (string) $validated['projectId'] : null,
             environmentId: isset($validated['environmentId']) ? (string) $validated['environmentId'] : null,
             pipelineId: isset($validated['pipelineId']) ? (string) $validated['pipelineId'] : null,
+            autoCreateDns: (bool) ($validated['autoCreateDns'] ?? false),
+            enableSsl: (bool) ($validated['enableSsl'] ?? false),
+            projectDnsZoneId: isset($validated['projectDnsZoneId']) ? (string) $validated['projectDnsZoneId'] : null,
+            includeWwwAlias: (bool) ($validated['includeWwwAlias'] ?? false),
+            sslChallenge: isset($validated['sslChallenge'])
+                ? SslChallenge::from((string) $validated['sslChallenge'])
+                : null,
         );
+    }
+
+    /**
+     * @param array<string, mixed> $validated
+     */
+    private function resolveDomain(array $validated): string
+    {
+        if (isset($validated['subdomainPrefix'], $validated['projectDnsZoneId'])) {
+            $projectDnsZone = ProjectDnsZone::query()
+                ->withoutGlobalScope('owned_by_organization')
+                ->whereKey((string) $validated['projectDnsZoneId'])
+                ->first();
+
+            if ($projectDnsZone !== null) {
+                /** @var CloudflareHostnameResolver $resolver */
+                $resolver = app(CloudflareHostnameResolver::class);
+
+                return $resolver->buildFromPrefix(
+                    (string) $validated['subdomainPrefix'],
+                    $projectDnsZone->base_domain,
+                );
+            }
+        }
+
+        return (string) $validated['domain'];
     }
 }

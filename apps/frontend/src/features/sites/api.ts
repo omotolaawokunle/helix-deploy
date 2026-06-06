@@ -10,7 +10,14 @@ interface CollectionResponse<T> {
 }
 
 export interface CreateSitePayload {
-  domain: string
+  domain?: string
+  subdomainPrefix?: string
+  projectId?: string
+  projectDnsZoneId?: string
+  autoCreateDns?: boolean
+  enableSsl?: boolean
+  includeWwwAlias?: boolean
+  sslChallenge?: 'http-01' | 'dns-01'
   runtime: string
   deployBranch?: string
   repositoryUrl?: string
