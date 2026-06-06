@@ -13,6 +13,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import BuildRunnerRuntimeWarningAlert from '@/features/build-runners/components/BuildRunnerRuntimeWarningAlert.vue'
+import { evaluateBuildRunnerRuntimeCompatibility } from '@/features/build-runners/lib/buildRunnerRuntimeCompatibility'
+import type { BuildRunner } from '@/features/build-runners/types'
 import type { Site } from '@/types'
 
 interface Props {
@@ -20,10 +23,12 @@ interface Props {
   site: Site | null
   isProduction: boolean
   isSubmitting?: boolean
+  buildRunners?: BuildRunner[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isSubmitting: false,
+  buildRunners: () => [],
 })
 
 const emit = defineEmits<{
@@ -44,6 +49,20 @@ const canSubmit = computed(() => {
   }
 
   return true
+})
+
+const buildRunnerRuntimeWarning = computed(() => {
+  if (props.site === null) {
+    return null
+  }
+
+  return evaluateBuildRunnerRuntimeCompatibility({
+    siteRuntime: props.site.runtime,
+    siteProjectId: props.site.projectId,
+    buildStrategy: props.site.buildStrategy,
+    buildRunnerId: props.site.buildRunnerId,
+    buildRunners: props.buildRunners,
+  })
 })
 
 watch(
@@ -88,6 +107,11 @@ function handleSubmit(): void {
           :resource-name="site?.domain ?? 'site'"
           :is-production="isProduction"
           variant="inline"
+        />
+
+        <BuildRunnerRuntimeWarningAlert
+          v-if="buildRunnerRuntimeWarning !== null"
+          :warning="buildRunnerRuntimeWarning"
         />
 
         <div class="space-y-2">

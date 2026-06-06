@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { isAxiosError } from 'axios'
 import { RocketIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -15,6 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useActiveOrg } from '@/composables/useActiveOrg'
+import { fetchBuildRunners } from '@/features/build-runners/api'
+import type { BuildRunner } from '@/features/build-runners/types'
 import { fetchSiteDeployments, triggerDeployment } from '@/features/deployments/api'
 import type { DeploymentListItem } from '@/features/deployments/types'
 import DeployNowModal from '@/features/sites/components/DeployNowModal.vue'
@@ -23,6 +27,7 @@ import {
   formatRelativeTime,
   shortCommitHash,
 } from '@/lib/format'
+import { extractApiErrorMessage } from '@/lib/api-error'
 import { DeploymentType, TeamRole, type Site } from '@/types'
 
 interface Props {
@@ -34,6 +39,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const router = useRouter()
+const { orgId } = useActiveOrg()
 
 const deployments = ref<DeploymentListItem[]>([])
 const nextCursor = ref<string | null>(null)
@@ -41,6 +47,8 @@ const isLoading = ref(true)
 const isLoadingMore = ref(false)
 const isDeployModalOpen = ref(false)
 const isDeploying = ref(false)
+const buildRunners = ref<BuildRunner[]>([])
+const hasLoadedBuildRunners = ref(false)
 
 const latestDeployment = computed(() => deployments.value[0] ?? null)
 
@@ -54,6 +62,25 @@ const canRollbackInTable = computed(
 
 function typeLabel(type: string): string {
   return type === DeploymentType.Rollback ? 'Rollback' : 'Deploy'
+}
+
+async function loadBuildRunners(): Promise<void> {
+  const activeOrgId = orgId.value
+
+  if (
+    activeOrgId === null
+    || props.site.buildStrategy !== 'runner'
+    || hasLoadedBuildRunners.value
+  ) {
+    return
+  }
+
+  try {
+    buildRunners.value = await fetchBuildRunners(activeOrgId)
+    hasLoadedBuildRunners.value = true
+  } catch {
+    buildRunners.value = []
+  }
 }
 
 async function loadDeployments(append = false): Promise<void> {
@@ -90,13 +117,22 @@ async function handleDeploy(branch: string): Promise<void> {
     const response = await triggerDeployment(props.site.id, { branch })
     isDeployModalOpen.value = false
     await router.push(`/deployments/${response.data.id}`)
-  } catch {
+  } catch (error) {
+    const fallback = isAxiosError(error) && error.response?.status === 409
+      ? 'Another deployment may already be in progress.'
+      : 'Unable to start deployment.'
+
     toast.error('Deploy failed', {
-      description: 'Another deployment may already be in progress.',
+      description: extractApiErrorMessage(error, fallback),
     })
   } finally {
     isDeploying.value = false
   }
+}
+
+function openDeployModal(): void {
+  void loadBuildRunners()
+  isDeployModalOpen.value = true
 }
 
 function navigateToDeployment(deploymentId: string): void {
@@ -142,7 +178,7 @@ onMounted(() => {
       <Button
         v-if="!isEmpty"
         data-testid="deploy-now-button"
-        @click="isDeployModalOpen = true"
+        @click="openDeployModal"
       >
         Deploy Now
       </Button>
@@ -154,7 +190,7 @@ onMounted(() => {
       title="No deployments yet"
       description="Deploy your site to push the latest code and watch the live log output."
       :icon="RocketIcon"
-      @action="isDeployModalOpen = true"
+      @action="openDeployModal"
     >
       Deploy Now
     </EmptyState>
@@ -243,6 +279,7 @@ onMounted(() => {
       :site="site"
       :is-production="isProduction"
       :is-submitting="isDeploying"
+      :build-runners="buildRunners"
       @submit="handleDeploy"
     />
   </div>

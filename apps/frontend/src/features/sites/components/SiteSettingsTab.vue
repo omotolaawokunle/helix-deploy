@@ -18,6 +18,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchBuildRunners } from '@/features/build-runners/api'
+import BuildRunnerRuntimeWarningAlert from '@/features/build-runners/components/BuildRunnerRuntimeWarningAlert.vue'
+import { evaluateBuildRunnerRuntimeCompatibility } from '@/features/build-runners/lib/buildRunnerRuntimeCompatibility'
 import type { BuildRunner } from '@/features/build-runners/types'
 import { fetchPipelines } from '@/features/pipelines/api'
 import type { PipelineRecord } from '@/features/pipelines/types'
@@ -104,6 +106,14 @@ const selectedRepository = computed((): string | null => {
 
   return match?.fullName ?? null
 })
+
+const buildRunnerRuntimeWarning = computed(() => evaluateBuildRunnerRuntimeCompatibility({
+  siteRuntime: props.site.runtime,
+  siteProjectId: props.site.projectId,
+  buildStrategy: buildStrategy.value,
+  buildRunnerId: buildRunnerId.value,
+  buildRunners: buildRunners.value,
+}))
 
 watch(
   () => props.site,
@@ -548,6 +558,11 @@ async function handleDelete(): Promise<void> {
           </RouterLink>
         </p>
       </div>
+
+      <BuildRunnerRuntimeWarningAlert
+        v-if="buildRunnerRuntimeWarning !== null"
+        :warning="buildRunnerRuntimeWarning"
+      />
 
       <div
         v-if="buildStrategy === 'external'"
