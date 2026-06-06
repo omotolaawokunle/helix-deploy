@@ -40,6 +40,8 @@ Route::prefix('v1/auth')->middleware('web')->group(function (): void {
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/user', [AuthController::class, 'user']);
+        Route::patch('/user', [AuthController::class, 'updateProfile']);
+        Route::post('/password', [AuthController::class, 'changePassword']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail']);
         Route::post('/email/resend', [AuthController::class, 'resendVerificationEmail']);

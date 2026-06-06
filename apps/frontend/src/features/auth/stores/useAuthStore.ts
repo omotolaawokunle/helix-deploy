@@ -72,6 +72,11 @@ export const useAuthStore = defineStore('auth', () => {
     currentRole.value = await fetchCurrentMemberRole(org.id, user.value.id)
   }
 
+  async function refreshUser(): Promise<void> {
+    const authUser = await fetchAuthUser()
+    setAuthUser(authUser)
+  }
+
   async function loadOrganizations(): Promise<void> {
     organizations.value = await fetchOrganizations()
   }
@@ -194,5 +199,6 @@ export const useAuthStore = defineStore('auth', () => {
     createOrg,
     loadOrganizations,
     resolveCurrentRole,
+    refreshUser,
   }
 })

@@ -17,8 +17,40 @@ export interface RegisterPayload {
   password_confirmation: string
 }
 
+export interface UpdateProfilePayload {
+  name: string
+  email: string
+  timezone: string
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string
+  password: string
+  passwordConfirmation: string
+}
+
 export interface CreateOrganizationPayload {
   name: string
+}
+
+export type ApiTokenAbility = 'full' | 'read'
+
+export interface ApiTokenRecord {
+  id: string
+  name: string
+  ability: ApiTokenAbility
+  lastUsedAt: string | null
+  createdAt: string
+}
+
+export interface CreateApiTokenPayload {
+  name: string
+  ability: ApiTokenAbility
+}
+
+export interface CreateApiTokenResponse {
+  token: ApiTokenRecord
+  plainTextToken: string
 }
 
 export { TeamRole }

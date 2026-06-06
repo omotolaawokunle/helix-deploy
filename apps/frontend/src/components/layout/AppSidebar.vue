@@ -10,6 +10,7 @@ import {
   GitBranchIcon,
   HexagonIcon,
   ServerIcon,
+  UserCircleIcon,
   UsersIcon,
 } from '@lucide/vue'
 import OrgSwitcher from '@/components/layout/OrgSwitcher.vue'
@@ -44,7 +45,8 @@ const primaryNavItems = computed<NavItem[]>(() => [
 ])
 
 const settingsNavItems = computed<NavItem[]>(() => [
-  { label: 'Profile Settings', to: '/settings/team', icon: UsersIcon, visible: true },
+  { label: 'Profile Settings', to: '/settings/team', icon: UserCircleIcon, visible: true },
+  { label: 'Teams', to: '/settings/teams', icon: UsersIcon, visible: true },
   {
     label: 'Organization Settings',
     to: '/settings/organization',

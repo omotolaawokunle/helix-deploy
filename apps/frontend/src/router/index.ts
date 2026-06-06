@@ -96,6 +96,18 @@ const authenticatedRoutes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, title: "Organization Settings" },
   },
   {
+    path: '/settings/teams',
+    name: 'teams',
+    component: () => import('@/features/teams/views/TeamsIndexView.vue'),
+    meta: { requiresAuth: true, title: 'Teams' },
+  },
+  {
+    path: '/settings/teams/:id',
+    name: 'team-detail',
+    component: () => import('@/features/teams/views/TeamDetailView.vue'),
+    meta: { requiresAuth: true, title: 'Team' },
+  },
+  {
     path: "/settings/team",
     name: "team-settings",
     component: () =>
