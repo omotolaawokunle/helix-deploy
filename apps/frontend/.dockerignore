@@ -1,0 +1,10 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+node_modules
+dist
+.agent
+.cursor
+*.md

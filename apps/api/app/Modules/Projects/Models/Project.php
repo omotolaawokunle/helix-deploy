@@ -11,7 +11,9 @@ use App\Modules\Shared\Concerns\OwnedByOrganization;
 use App\Modules\Sites\Models\Site;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use App\Modules\Teams\Models\Team;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Project extends Model
@@ -54,5 +56,10 @@ class Project extends Model
     public function pipelines(): HasMany
     {
         return $this->hasMany(Pipeline::class);
+    }
+
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class, 'project_team');
     }
 }

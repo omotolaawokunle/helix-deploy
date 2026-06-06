@@ -44,6 +44,7 @@ class Server extends Model
         'provider',
         'region',
         'server_type',
+        'provider_instance_id',
         'os',
         'php_version',
         'node_version',

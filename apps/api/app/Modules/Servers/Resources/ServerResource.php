@@ -24,6 +24,7 @@ class ServerResource extends JsonResource
             'sshPort' => $this->ssh_port,
             'sshUser' => $this->ssh_user,
             'provider' => $this->provider?->value,
+            'providerInstanceId' => $this->provider_instance_id,
             'region' => $this->region,
             'serverType' => $this->server_type,
             'os' => $this->os,

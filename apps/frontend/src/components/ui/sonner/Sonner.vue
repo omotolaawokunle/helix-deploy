@@ -33,15 +33,15 @@ const sonnerProps = computed(() => {
   <Sonner
     :class="cn('toaster group', props.class)"
     :style="{
-      '--normal-bg': 'var(--popover)',
-      '--normal-text': 'var(--popover-foreground)',
-      '--normal-border': 'var(--border)',
+      '--normal-bg': 'oklch(var(--popover))',
+      '--normal-text': 'oklch(var(--popover-foreground))',
+      '--normal-border': 'oklch(var(--border))',
       '--border-radius': 'var(--radius)',
-      '--gray2': 'hsl(var(--popover) / 0.9)',
-      '--gray3': 'var(--border)',
-      '--gray4': 'var(--border)',
-      '--gray5': 'var(--border)',
-      '--gray12': 'var(--popover-foreground)',
+      '--gray2': 'color-mix(in oklch, oklch(var(--popover)) 90%, transparent)',
+      '--gray3': 'oklch(var(--border))',
+      '--gray4': 'oklch(var(--border))',
+      '--gray5': 'oklch(var(--border))',
+      '--gray12': 'oklch(var(--popover-foreground))',
     }"
     :toast-options="mergedToastOptions"
     v-bind="sonnerProps"

@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('commit_hash')->nullable();
             $table->text('commit_message')->nullable();
             $table->string('release_path')->nullable();
-            $table->foreignUuid('rollback_target_id')->nullable()->constrained('deployments');
+            $table->uuid('rollback_target_id')->nullable();
             $table->text('rollback_reason')->nullable();
             $table->uuid('pipeline_run_id')->nullable();
             $table->jsonb('metadata')->nullable();
@@ -34,10 +34,18 @@ return new class extends Migration
             $table->index(['organization_id', 'created_at']);
             $table->index('status');
         });
+
+        Schema::table('deployments', function (Blueprint $table): void {
+            $table->foreign('rollback_target_id')->references('id')->on('deployments');
+        });
     }
 
     public function down(): void
     {
+        Schema::table('deployments', function (Blueprint $table): void {
+            $table->dropForeign(['rollback_target_id']);
+        });
+
         Schema::dropIfExists('deployments');
     }
 };

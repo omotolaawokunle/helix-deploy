@@ -2,11 +2,41 @@
 
 declare(strict_types=1);
 
+use App\Modules\Audit\Controllers\AuditLogController;
+use App\Modules\Auth\Controllers\ApiTokenController;
 use App\Modules\Auth\Controllers\AuthController;
+use App\Modules\Commands\Controllers\CommandController;
+use App\Modules\Commands\Controllers\CommandStreamController;
+use App\Modules\Integrations\Controllers\CloudflareController;
+use App\Modules\Integrations\Controllers\DigitalOceanController;
+use App\Modules\Integrations\Controllers\ProjectDnsZoneController;
+use App\Modules\Organizations\Controllers\InvitationAcceptRedirectController;
 use App\Modules\Organizations\Controllers\OrganizationController;
+use App\Modules\Organizations\Controllers\OrganizationInvitationController;
 use App\Modules\Organizations\Controllers\OrganizationMemberController;
+use App\Modules\Projects\Controllers\EnvironmentController;
+use App\Modules\Projects\Controllers\ProjectController;
 use App\Modules\Provisioning\Controllers\ProvisioningController;
+use App\Modules\Provisioning\Controllers\ProvisioningTemplateController;
 use App\Modules\Servers\Controllers\ServerController;
+use App\Modules\Servers\Controllers\ServerGroupController;
+use App\Modules\Teams\Controllers\TeamController;
+use App\Modules\Teams\Controllers\TeamMemberController;
+use App\Modules\Pipelines\Controllers\PipelineController;
+use App\Modules\Pipelines\Controllers\PipelineRunController;
+use App\Modules\Deployments\Controllers\DeploymentController;
+use App\Modules\Monitoring\Controllers\MonitoringController;
+use App\Modules\Deployments\Controllers\DeploymentStreamController;
+use App\Modules\CronJobs\Controllers\CronJobController;
+use App\Modules\Daemons\Controllers\DaemonController;
+use App\Modules\Sites\Controllers\GitProviderController;
+use App\Modules\Servers\Controllers\CloudProviderController;
+use App\Modules\Sites\Controllers\EnvVarController;
+use App\Modules\Sites\Controllers\NginxConfigController;
+use App\Modules\Sites\Controllers\SiteController;
+use App\Modules\Sites\Controllers\SiteDnsController;
+use App\Modules\Sites\Controllers\SiteSslController;
+use App\Modules\BuildRunners\Controllers\BuildRunnerController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/auth')->middleware('web')->group(function (): void {
@@ -14,37 +44,149 @@ Route::prefix('v1/auth')->middleware('web')->group(function (): void {
     Route::post('/login', [AuthController::class, 'login']);
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('/user', [AuthController::class, 'user']);
+        Route::patch('/user', [AuthController::class, 'updateProfile']);
+        Route::post('/password', [AuthController::class, 'changePassword']);
+        Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail']);
         Route::post('/email/resend', [AuthController::class, 'resendVerificationEmail']);
-    });
-
-    Route::middleware(['auth:sanctum', 'verified'])->group(function (): void {
-        Route::post('/logout', [AuthController::class, 'logout']);
-        Route::get('/user', [AuthController::class, 'user']);
+        Route::get('/tokens', [ApiTokenController::class, 'index']);
+        Route::post('/tokens', [ApiTokenController::class, 'store']);
+        Route::delete('/tokens/{token}', [ApiTokenController::class, 'destroy']);
     });
 });
 
-Route::middleware(['web', 'auth:sanctum', 'verified'])->prefix('v1')->group(function (): void {
+Route::get('/v1/organizations/invitations/accept', InvitationAcceptRedirectController::class)
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('organizations.invitations.accept');
+
+Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->prefix('v1')->group(function (): void {
+    Route::post('/organizations/invitations/accept', [OrganizationInvitationController::class, 'accept']);
     Route::get('/organizations', [OrganizationController::class, 'index']);
     Route::post('/organizations', [OrganizationController::class, 'store']);
     Route::get('/organizations/{org}', [OrganizationController::class, 'show']);
     Route::patch('/organizations/{org}', [OrganizationController::class, 'update']);
+    Route::delete('/organizations/{org}', [OrganizationController::class, 'destroy']);
     Route::get('/organizations/{org}/members', [OrganizationMemberController::class, 'index']);
     Route::post('/organizations/{org}/invitations', [OrganizationMemberController::class, 'invite']);
     Route::patch('/organizations/{org}/members/{user}', [OrganizationMemberController::class, 'update']);
     Route::delete('/organizations/{org}/members/{user}', [OrganizationMemberController::class, 'destroy']);
     Route::post('/organizations/{org}/switch', [OrganizationController::class, 'switchOrganization']);
+    Route::get('/organizations/{org}/audit-logs', [AuditLogController::class, 'indexForOrganization']);
+    Route::get('/organizations/{org}/audit-logs/export', [AuditLogController::class, 'export']);
+    Route::get('/cron-jobs/describe', [CronJobController::class, 'describe']);
+    Route::get('/organizations/{org}/deployments', [DeploymentController::class, 'indexForOrganization']);
+    Route::get('/organizations/{org}/monitoring/servers', [MonitoringController::class, 'servers']);
+    Route::get('/organizations/{org}/teams', [TeamController::class, 'index']);
+    Route::post('/organizations/{org}/teams', [TeamController::class, 'store']);
+    Route::get('/teams/{team}', [TeamController::class, 'show']);
+    Route::patch('/teams/{team}', [TeamController::class, 'update']);
+    Route::delete('/teams/{team}', [TeamController::class, 'destroy']);
+    Route::put('/teams/{team}/projects', [TeamController::class, 'syncProjects']);
+    Route::get('/teams/{team}/members', [TeamMemberController::class, 'index']);
+    Route::post('/teams/{team}/members', [TeamMemberController::class, 'store']);
+    Route::patch('/teams/{team}/members/{user}', [TeamMemberController::class, 'update']);
+    Route::delete('/teams/{team}/members/{user}', [TeamMemberController::class, 'destroy']);
+    Route::get('/organizations/{org}/pipelines', [PipelineController::class, 'index']);
+    Route::post('/organizations/{org}/pipelines', [PipelineController::class, 'store']);
+    Route::get('/pipelines/{pipeline}', [PipelineController::class, 'show']);
+    Route::patch('/pipelines/{pipeline}', [PipelineController::class, 'update']);
+    Route::delete('/pipelines/{pipeline}', [PipelineController::class, 'destroy']);
+    Route::post('/pipeline-runs/{pipelineRun}/approve', [PipelineRunController::class, 'approve']);
+    Route::post('/pipeline-runs/{pipelineRun}/reject', [PipelineRunController::class, 'reject']);
+    Route::get('/organizations/{org}/projects', [ProjectController::class, 'index']);
+    Route::post('/organizations/{org}/projects', [ProjectController::class, 'store']);
+    Route::get('/projects/{project}', [ProjectController::class, 'show']);
+    Route::patch('/projects/{project}', [ProjectController::class, 'update']);
+    Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+    Route::get('/projects/{project}/environments', [EnvironmentController::class, 'index']);
+    Route::post('/projects/{project}/environments', [EnvironmentController::class, 'store']);
+    Route::get('/environments/{environment}', [EnvironmentController::class, 'show']);
+    Route::patch('/projects/{project}/environments/{environment}', [EnvironmentController::class, 'update']);
+    Route::delete('/projects/{project}/environments/{environment}', [EnvironmentController::class, 'destroy']);
+    Route::get('/organizations/{org}/server-groups', [ServerGroupController::class, 'index']);
+    Route::post('/organizations/{org}/server-groups', [ServerGroupController::class, 'store']);
+    Route::get('/server-groups/{serverGroup}', [ServerGroupController::class, 'show']);
+    Route::patch('/server-groups/{serverGroup}', [ServerGroupController::class, 'update']);
+    Route::delete('/server-groups/{serverGroup}', [ServerGroupController::class, 'destroy']);
+    Route::put('/server-groups/{serverGroup}/servers', [ServerGroupController::class, 'syncServers']);
     Route::get('/organizations/{org}/servers', [ServerController::class, 'index']);
     Route::post('/organizations/{org}/servers', [ServerController::class, 'store']);
     Route::get('/servers/{server}', [ServerController::class, 'show']);
     Route::patch('/servers/{server}', [ServerController::class, 'update']);
     Route::delete('/servers/{server}', [ServerController::class, 'destroy']);
     Route::post('/servers/{server}/test-connection', [ServerController::class, 'testConnection']);
+    Route::get('/organizations/{org}/build-runners', [BuildRunnerController::class, 'index']);
+    Route::post('/organizations/{org}/build-runners', [BuildRunnerController::class, 'store']);
+    Route::get('/build-runners/{buildRunner}', [BuildRunnerController::class, 'show']);
+    Route::patch('/build-runners/{buildRunner}', [BuildRunnerController::class, 'update']);
+    Route::delete('/build-runners/{buildRunner}', [BuildRunnerController::class, 'destroy']);
+    Route::post('/build-runners/{buildRunner}/test-connection', [BuildRunnerController::class, 'testConnection']);
+    Route::get('/servers/{server}/commands', [CommandController::class, 'index']);
+    Route::post('/servers/{server}/commands', [CommandController::class, 'store']);
+    Route::get('/commands/{command}/stream', [CommandStreamController::class, 'stream']);
+    Route::post('/commands/{command}/cancel', [CommandController::class, 'cancel']);
+    Route::get('/servers/{server}/audit-logs', [AuditLogController::class, 'indexForServer']);
     Route::post('/servers/{server}/provision', [ProvisioningController::class, 'provision']);
+    Route::get('/organizations/{org}/provisioning-templates', [ProvisioningTemplateController::class, 'index']);
+    Route::post('/organizations/{org}/provisioning-templates', [ProvisioningTemplateController::class, 'store']);
+    Route::get('/provisioning-templates/{provisioningTemplate}', [ProvisioningTemplateController::class, 'show']);
+    Route::patch('/provisioning-templates/{provisioningTemplate}', [ProvisioningTemplateController::class, 'update']);
+    Route::delete('/provisioning-templates/{provisioningTemplate}', [ProvisioningTemplateController::class, 'destroy']);
+    Route::get('/organizations/{org}/git-providers', [GitProviderController::class, 'index']);
+    Route::post('/organizations/{org}/git-providers', [GitProviderController::class, 'store']);
+    Route::delete('/organizations/{org}/git-providers/{provider}', [GitProviderController::class, 'destroy']);
+    Route::get('/organizations/{org}/git-providers/{provider}/repositories', [GitProviderController::class, 'repositories']);
+    Route::get('/organizations/{org}/git-providers/{provider}/repositories/{owner}/{repo}/branches', [GitProviderController::class, 'branches']);
+    Route::get('/organizations/{org}/cloud-providers', [CloudProviderController::class, 'index']);
+    Route::post('/organizations/{org}/cloud-providers', [CloudProviderController::class, 'store']);
+    Route::delete('/organizations/{org}/cloud-providers/{provider}', [CloudProviderController::class, 'destroy']);
+    Route::get('/organizations/{org}/cloud-providers/{provider}/instances', [CloudProviderController::class, 'instances']);
+    Route::get('/organizations/{org}/integrations/cloudflare', [CloudflareController::class, 'show']);
+    Route::post('/organizations/{org}/integrations/cloudflare/connect', [CloudflareController::class, 'connect']);
+    Route::delete('/organizations/{org}/integrations/cloudflare/disconnect', [CloudflareController::class, 'disconnect']);
+    Route::get('/organizations/{org}/integrations/cloudflare/zones', [CloudflareController::class, 'zones']);
+    Route::get('/organizations/{org}/integrations/digitalocean', [DigitalOceanController::class, 'show']);
+    Route::post('/organizations/{org}/integrations/digitalocean/connect', [DigitalOceanController::class, 'connect']);
+    Route::delete('/organizations/{org}/integrations/digitalocean/disconnect', [DigitalOceanController::class, 'disconnect']);
+    Route::get('/organizations/{org}/integrations/digitalocean/zones', [DigitalOceanController::class, 'zones']);
+    Route::get('/projects/{project}/dns-zones', [ProjectDnsZoneController::class, 'index']);
+    Route::post('/projects/{project}/dns-zones', [ProjectDnsZoneController::class, 'store']);
+    Route::delete('/projects/{project}/dns-zones/{projectDnsZone}', [ProjectDnsZoneController::class, 'destroy']);
+    Route::get('/organizations/{org}/sites', [SiteController::class, 'index']);
+    Route::get('/servers/{server}/sites', [SiteController::class, 'indexForServer']);
+    Route::post('/servers/{server}/sites', [SiteController::class, 'store']);
+    Route::get('/sites/{site}', [SiteController::class, 'show']);
+    Route::patch('/sites/{site}', [SiteController::class, 'update']);
+    Route::delete('/sites/{site}', [SiteController::class, 'destroy']);
+    Route::post('/sites/{site}/dns/retry', [SiteDnsController::class, 'retry']);
+    Route::post('/sites/{site}/ssl/retry', [SiteSslController::class, 'retry']);
+    Route::get('/sites/{site}/nginx-config', [NginxConfigController::class, 'show']);
+    Route::put('/sites/{site}/nginx-config', [NginxConfigController::class, 'update']);
+    Route::get('/sites/{site}/env-vars', [EnvVarController::class, 'index']);
+    Route::post('/sites/{site}/env-vars', [EnvVarController::class, 'store']);
+    Route::patch('/sites/{site}/env-vars/{credential}', [EnvVarController::class, 'update']);
+    Route::delete('/sites/{site}/env-vars/{credential}', [EnvVarController::class, 'destroy']);
+    Route::get('/sites/{site}/env-vars/{credential}/reveal', [EnvVarController::class, 'reveal']);
+    Route::post('/sites/{site}/env-vars/sync', [EnvVarController::class, 'sync']);
+    Route::get('/servers/{server}/cron-jobs', [CronJobController::class, 'index']);
+    Route::post('/servers/{server}/cron-jobs', [CronJobController::class, 'store']);
+    Route::patch('/servers/{server}/cron-jobs/{cronJob}', [CronJobController::class, 'update']);
+    Route::delete('/servers/{server}/cron-jobs/{cronJob}', [CronJobController::class, 'destroy']);
+    Route::post('/servers/{server}/cron-jobs/{cronJob}/toggle', [CronJobController::class, 'toggle']);
+    Route::post('/servers/{server}/cron-jobs/sync', [CronJobController::class, 'sync']);
+    Route::get('/servers/{server}/daemons', [DaemonController::class, 'index']);
+    Route::post('/servers/{server}/daemons', [DaemonController::class, 'store']);
+    Route::post('/servers/{server}/daemons/{daemon}/restart', [DaemonController::class, 'restart']);
+    Route::post('/servers/{server}/daemons/{daemon}/start', [DaemonController::class, 'start']);
+    Route::post('/servers/{server}/daemons/{daemon}/stop', [DaemonController::class, 'stop']);
+    Route::delete('/servers/{server}/daemons/{daemon}', [DaemonController::class, 'destroy']);
+    Route::get('/servers/{server}/daemons/{daemon}/logs', [DaemonController::class, 'logs']);
+    Route::get('/sites/{site}/deployments', [DeploymentController::class, 'indexForSite']);
+    Route::post('/sites/{site}/deployments', [DeploymentController::class, 'store']);
+    Route::get('/deployments/{deployment}', [DeploymentController::class, 'show']);
+    Route::post('/deployments/{deployment}/cancel', [DeploymentController::class, 'cancel']);
+    Route::post('/deployments/{deployment}/rollback', [DeploymentController::class, 'rollback']);
+    Route::get('/deployments/{deployment}/stream', [DeploymentStreamController::class, 'stream']);
 });
 
-Route::get('/v1/organizations/invitations/accept', function () {
-    return response()->json([
-        'message' => 'Invitation acceptance flow is not implemented yet.',
-    ], 501);
-})->name('organizations.invitations.accept');

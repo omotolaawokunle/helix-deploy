@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Servers\Services;
 
 use App\Modules\Shared\Services\BaseTableFilterService;
+use Illuminate\Database\Eloquent\Builder;
 
 class ServerTableFilterService extends BaseTableFilterService
 {
@@ -33,6 +34,24 @@ class ServerTableFilterService extends BaseTableFilterService
             'management_mode' => 'servers.management_mode',
             'project_id' => 'servers.project_id',
             'environment_id' => 'servers.environment_id',
+            'tags' => function (Builder $query, mixed $value): void {
+                $tags = is_array($value)
+                    ? $value
+                    : array_map('trim', explode(',', (string) $value));
+
+                foreach (array_filter($tags) as $tag) {
+                    $query->whereJsonContains('servers.tags', $tag);
+                }
+            },
+            'server_group_id' => function (Builder $query, mixed $value): void {
+                if (! is_string($value) || $value === '') {
+                    return;
+                }
+
+                $query->whereHas('serverGroups', function (Builder $builder) use ($value): void {
+                    $builder->whereKey($value);
+                });
+            },
         ];
     }
 

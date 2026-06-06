@@ -171,6 +171,41 @@ class SSHPackageTest extends TestCase
         self::assertSame($result, $result->throw());
     }
 
+    public function test_run_returns_stdout_when_no_line_callback(): void
+    {
+        $organization = $this->createOrganization();
+        $server = $this->createServer($organization, hash('sha256', 'host-key-c'));
+        $privateKey = EC::createKey('Ed25519')->toString('OpenSSH', ['password' => '']);
+
+        $fakeSsh = new FakePhpseclibSSH2(hostKey: 'host-key-c', loginResult: true);
+        $connection = new TestableSSHConnection($server, $privateKey, $fakeSsh);
+        $connection->connect();
+
+        $result = $connection->run('echo "_ok_" && uname -a');
+
+        self::assertSame("output line 1\noutput line 2", $result->stdout);
+        self::assertNotSame('1', $result->stdout);
+    }
+
+    public function test_run_accumulates_stdout_when_line_callback_is_provided(): void
+    {
+        $organization = $this->createOrganization();
+        $server = $this->createServer($organization, hash('sha256', 'host-key-d'));
+        $privateKey = EC::createKey('Ed25519')->toString('OpenSSH', ['password' => '']);
+
+        $fakeSsh = new FakePhpseclibSSH2(hostKey: 'host-key-d', loginResult: true);
+        $connection = new TestableSSHConnection($server, $privateKey, $fakeSsh);
+        $connection->connect();
+
+        $lines = [];
+        $result = $connection->run('echo step-one && echo step-two', function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        });
+
+        self::assertSame("output line 1\noutput line 2", $result->stdout);
+        self::assertSame(['output line 1', 'output line 2'], $lines);
+    }
+
     private function createSchema(): void
     {
         $schema = $this->capsule->schema();
@@ -183,6 +218,7 @@ class SSHPackageTest extends TestCase
             $table->text('settings')->nullable();
             $table->string('owner_id');
             $table->timestamps();
+            $table->softDeletes();
         });
 
         $schema->create('servers', function (Blueprint $table): void {
@@ -280,11 +316,15 @@ class FakePhpseclibSSH2 extends SSH2
 
     public function exec($command, $callback = null)
     {
-        if ($callback !== null) {
-            $callback("output line 1\noutput line 2");
+        $output = "output line 1\noutput line 2";
+
+        if (is_callable($callback)) {
+            $callback($output);
+
+            return true;
         }
 
-        return "output line 1\noutput line 2";
+        return $output;
     }
 
     public function getExitStatus()

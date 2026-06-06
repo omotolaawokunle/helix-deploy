@@ -7,12 +7,15 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "aws/aws-sdk-php": "^3.300",
+        "dragonmantank/cron-expression": "^3.0",
         "laravel/framework": "^12.0",
         "laravel/horizon": "^5.47",
         "laravel/reverb": "^1.10",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.10.1",
         "phpseclib/phpseclib": "^3.0",
+        "predis/predis": "^3.5",
         "spatie/laravel-permission": "^7.4"
     },
     "require-dev": {
@@ -52,7 +55,7 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite --kill-others"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --queue=deployments,provisioning,commands,monitoring,default --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"php artisan reverb:start\" \"cd ../frontend && npm run dev\" --names=server,queue,logs,reverb,vite --kill-others"
         ],
         "test": [
             "@php artisan config:clear --ansi",

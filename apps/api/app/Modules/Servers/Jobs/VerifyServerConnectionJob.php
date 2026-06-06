@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Servers\Jobs;
 
 use App\Modules\Monitoring\Models\InfrastructureEvent;
+use App\Modules\Servers\Actions\ReportFingerprintMismatchAction;
+use App\Modules\Servers\Actions\SyncServerInventoryAction;
 use App\Modules\Servers\Enums\ServerStatus;
 use App\Modules\Servers\Events\ServerConnected;
 use App\Modules\Servers\Events\ServerConnectionFailed;
-use App\Modules\Servers\Events\ServerFingerprintMismatch;
 use App\Modules\Servers\Models\Server;
 use App\Packages\SSH\Exceptions\SSHFingerprintMismatchException;
 use App\Packages\SSH\SSHManager;
@@ -38,7 +39,12 @@ class VerifyServerConnectionJob implements ShouldQueue
         return [30, 60, 120, 300, 600];
     }
 
-    public function handle(SSHManager $sshManager, CredentialVault $vault): void
+    public function handle(
+        SSHManager $sshManager,
+        CredentialVault $vault,
+        ReportFingerprintMismatchAction $reportFingerprintMismatch,
+        SyncServerInventoryAction $syncServerInventory,
+    ): void
     {
         $server = $this->loadServer();
         if ($server === null) {
@@ -52,7 +58,9 @@ class VerifyServerConnectionJob implements ShouldQueue
             )->throw();
 
             $parsedOutput = $this->parseProbeOutput($probe->stdout);
+            $inventory = $syncServerInventory->execute($server, $connection);
 
+            $server->refresh();
             $server->forceFill([
                 'status' => ServerStatus::ACTIVE->value,
                 'os' => $parsedOutput['os'],
@@ -70,19 +78,14 @@ class VerifyServerConnectionJob implements ShouldQueue
                     'os' => $parsedOutput['os'],
                     'phpVersion' => $parsedOutput['phpVersion'],
                     'nodeVersion' => $parsedOutput['nodeVersion'],
+                    'discoveredSiteCount' => $inventory['discoveredSiteCount'],
+                    'sitesCreated' => $inventory['sitesCreated'],
+                    'sitesUpdated' => $inventory['sitesUpdated'],
                 ],
                 'created_at' => now(),
             ]);
         } catch (SSHFingerprintMismatchException $exception) {
-            $server->forceFill([
-                'status' => ServerStatus::DISCONNECTED->value,
-            ])->save();
-
-            event(new ServerFingerprintMismatch(
-                server: $server->refresh(),
-                expectedFingerprint: $exception->expectedFingerprint,
-                receivedFingerprint: $exception->receivedFingerprint,
-            ));
+            $reportFingerprintMismatch->execute($exception);
 
             return;
         } catch (Throwable $exception) {

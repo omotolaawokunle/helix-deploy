@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Sites\Models;
 
 use App\Modules\Credentials\Models\Credential;
+use App\Modules\BuildRunners\Enums\BuildStrategy;
+use App\Modules\BuildRunners\Models\BuildRunner;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\Release;
 use App\Modules\Organizations\Models\Organization;
@@ -13,11 +15,17 @@ use App\Modules\Projects\Models\Environment;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Shared\Concerns\OwnedByOrganization;
+use App\Modules\Integrations\Enums\DnsStatus;
+use App\Modules\Integrations\Models\ProjectDnsZone;
 use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\NodePM;
 use App\Modules\Sites\Enums\PythonWSGI;
 use App\Modules\Sites\Enums\Runtime;
+use App\Modules\Sites\Enums\SiteStatus;
+use App\Modules\Sites\Enums\SslChallenge;
+use App\Modules\Sites\Enums\SslProvider;
+use App\Modules\Sites\Enums\SslStatus;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,6 +43,13 @@ class Site extends Model
 
     protected $keyType = 'string';
 
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'build_strategy' => 'on_server',
+    ];
+
     protected $fillable = [
         'server_id',
         'organization_id',
@@ -48,7 +63,11 @@ class Site extends Model
         'repository_url',
         'repository_provider',
         'deploy_branch',
-        'deploy_script',
+        'build_strategy',
+        'build_runner_id',
+        'pre_build_script',
+        'pre_deploy_script',
+        'post_deploy_script',
         'run_migrations',
         'docker_image',
         'docker_registry',
@@ -59,8 +78,22 @@ class Site extends Model
         'python_wsgi',
         'go_binary_path',
         'go_service_name',
+        'app_port',
         'status',
         'pipeline_id',
+        'auto_create_dns',
+        'is_apex',
+        'project_dns_zone_id',
+        'dns_zone_id',
+        'dns_status',
+        'dns_provider',
+        'dns_record_ids',
+        'dns_error',
+        'enable_ssl',
+        'ssl_status',
+        'ssl_provider',
+        'ssl_error',
+        'ssl_challenge',
     ];
 
     /**
@@ -74,8 +107,19 @@ class Site extends Model
             'docker_build_mode' => DockerBuildMode::class,
             'node_pm' => NodePM::class,
             'python_wsgi' => PythonWSGI::class,
+            'status' => SiteStatus::class,
+            'build_strategy' => BuildStrategy::class,
             'aliases' => 'array',
+            'dns_record_ids' => 'array',
             'run_migrations' => 'boolean',
+            'auto_create_dns' => 'boolean',
+            'is_apex' => 'boolean',
+            'enable_ssl' => 'boolean',
+            'app_port' => 'integer',
+            'dns_status' => DnsStatus::class,
+            'ssl_status' => SslStatus::class,
+            'ssl_challenge' => SslChallenge::class,
+            'ssl_provider' => SslProvider::class,
         ];
     }
 
@@ -117,5 +161,15 @@ class Site extends Model
     public function pipeline(): BelongsTo
     {
         return $this->belongsTo(Pipeline::class);
+    }
+
+    public function preferredRunner(): BelongsTo
+    {
+        return $this->belongsTo(BuildRunner::class, 'build_runner_id');
+    }
+
+    public function projectDnsZone(): BelongsTo
+    {
+        return $this->belongsTo(ProjectDnsZone::class, 'project_dns_zone_id');
     }
 }

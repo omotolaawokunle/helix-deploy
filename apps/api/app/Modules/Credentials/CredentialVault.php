@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Credentials;
 
-use App\Models\Organization;
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Credentials\Contracts\CredentialVaultInterface;
 use App\Modules\Credentials\DTOs\StoredKeyPair;
@@ -16,6 +16,7 @@ use App\Packages\Encryption\EncryptedPayload;
 use App\Packages\Encryption\MasterKeyManager;
 use App\Packages\Encryption\SodiumEncryption;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use phpseclib3\Crypt\EC;
 
 class CredentialVault implements CredentialVaultInterface
@@ -93,6 +94,387 @@ class CredentialVault implements CredentialVaultInterface
             organization: $organization,
             operation: 'credential.created',
             resourceId: (string) $credential->getKey(),
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $credential;
+    }
+
+    public function storeGitProviderToken(Organization $organization, string $name, string $token): Credential
+    {
+        $existing = Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::GIT_PROVIDER_TOKEN)
+            ->where('name', $name)
+            ->first();
+
+        if ($existing !== null) {
+            return $this->updateGitProviderToken((string) $existing->getKey(), $organization, $token);
+        }
+
+        $credential = $this->storeEncrypted(
+            organization: $organization,
+            owner: $organization,
+            name: $name,
+            type: CredentialType::GIT_PROVIDER_TOKEN,
+            plaintext: $token,
+            publicKey: null,
+        );
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.created',
+            resourceId: (string) $credential->getKey(),
+            afterState: [
+                'name' => $credential->name,
+                'type' => $credential->type?->value,
+            ],
+        );
+
+        return $credential;
+    }
+
+    public function updateGitProviderToken(string $credentialId, Organization $organization, string $token): Credential
+    {
+        $credential = $this->loadCredential($credentialId, $organization);
+        $this->assertCredentialType($credential, CredentialType::GIT_PROVIDER_TOKEN);
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $masterKey = $this->getMasterKey($organization);
+
+        try {
+            $payload = $this->encryption->encrypt($token, $masterKey);
+        } finally {
+            sodium_memzero($masterKey);
+        }
+
+        $credential->forceFill([
+            'encrypted_value' => $payload->ciphertext,
+            'nonce' => $payload->nonce,
+            'last_used_at' => null,
+        ])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.updated',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $credential;
+    }
+
+    public function getGitProviderToken(Organization $organization, string $name): string
+    {
+        $credential = $this->findGitProviderCredential($organization, $name);
+
+        if ($credential === null) {
+            throw new CredentialNotFoundException('Git provider credential not found.');
+        }
+
+        $plaintext = $this->decryptCredential($organization, $credential);
+
+        $credential->forceFill(['last_used_at' => now()])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.accessed',
+            resourceId: (string) $credential->getKey(),
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $plaintext;
+    }
+
+    public function findGitProviderCredential(Organization $organization, string $name): ?Credential
+    {
+        return Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::GIT_PROVIDER_TOKEN)
+            ->where('name', $name)
+            ->first();
+    }
+
+    public function storeCloudProviderCredential(Organization $organization, string $name, string $payload): Credential
+    {
+        $existing = Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::CLOUD_PROVIDER_CREDENTIAL)
+            ->where('name', $name)
+            ->first();
+
+        if ($existing !== null) {
+            return $this->updateCloudProviderCredential((string) $existing->getKey(), $organization, $payload);
+        }
+
+        $credential = $this->storeEncrypted(
+            organization: $organization,
+            owner: $organization,
+            name: $name,
+            type: CredentialType::CLOUD_PROVIDER_CREDENTIAL,
+            plaintext: $payload,
+            publicKey: null,
+        );
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.created',
+            resourceId: (string) $credential->getKey(),
+            afterState: [
+                'name' => $credential->name,
+                'type' => $credential->type?->value,
+            ],
+        );
+
+        return $credential;
+    }
+
+    public function updateCloudProviderCredential(string $credentialId, Organization $organization, string $payload): Credential
+    {
+        $credential = $this->loadCredential($credentialId, $organization);
+        $this->assertCredentialType($credential, CredentialType::CLOUD_PROVIDER_CREDENTIAL);
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $masterKey = $this->getMasterKey($organization);
+
+        try {
+            $encrypted = $this->encryption->encrypt($payload, $masterKey);
+        } finally {
+            sodium_memzero($masterKey);
+        }
+
+        $credential->forceFill([
+            'encrypted_value' => $encrypted->ciphertext,
+            'nonce' => $encrypted->nonce,
+            'last_used_at' => null,
+        ])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.updated',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $credential;
+    }
+
+    public function getCloudProviderCredential(Organization $organization, string $name): string
+    {
+        $credential = $this->findCloudProviderCredential($organization, $name);
+
+        if ($credential === null) {
+            throw new CredentialNotFoundException('Cloud provider credential not found.');
+        }
+
+        $plaintext = $this->decryptCredential($organization, $credential);
+
+        $credential->forceFill(['last_used_at' => now()])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.accessed',
+            resourceId: (string) $credential->getKey(),
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $plaintext;
+    }
+
+    public function findCloudProviderCredential(Organization $organization, string $name): ?Credential
+    {
+        return Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::CLOUD_PROVIDER_CREDENTIAL)
+            ->where('name', $name)
+            ->first();
+    }
+
+    public function deleteCloudProviderCredential(Organization $organization, string $name): void
+    {
+        $credential = $this->findCloudProviderCredential($organization, $name);
+
+        if ($credential === null) {
+            return;
+        }
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $credential->delete();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.deleted',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
+        );
+    }
+
+    public function storeDnsProviderCredential(Organization $organization, string $name, string $payload): Credential
+    {
+        $existing = Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::DNS_PROVIDER_CREDENTIAL)
+            ->where('name', $name)
+            ->first();
+
+        if ($existing !== null) {
+            return $this->updateDnsProviderCredential((string) $existing->getKey(), $organization, $payload);
+        }
+
+        $credential = $this->storeEncrypted(
+            organization: $organization,
+            owner: $organization,
+            name: $name,
+            type: CredentialType::DNS_PROVIDER_CREDENTIAL,
+            plaintext: $payload,
+            publicKey: null,
+        );
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.created',
+            resourceId: (string) $credential->getKey(),
+            afterState: [
+                'name' => $credential->name,
+                'type' => $credential->type?->value,
+            ],
+        );
+
+        return $credential;
+    }
+
+    public function updateDnsProviderCredential(string $credentialId, Organization $organization, string $payload): Credential
+    {
+        $credential = $this->loadCredential($credentialId, $organization);
+        $this->assertCredentialType($credential, CredentialType::DNS_PROVIDER_CREDENTIAL);
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $masterKey = $this->getMasterKey($organization);
+
+        try {
+            $encrypted = $this->encryption->encrypt($payload, $masterKey);
+        } finally {
+            sodium_memzero($masterKey);
+        }
+
+        $credential->forceFill([
+            'encrypted_value' => $encrypted->ciphertext,
+            'nonce' => $encrypted->nonce,
+            'last_used_at' => null,
+        ])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.updated',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $credential;
+    }
+
+    public function getDnsProviderCredential(Organization $organization, string $name): string
+    {
+        $credential = $this->findDnsProviderCredential($organization, $name);
+
+        if ($credential === null) {
+            throw new CredentialNotFoundException('DNS provider credential not found.');
+        }
+
+        $plaintext = $this->decryptCredential($organization, $credential);
+
+        $credential->forceFill(['last_used_at' => now()])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.accessed',
+            resourceId: (string) $credential->getKey(),
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $plaintext;
+    }
+
+    public function findDnsProviderCredential(Organization $organization, string $name): ?Credential
+    {
+        return Credential::query()
+            ->forOrganization($organization)
+            ->ofType(CredentialType::DNS_PROVIDER_CREDENTIAL)
+            ->where('name', $name)
+            ->first();
+    }
+
+    public function deleteDnsProviderCredential(Organization $organization, string $name): void
+    {
+        $credential = $this->findDnsProviderCredential($organization, $name);
+
+        if ($credential === null) {
+            return;
+        }
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $credential->delete();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.deleted',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
+        );
+    }
+
+    public function updateSecret(string $credentialId, Organization $organization, string $value): Credential
+    {
+        $credential = $this->loadCredential($credentialId, $organization);
+        $this->assertCredentialType($credential, CredentialType::ENV_VAR);
+
+        $beforeState = [
+            'name' => $credential->name,
+            'type' => $credential->type?->value,
+        ];
+
+        $masterKey = $this->getMasterKey($organization);
+
+        try {
+            $payload = $this->encryption->encrypt($value, $masterKey);
+        } finally {
+            sodium_memzero($masterKey);
+        }
+
+        $credential->forceFill([
+            'encrypted_value' => $payload->ciphertext,
+            'nonce' => $payload->nonce,
+            'last_used_at' => null,
+        ])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.updated',
+            resourceId: (string) $credential->getKey(),
+            beforeState: $beforeState,
             afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
         );
 
@@ -253,6 +635,31 @@ class CredentialVault implements CredentialVaultInterface
         return $this->masterKeyManager->decryptMasterKey($encryptedMasterKey);
     }
 
+    private function resolveCreatorId(Organization $organization): string
+    {
+        if (Auth::getFacadeRoot() !== null) {
+            $authId = Auth::id();
+
+            if ($authId !== null) {
+                return (string) $authId;
+            }
+        }
+
+        $ownerId = $organization->getAttribute('owner_id');
+
+        if (is_string($ownerId) && $ownerId !== '') {
+            return $ownerId;
+        }
+
+        $memberId = $organization->users()->value('users.id');
+
+        if ($memberId !== null) {
+            return (string) $memberId;
+        }
+
+        throw new \RuntimeException('Unable to resolve credential creator.');
+    }
+
     private function storeEncrypted(
         Organization $organization,
         Model $owner,
@@ -278,7 +685,7 @@ class CredentialVault implements CredentialVaultInterface
             'encrypted_value' => $payload->ciphertext,
             'nonce' => $payload->nonce,
             'key_fingerprint' => $publicKey,
-            'created_by' => (string) $organization->owner_id,
+            'created_by' => $this->resolveCreatorId($organization),
             'last_used_at' => null,
         ]);
     }

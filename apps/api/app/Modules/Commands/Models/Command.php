@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Commands\Models;
 
+use App\Modules\Commands\Enums\CommandStatus;
 use App\Models\User;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Servers\Models\Server;
@@ -30,9 +31,13 @@ class Command extends Model
         'organization_id',
         'user_id',
         'command',
+        'status',
+        'timeout_seconds',
         'output',
         'exit_code',
         'executed_at',
+        'started_at',
+        'finished_at',
     ];
 
     /**
@@ -41,9 +46,22 @@ class Command extends Model
     protected function casts(): array
     {
         return [
+            'status' => CommandStatus::class,
+            'timeout_seconds' => 'integer',
             'exit_code' => 'integer',
             'executed_at' => 'datetime',
+            'started_at' => 'datetime',
+            'finished_at' => 'datetime',
         ];
+    }
+
+    public function duration(): ?float
+    {
+        if ($this->started_at === null || $this->finished_at === null) {
+            return null;
+        }
+
+        return (float) $this->finished_at->floatDiffInSeconds($this->started_at);
     }
 
     public function server(): BelongsTo

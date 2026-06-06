@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Servers\Models;
 
 use App\Modules\Organizations\Models\Organization;
+use App\Modules\Shared\Concerns\OwnedByOrganization;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class ServerGroup extends Model
 {
     use HasUuids;
+    use OwnedByOrganization;
 
     protected $table = 'server_groups';
 

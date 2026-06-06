@@ -41,7 +41,7 @@ it('creates user organization and pivot record on register', function (): void {
     });
 });
 
-it('forbids unverified users from protected auth routes', function (): void {
+it('allows unverified users to fetch auth user and logout', function (): void {
     $organization = Organization::query()->create([
         'name' => 'Acme Org',
         'slug' => 'acme-org',
@@ -60,6 +60,33 @@ it('forbids unverified users from protected auth routes', function (): void {
 
     $this->actingAs($user)
         ->getJson('/api/v1/auth/user')
+        ->assertOk()
+        ->assertJsonPath('data.emailVerifiedAt', null);
+
+    $this->actingAs($user)
+        ->postJson('/api/v1/auth/logout')
+        ->assertNoContent();
+});
+
+it('forbids unverified users from verified application routes', function (): void {
+    $organization = Organization::query()->create([
+        'name' => 'Acme Org',
+        'slug' => 'acme-org',
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $user = User::factory()->unverified()->create([
+        'current_organization_id' => (string) $organization->getKey(),
+    ]);
+
+    $organization->users()->attach($user->getKey(), [
+        'role' => TeamRole::OWNER->value,
+    ]);
+
+    $this->actingAs($user)
+        ->getJson('/api/v1/organizations')
         ->assertForbidden();
 });
 

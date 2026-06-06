@@ -20,9 +20,15 @@ class SendInvitationEmailJob implements ShouldQueue
 
     public function handle(): void
     {
+        $query = parse_url($this->invitationUrl, PHP_URL_QUERY);
+        $spaUrl = rtrim((string) config('helixdeploy.spa_url'), '/');
+        $spaInvitationUrl = $query !== null && $query !== ''
+            ? "{$spaUrl}/accept-invitation?{$query}"
+            : "{$spaUrl}/accept-invitation";
+
         Log::info('Organization invitation URL generated.', [
             'email' => $this->email,
-            'invitation_url' => $this->invitationUrl,
+            'invitation_url' => $spaInvitationUrl,
         ]);
     }
 }

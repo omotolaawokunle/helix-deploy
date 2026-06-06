@@ -10,6 +10,7 @@ use App\Modules\Servers\Models\Server;
 use App\Packages\Provisioning\Enums\NodejsVersion;
 use App\Packages\Provisioning\Enums\PhpVersion;
 use App\Packages\Provisioning\Scripts\CreateDeployUser;
+use App\Packages\Provisioning\Scripts\InstallCertbot;
 use App\Packages\Provisioning\Scripts\InstallDocker;
 use App\Packages\Provisioning\Scripts\InstallMySQL;
 use App\Packages\Provisioning\Scripts\InstallNginx;
@@ -60,6 +61,32 @@ it('install nginx runs expected command sequence', function (): void {
     $script->handle($connection, $server);
 
     expect($connection->getExecutedCommands())->toHaveCount(7);
+});
+
+it('install certbot skips when already installed', function (): void {
+    $fixture = provisioningServerFixture();
+    $server = $fixture[1];
+    $script = new InstallCertbot();
+    $connection = (new FakeSSHConnection())->connect();
+    $connection->addResponse('*command -v certbot*', new SSHResult('cmd', 0, 'yes', '', 0.01));
+
+    $script->handle($connection, $server);
+
+    expect($connection->getExecutedCommands())->toHaveCount(1);
+});
+
+it('install certbot installs packages when missing', function (): void {
+    $fixture = provisioningServerFixture();
+    $server = $fixture[1];
+    $script = new InstallCertbot();
+    $connection = (new FakeSSHConnection())->connect();
+    $connection->addResponse('*command -v certbot*', new SSHResult('cmd', 0, 'no', '', 0.01));
+    $connection->addResponse('*apt-get update*', sshSuccess());
+    $connection->addResponse('*certbot*', sshSuccess());
+
+    $script->handle($connection, $server);
+
+    expect($connection->getExecutedCommands()[2])->toContain('python3-certbot-dns-digitalocean');
 });
 
 it('install php 8.1 installs version-specific packages', function (): void {

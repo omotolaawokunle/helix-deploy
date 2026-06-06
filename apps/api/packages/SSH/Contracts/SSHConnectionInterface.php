@@ -17,6 +17,8 @@ interface SSHConnectionInterface
 
     public function upload(string $content, string $remotePath): bool;
 
+    public function interrupt(): void;
+
     public function disconnect(): void;
 
     public function isConnected(): bool;

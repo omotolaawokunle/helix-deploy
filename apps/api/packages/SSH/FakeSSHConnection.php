@@ -20,7 +20,14 @@ class FakeSSHConnection implements SSHConnectionInterface
      */
     private array $executedCommands = [];
 
+    /**
+     * @var array<string, string>
+     */
+    private array $uploads = [];
+
     private bool $connected = false;
+
+    public bool $interrupted = false;
 
     public function connect(): static
     {
@@ -82,7 +89,23 @@ class FakeSSHConnection implements SSHConnectionInterface
 
     public function upload(string $content, string $remotePath): bool
     {
+        $this->uploads[$remotePath] = $content;
+
         return true;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getUploads(): array
+    {
+        return $this->uploads;
+    }
+
+    public function interrupt(): void
+    {
+        $this->interrupted = true;
+        $this->disconnect();
     }
 
     public function disconnect(): void

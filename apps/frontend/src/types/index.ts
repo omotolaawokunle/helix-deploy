@@ -1,21 +1,22 @@
 export enum ServerStatus {
-  Provisioning = 'provisioning',
+  Connecting = 'connecting',
   Active = 'active',
-  Inactive = 'inactive',
-  Failed = 'failed',
+  Disconnected = 'disconnected',
+  Maintenance = 'maintenance',
 }
 
 export enum ServerProvider {
   Aws = 'aws',
   Hetzner = 'hetzner',
   DigitalOcean = 'digitalocean',
+  Vultr = 'vultr',
   Linode = 'linode',
   Generic = 'generic',
 }
 
 export enum ManagementMode {
   Managed = 'managed',
-  Unmanaged = 'unmanaged',
+  Observe = 'observe',
 }
 
 export enum Runtime {
@@ -30,12 +31,17 @@ export enum DeployMode {
   Recreate = 'recreate',
 }
 
+export type SiteBuildStrategy = 'on_server' | 'runner' | 'external' // external: API-only in v1 UI
+
 export enum DeploymentStatus {
   Pending = 'pending',
+  Building = 'building',
+  Built = 'built',
   Running = 'running',
-  Succeeded = 'succeeded',
+  Succeeded = 'success',
   Failed = 'failed',
   Cancelled = 'cancelled',
+  AwaitingApproval = 'awaiting_approval',
 }
 
 export enum DeploymentType {
@@ -61,8 +67,7 @@ export enum CredentialType {
 export enum TeamRole {
   Owner = 'owner',
   Admin = 'admin',
-  Maintainer = 'maintainer',
-  Member = 'member',
+  Developer = 'developer',
   Viewer = 'viewer',
 }
 
@@ -78,8 +83,10 @@ export interface User {
   email: string
   emailVerifiedAt: string | null
   currentOrganizationId: string | null
+  currentOrganization?: Organization | null
+  timezone?: string
   createdAt: string
-  updatedAt: string
+  updatedAt?: string
 }
 
 export interface Organization {
@@ -128,15 +135,49 @@ export interface Environment {
   updatedAt: string
 }
 
+export interface ServerEnvironmentSummary {
+  id: string
+  name: string
+  label: string | null
+  isProduction: boolean
+}
+
+export interface ServerProjectSummary {
+  id: string
+  name: string
+  description: string | null
+}
+
+export interface ServerHealthStatus {
+  cpuPercent?: number
+  memoryUsedPercent?: number
+  memoryTotalMb?: number
+  diskUsedPercent?: number
+  diskTotalGb?: number
+  lastCheckedAt?: string
+  fingerprintVerified?: boolean
+}
+
 export interface Server {
   id: string
-  organizationId: string
-  serverGroupId: string | null
-  name: string
   hostname: string
+  ipAddress: string
+  sshPort: number
+  sshUser: string
   provider: ServerProvider
+  providerInstanceId: string | null
+  region: string | null
+  serverType: string | null
+  os: string | null
+  phpVersion: string | null
+  nodeVersion: string | null
   status: ServerStatus
   managementMode: ManagementMode
+  environment: ServerEnvironmentSummary | null
+  project: ServerProjectSummary | null
+  tags: string[]
+  installedServices: string[]
+  healthStatus: ServerHealthStatus | null
   createdAt: string
   updatedAt: string
 }
@@ -146,20 +187,148 @@ export interface ServerGroup {
   organizationId: string
   name: string
   description: string | null
+  serversCount?: number
+  serverIds?: string[]
   createdAt: string
   updatedAt: string
 }
 
+export type GitProviderType = 'github' | 'gitlab' | 'bitbucket'
+
+export type DnsStatus = 'none' | 'pending' | 'active' | 'failed'
+export type SslStatus = 'none' | 'pending' | 'active' | 'failed'
+export type SslChallenge = 'http-01' | 'dns-01'
+
 export interface Site {
   id: string
   organizationId: string
-  projectId: string
+  projectId: string | null
   serverId: string
-  name: string
+  environmentId: string | null
+  name?: string
   domain: string
+  repositoryUrl: string | null
+  repositoryProvider: GitProviderType | null
+  gitCredentialConfigured: boolean
+  deployBranch: string
+  preDeployScript: string | null
+  postDeployScript: string | null
+  preBuildScript: string | null
+  buildStrategy: SiteBuildStrategy
+  buildRunnerId: string | null
+  runMigrations: boolean
+  dockerImage: string | null
+  dockerRegistry: string | null
+  dockerComposePath: string | null
+  pipelineId: string | null
   runtime: Runtime
+  status: string
+  autoCreateDns: boolean
+  isApex: boolean
+  projectDnsZoneId: string | null
+  dnsZoneId: string | null
+  dnsStatus: DnsStatus | null
+  dnsProvider: string | null
+  dnsRecordIds: string[]
+  dnsError: string | null
+  enableSsl: boolean
+  sslStatus: SslStatus | null
+  sslProvider: string | null
+  sslError: string | null
+  sslChallenge: SslChallenge | null
+  aliases: string[]
   createdAt: string
   updatedAt: string
+}
+
+export interface EnvVarListItem {
+  id: string
+  key: string
+  maskedValue: string
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface NginxConfig {
+  siteId: string
+  domain: string
+  config: string
+  updatedAt: string | null
+}
+
+export interface CronJobRecord {
+  id: string
+  serverId: string
+  organizationId: string
+  expression: string
+  command: string
+  user: string
+  active: boolean
+  description: string
+  lastRunAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DaemonRecord {
+  id: string
+  serverId: string
+  organizationId: string
+  name: string
+  command: string
+  directory: string | null
+  user: string
+  processes: number
+  status: DaemonStatus | string
+  createdAt: string
+  updatedAt: string
+}
+
+export type CommandStatus = 'pending' | 'running' | 'completed' | 'cancelled' | 'failed'
+
+export interface CommandRecord {
+  id: string
+  serverId: string
+  userId: string
+  command: string
+  status: CommandStatus
+  timeoutSeconds: number
+  output: string | null
+  exitCode: number | null
+  executedAt: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  duration: number | null
+  user?: {
+    id: string
+    name: string
+    email: string
+  }
+}
+
+export interface AuditLogEntry {
+  id: string
+  operation: string
+  actor: {
+    id: string
+    name: string
+    email: string
+  } | null
+  resourceType: string
+  resourceId: string
+  ipAddress: string | null
+  requestId: string | null
+  createdAt: string
+  beforeState?: Record<string, unknown> | null
+  afterState?: Record<string, unknown> | null
+}
+
+export interface OrganizationMemberRecord {
+  id: string
+  name: string
+  email: string
+  role: TeamRole
+  joinedAt: string | null
 }
 
 export interface DeploymentStep {
@@ -225,17 +394,6 @@ export interface CronJob {
   command: string
   expression: string
   enabled: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export interface SupervisorProcess {
-  id: string
-  organizationId: string
-  siteId: string
-  name: string
-  command: string
-  status: DaemonStatus
   createdAt: string
   updatedAt: string
 }

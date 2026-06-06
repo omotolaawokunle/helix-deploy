@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Credentials\Commands;
 
-use App\Models\Organization;
-use App\Modules\Credentials\Contracts\CredentialVaultInterface;
+use App\Modules\Audit\Models\AuditLog;
+use App\Modules\Organizations\Models\Organization;
 use App\Packages\Encryption\EncryptedPayload;
 use App\Packages\Encryption\MasterKeyManager;
 use App\Packages\Encryption\SodiumEncryption;
@@ -17,10 +17,9 @@ class RekeyCredentialsCommand extends Command
 {
     protected $signature = 'credentials:rekey {--old-key= : Base64 encoded previous APP_KEY}';
 
-    protected $description = 'Re-encrypt all organization credentials using the current application key.';
+    protected $description = 'Re-encrypt all organization master keys after APP_KEY rotation.';
 
     public function __construct(
-        private readonly CredentialVaultInterface $credentialVault,
         private readonly SodiumEncryption $encryption,
     ) {
         parent::__construct();
@@ -45,6 +44,11 @@ class RekeyCredentialsCommand extends Command
             appKey: $oldAppKey,
         );
 
+        $currentMasterKeyManager = new MasterKeyManager(
+            encryption: $this->encryption,
+            appKey: (string) config('app.key'),
+        );
+
         $organizations = Organization::query()->get();
         $progressBar = $this->output->createProgressBar($organizations->count());
         $progressBar->start();
@@ -54,14 +58,33 @@ class RekeyCredentialsCommand extends Command
 
         foreach ($organizations as $organization) {
             try {
-                DB::transaction(function () use ($organization, $oldMasterKeyManager): void {
+                DB::transaction(function () use (
+                    $organization,
+                    $oldMasterKeyManager,
+                    $currentMasterKeyManager,
+                ): void {
                     $oldMasterKeyPayload = EncryptedPayload::fromJson((string) $organization->master_key_encrypted);
-                    $oldMasterKey = $oldMasterKeyManager->decryptMasterKey($oldMasterKeyPayload);
+                    $masterKeyPlaintext = $oldMasterKeyManager->decryptMasterKey($oldMasterKeyPayload);
 
                     try {
-                        $this->credentialVault->rekeyOrganization($organization, $oldMasterKey);
+                        $organization->forceFill([
+                            'master_key_encrypted' => $currentMasterKeyManager
+                                ->encryptMasterKey($masterKeyPlaintext)
+                                ->toJson(),
+                        ])->save();
+
+                        AuditLog::record(
+                            operation: 'organization.rekeyed',
+                            resource: $organization,
+                            metadata: [
+                                'organization_id' => (string) $organization->getKey(),
+                            ],
+                            afterState: [
+                                'reason' => 'app_key_rotation',
+                            ],
+                        );
                     } finally {
-                        sodium_memzero($oldMasterKey);
+                        sodium_memzero($masterKeyPlaintext);
                     }
                 });
 

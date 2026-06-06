@@ -97,6 +97,7 @@ return [
     */
 
     'waits' => [
+        'redis:builds' => 60,
         'redis:deployments' => 60,
         'redis:provisioning' => 60,
         'redis:commands' => 60,
@@ -201,6 +202,19 @@ return [
     */
 
     'defaults' => [
+        'builds' => [
+            'connection' => 'redis',
+            'queue' => ['builds'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 2,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 128,
+            'tries' => 1,
+            'timeout' => 1800,
+            'nice' => 0,
+        ],
         'deployments' => [
             'connection' => 'redis',
             'queue' => ['deployments'],
@@ -270,6 +284,7 @@ return [
 
     'environments' => [
         'production' => [
+            'builds' => [],
             'deployments' => [],
             'provisioning' => [],
             'commands' => [],
@@ -278,6 +293,7 @@ return [
         ],
 
         'local' => [
+            'builds' => [],
             'deployments' => [],
             'provisioning' => [],
             'commands' => [],

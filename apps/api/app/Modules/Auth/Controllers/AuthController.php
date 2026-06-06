@@ -5,12 +5,18 @@ declare(strict_types=1);
 namespace App\Modules\Auth\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Auth\Actions\ChangePasswordAction;
+use App\Modules\Auth\Actions\UpdateProfileAction;
 use App\Modules\Auth\Contracts\AuthServiceInterface;
+use App\Modules\Auth\DTOs\ChangePasswordDTO;
 use App\Modules\Auth\DTOs\LoginDTO;
 use App\Modules\Auth\DTOs\RegisterDTO;
+use App\Modules\Auth\DTOs\UpdateProfileDTO;
 use App\Modules\Auth\Exceptions\InvalidCredentialsException;
+use App\Modules\Auth\Requests\ChangePasswordRequest;
 use App\Modules\Auth\Requests\LoginRequest;
 use App\Modules\Auth\Requests\RegisterRequest;
+use App\Modules\Auth\Requests\UpdateProfileRequest;
 use App\Modules\Auth\Resources\UserResource;
 use App\Modules\Auth\Resources\UserWithOrgResource;
 use Illuminate\Http\JsonResponse;
@@ -61,6 +67,30 @@ class AuthController extends Controller
         $user = $request->user();
 
         return UserWithOrgResource::make($user?->load('currentOrganizationRelation'));
+    }
+
+    public function updateProfile(
+        UpdateProfileRequest $request,
+        UpdateProfileAction $action,
+    ): UserWithOrgResource {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        $updated = $action->execute($user, UpdateProfileDTO::fromRequest($request));
+
+        return UserWithOrgResource::make($updated->load('currentOrganizationRelation'));
+    }
+
+    public function changePassword(
+        ChangePasswordRequest $request,
+        ChangePasswordAction $action,
+    ): JsonResponse {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        $action->execute($user, ChangePasswordDTO::fromRequest($request));
+
+        return response()->json(status: 204);
     }
 
     public function verifyEmail(Request $request, string $id, string $hash): UserWithOrgResource|JsonResponse

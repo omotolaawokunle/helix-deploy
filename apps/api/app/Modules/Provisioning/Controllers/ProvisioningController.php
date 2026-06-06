@@ -37,6 +37,7 @@ class ProvisioningController extends Controller
                     'python',
                     'supervisor',
                     'docker',
+                    'certbot',
                 ]),
             ],
             'options' => ['nullable', 'array'],

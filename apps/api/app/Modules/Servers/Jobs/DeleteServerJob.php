@@ -7,6 +7,7 @@ namespace App\Modules\Servers\Jobs;
 use App\Models\Organization as VaultOrganization;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Credentials\CredentialVault;
+use App\Modules\Servers\Events\ServerDeleted;
 use App\Modules\Servers\Models\Server;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -39,8 +40,9 @@ class DeleteServerJob implements ShouldQueue
             'status' => $server->status?->value,
         ];
 
+        $organizationId = (string) $server->organization_id;
         $credentialId = $server->credential_id;
-        $organization = VaultOrganization::query()->find($server->organization_id);
+        $organization = VaultOrganization::query()->find($organizationId);
 
         $server->delete();
 
@@ -61,5 +63,10 @@ class DeleteServerJob implements ShouldQueue
             'request_id' => null,
             'created_at' => now(),
         ]);
+
+        event(new ServerDeleted(
+            serverId: $this->serverId,
+            organizationId: $organizationId,
+        ));
     }
 }

@@ -7,6 +7,7 @@ namespace App\Modules\Shared\Services;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -32,6 +33,20 @@ abstract class BaseTableFilterService
         $paginator->appends($request->query());
 
         return $paginator;
+    }
+
+    public function cursorPaginate(Builder|Relation $query, Request $request, string $cursorName = 'cursor'): CursorPaginator
+    {
+        $builder = $query instanceof Relation ? $query->getQuery() : $query;
+
+        $this->applySearch($builder, $request);
+        $this->applyFilters($builder, $request);
+        $this->applySort($builder, $request);
+
+        return $builder->cursorPaginate(
+            perPage: $this->resolvePerPage($request),
+            cursorName: $cursorName,
+        );
     }
 
     /**
