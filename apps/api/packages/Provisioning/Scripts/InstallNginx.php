@@ -31,13 +31,14 @@ class InstallNginx extends BaseProvisioningScript
     {
         $this->prepare($options);
 
-        $this->runStep($ssh, $this->apt('apt-get update -y'), 'apt-update');
-        $this->runStep($ssh, $this->apt('apt-get install -y nginx'), 'install-nginx');
-        $this->runStep($ssh, 'systemctl enable nginx', 'enable-nginx');
-        $this->runStep($ssh, 'systemctl start nginx', 'start-nginx');
-        $this->runStep(
-            $ssh,
-            <<<'SHELL'
+        $nginxInstalled = $this->commandExists($ssh, 'nginx');
+
+        if (! $nginxInstalled) {
+            $this->runStep($ssh, $this->apt('apt-get update -y'), 'apt-update');
+            $this->runStep($ssh, $this->apt('apt-get install -y nginx'), 'install-nginx');
+            $this->runStep(
+                $ssh,
+                <<<'SHELL'
 cat <<'EOF' > /etc/nginx/nginx.conf
 user www-data;
 worker_processes auto;
@@ -65,8 +66,14 @@ http {
 }
 EOF
 SHELL,
-            'write-nginx-conf',
-        );
+                'write-nginx-conf',
+            );
+        } else {
+            $this->logInfo($options, 'nginx already installed — preserving existing configuration');
+        }
+
+        $this->preventApachePortConflict($ssh);
+        $this->runStep($ssh, 'systemctl enable --now nginx', 'enable-nginx');
         $this->runStep($ssh, 'nginx -t', 'validate-nginx-conf');
         $this->runStep($ssh, 'systemctl reload nginx', 'reload-nginx');
     }

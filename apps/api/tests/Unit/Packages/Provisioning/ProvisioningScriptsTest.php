@@ -52,15 +52,50 @@ it('create deploy user writes authorized keys with server public key', function 
     expect($commands[3])->toContain($publicKey);
 });
 
-it('install nginx runs expected command sequence', function (): void {
+it('install nginx runs expected command sequence on fresh server', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
     $script = new InstallNginx();
-    $connection = fakeSuccessfulConnection(7);
+    $connection = nginxProvisioningConnection(nginxInstalled: false);
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands())->toHaveCount(7);
+    $commands = $connection->getExecutedCommands();
+
+    expect($commands)->toHaveCount(8)
+        ->and(collect($commands)->first(fn (string $command): bool => str_contains($command, 'apt-get install')))->toContain('--no-install-recommends')
+        ->and(collect($commands)->first(fn (string $command): bool => str_contains($command, '/etc/nginx/nginx.conf')))->not->toBeNull();
+});
+
+it('install nginx preserves existing configuration when nginx is already installed', function (): void {
+    $fixture = provisioningServerFixture();
+    $server = $fixture[1];
+    $script = new InstallNginx();
+    $connection = nginxProvisioningConnection(nginxInstalled: true);
+
+    $script->handle($connection, $server);
+
+    $commands = $connection->getExecutedCommands();
+
+    expect($commands)->toHaveCount(5);
+
+    foreach ($commands as $command) {
+        expect($command)->not->toContain('/etc/nginx/nginx.conf');
+        expect($command)->not->toContain('apt-get install');
+    }
+});
+
+it('install nginx disables apache when present', function (): void {
+    $fixture = provisioningServerFixture();
+    $server = $fixture[1];
+    $script = new InstallNginx();
+    $connection = nginxProvisioningConnection(nginxInstalled: true);
+
+    $script->handle($connection, $server);
+
+    expect(collect($connection->getExecutedCommands())->contains(
+        fn (string $command): bool => str_contains($command, 'systemctl disable apache2'),
+    ))->toBeTrue();
 });
 
 it('install certbot skips when already installed', function (): void {
@@ -81,45 +116,67 @@ it('install certbot installs packages when missing', function (): void {
     $script = new InstallCertbot();
     $connection = (new FakeSSHConnection())->connect();
     $connection->addResponse('*command -v certbot*', new SSHResult('cmd', 0, 'no', '', 0.01));
-    $connection->addResponse('*apt-get update*', sshSuccess());
-    $connection->addResponse('*certbot*', sshSuccess());
+    $connection->addResponse('*apt-get update*', provisioningScriptSshSuccess());
+    $connection->addResponse('*certbot*', provisioningScriptSshSuccess());
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands()[2])->toContain('python3-certbot-dns-digitalocean');
+    expect($connection->getExecutedCommands()[2])->toContain('python3-certbot-dns-digitalocean')
+        ->and($connection->getExecutedCommands()[2])->toContain('--no-install-recommends');
 });
 
 it('install php 8.1 installs version-specific packages', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
     $script = new InstallPHP(PhpVersion::V8_1);
-    $connection = fakeSuccessfulConnection(6);
+    $connection = phpProvisioningConnection(fpmInstalled: false, nginxInstalled: false);
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands()[3])->toContain('php8.1-fpm');
+    $installCommand = collect($connection->getExecutedCommands())->first(
+        fn (string $command): bool => str_contains($command, 'apt-get install') && str_contains($command, 'php8.1-fpm'),
+    );
+
+    expect($installCommand)->not->toBeNull()
+        ->and($installCommand)->toContain('--no-install-recommends');
 });
 
 it('install php 8.2 installs version-specific packages', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
     $script = new InstallPHP(PhpVersion::V8_2);
-    $connection = fakeSuccessfulConnection(6);
+    $connection = phpProvisioningConnection(fpmInstalled: false, nginxInstalled: false);
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands()[3])->toContain('php8.2-fpm');
+    expect($connection->getExecutedCommands()[5])->toContain('php8.2-fpm');
 });
 
 it('install php 8.3 installs version-specific packages', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
     $script = new InstallPHP(PhpVersion::V8_3);
-    $connection = fakeSuccessfulConnection(6);
+    $connection = phpProvisioningConnection(fpmInstalled: false, nginxInstalled: false);
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands()[3])->toContain('php8.3-fpm');
+    expect($connection->getExecutedCommands()[5])->toContain('php8.3-fpm');
+});
+
+it('install php skips package installation when fpm is already installed', function (): void {
+    $fixture = provisioningServerFixture();
+    $server = $fixture[1];
+    $script = new InstallPHP(PhpVersion::V8_3);
+    $connection = phpProvisioningConnection(fpmInstalled: true, nginxInstalled: true);
+
+    $script->handle($connection, $server);
+
+    $commands = $connection->getExecutedCommands();
+
+    expect($commands)->toHaveCount(4)
+        ->and(collect($commands)->first(fn (string $command): bool => str_contains($command, 'dpkg -s')))->not->toBeNull()
+        ->and(collect($commands)->contains(fn (string $command): bool => str_contains($command, 'apt-get install')))->toBeFalse()
+        ->and(collect($commands)->contains(fn (string $command): bool => str_contains($command, 'systemctl disable apache2')))->toBeTrue();
 });
 
 it('install mysql stores generated deploy password in vault', function (): void {
@@ -127,11 +184,23 @@ it('install mysql stores generated deploy password in vault', function (): void 
     $vault = \Mockery::mock(CredentialVaultInterface::class);
     $vault->shouldReceive('storeSecret')->once();
     $script = new InstallMySQL($vault, $organization);
-    $connection = fakeSuccessfulConnection(6);
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 6);
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands())->toHaveCount(6);
+    expect($connection->getExecutedCommands())->toHaveCount(7);
+});
+
+it('install mysql skips package installation when mysql is already installed', function (): void {
+    [$organization, $server] = provisioningServerFixture();
+    $vault = \Mockery::mock(CredentialVaultInterface::class);
+    $vault->shouldReceive('storeSecret')->never();
+    $script = new InstallMySQL($vault, $organization);
+    $connection = serviceProvisioningConnection(serviceInstalled: true, installSteps: 0, serviceBinary: 'mysql');
+
+    $script->handle($connection, $server);
+
+    expect($connection->getExecutedCommands())->toHaveCount(3);
 });
 
 it('install postgresql stores generated deploy password in vault', function (): void {
@@ -139,11 +208,11 @@ it('install postgresql stores generated deploy password in vault', function (): 
     $vault = \Mockery::mock(CredentialVaultInterface::class);
     $vault->shouldReceive('storeSecret')->once();
     $script = new InstallPostgreSQL($vault, $organization);
-    $connection = fakeSuccessfulConnection(5);
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 5);
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands())->toHaveCount(5);
+    expect($connection->getExecutedCommands())->toHaveCount(6);
 });
 
 it('install redis sets password when provided and stores it in vault', function (): void {
@@ -151,67 +220,75 @@ it('install redis sets password when provided and stores it in vault', function 
     $vault = \Mockery::mock(CredentialVaultInterface::class);
     $vault->shouldReceive('storeSecret')->once();
     $script = new InstallRedis($vault, $organization, 'redis-secret-123');
-    $connection = fakeSuccessfulConnection(6);
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 6, serviceBinary: 'redis-cli');
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands())->toHaveCount(6);
+    expect($connection->getExecutedCommands())->toHaveCount(7);
 });
 
 it('install nodejs uses configured major version', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
     $script = new InstallNodejs(NodejsVersion::V22);
-    $connection = fakeSuccessfulConnection(5);
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 5, serviceBinary: 'node');
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands()[2])->toContain('setup_22.x');
+    expect(collect($connection->getExecutedCommands())->contains(
+        fn (string $command): bool => str_contains($command, 'setup_22.x'),
+    ))->toBeTrue();
 });
 
 it('install python runs expected command sequence', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
     $script = new InstallPython();
-    $connection = fakeSuccessfulConnection(3);
-
-    $script->handle($connection, $server);
-
-    expect($connection->getExecutedCommands())->toHaveCount(3);
-});
-
-it('install supervisor runs expected command sequence', function (): void {
-    $fixture = provisioningServerFixture();
-    $server = $fixture[1];
-    $script = new InstallSupervisor();
-    $connection = fakeSuccessfulConnection(4);
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 3, serviceBinary: 'python3');
 
     $script->handle($connection, $server);
 
     expect($connection->getExecutedCommands())->toHaveCount(4);
 });
 
+it('install supervisor runs expected command sequence', function (): void {
+    $fixture = provisioningServerFixture();
+    $server = $fixture[1];
+    $script = new InstallSupervisor();
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 4, serviceBinary: 'supervisorctl');
+
+    $script->handle($connection, $server);
+
+    expect($connection->getExecutedCommands())->toHaveCount(5);
+});
+
 it('install docker runs expected command sequence', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
     $script = new InstallDocker();
-    $connection = fakeSuccessfulConnection(3);
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 3, serviceBinary: 'docker');
 
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands())->toHaveCount(3);
+    expect($connection->getExecutedCommands())->toHaveCount(4);
 });
 
 it('idempotent scripts can run twice without errors', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
     $script = new InstallSupervisor();
-    $connection = fakeSuccessfulConnection(8);
+    $connection = (new FakeSSHConnection())->connect();
+    $connection->addSequence(
+        '*command -v*supervisorctl*',
+        new SSHResult('cmd', 0, 'yes', '', 0.01),
+        new SSHResult('cmd', 0, 'yes', '', 0.01),
+    );
+    $connection->addSequence('*', ...array_fill(0, 6, provisioningScriptSshSuccess()));
 
     $script->handle($connection, $server);
     $script->handle($connection, $server);
 
-    expect($connection->getExecutedCommands())->toHaveCount(8);
+    expect($connection->getExecutedCommands())->toHaveCount(6);
 });
 
 /**
@@ -267,6 +344,73 @@ function fakeSuccessfulConnection(int $stepCount): FakeSSHConnection
     }
 
     $connection->addSequence('*', ...$responses);
+
+    return $connection;
+}
+
+function provisioningScriptSshSuccess(): SSHResult
+{
+    return new SSHResult('cmd', 0, 'ok', '', 0.01);
+}
+
+function nginxProvisioningConnection(bool $nginxInstalled): FakeSSHConnection
+{
+    $connection = (new FakeSSHConnection())->connect();
+    $connection->addResponse(
+        '*command -v*nginx*',
+        new SSHResult('cmd', 0, $nginxInstalled ? 'yes' : 'no', '', 0.01),
+    );
+    $connection->addSequence('*', ...array_fill(0, 12, provisioningScriptSshSuccess()));
+
+    return $connection;
+}
+
+function phpProvisioningConnection(bool $fpmInstalled, bool $nginxInstalled): FakeSSHConnection
+{
+    $connection = (new FakeSSHConnection())->connect();
+    $connection->addResponse(
+        '*dpkg -s*',
+        new SSHResult('cmd', 0, $fpmInstalled ? 'yes' : 'no', '', 0.01),
+    );
+
+    if ($fpmInstalled) {
+        $connection->addResponse(
+            '*command -v*nginx*',
+            new SSHResult('cmd', 0, $nginxInstalled ? 'yes' : 'no', '', 0.01),
+        );
+    }
+
+    $connection->addSequence('*', ...array_fill(0, 12, provisioningScriptSshSuccess()));
+
+    return $connection;
+}
+
+function serviceProvisioningConnection(
+    bool $serviceInstalled,
+    int $installSteps,
+    string $serviceBinary = 'mysql',
+): FakeSSHConnection {
+    $connection = (new FakeSSHConnection())->connect();
+    $connection->addResponse(
+        "*command -v*{$serviceBinary}*",
+        new SSHResult('cmd', 0, $serviceInstalled ? 'yes' : 'no', '', 0.01),
+    );
+
+    if ($serviceBinary === 'python3' && $serviceInstalled) {
+        $connection->addResponse(
+            '*command -v*gunicorn*',
+            new SSHResult('cmd', 0, 'yes', '', 0.01),
+        );
+    }
+
+    if ($serviceBinary === 'node' && $serviceInstalled) {
+        $connection->addResponse(
+            '*command -v*pm2*',
+            new SSHResult('cmd', 0, 'yes', '', 0.01),
+        );
+    }
+
+    $connection->addSequence('*', ...array_fill(0, max($installSteps + 4, 6), provisioningScriptSshSuccess()));
 
     return $connection;
 }

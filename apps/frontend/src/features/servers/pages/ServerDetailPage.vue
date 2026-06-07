@@ -14,12 +14,19 @@ import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import BackLink from '@/components/layout/BackLink.vue'
-import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import ProviderIcon from '@/features/servers/components/ProviderIcon.vue'
+import ServerObserveModeAlert from '@/features/servers/components/ServerObserveModeAlert.vue'
 
 import { deleteServer, testServerConnection } from '@/features/servers/api'
 import { useServersStore } from '@/features/servers/stores/useServersStore'
@@ -124,10 +131,22 @@ const managementModeLabel = computed((): string => {
   return 'Managed'
 })
 
+const isObserveMode = computed(
+  (): boolean => server.value?.managementMode === ManagementMode.Observe,
+)
+
 interface OverviewRow {
   label: string
   value: string
 }
+
+const installedServicesEmptyMessage = computed((): string => {
+  if (isObserveMode.value) {
+    return 'No services detected yet. HelixDeploy scans the server after SSH connects.'
+  }
+
+  return 'No services detected yet. HelixDeploy scans the server after SSH connects, or you can provision a stack manually.'
+})
 
 const overviewRows = computed((): OverviewRow[] => {
   if (server.value === null) {
@@ -306,6 +325,12 @@ onMounted(() => {
             <Badge v-if="server.project" variant="secondary">
               {{ server.project.name }}
             </Badge>
+            <Badge
+              variant="outline"
+              :class="isObserveMode ? 'border-primary/30 text-primary' : ''"
+            >
+              {{ managementModeLabel }}
+            </Badge>
           </div>
         </div>
 
@@ -319,7 +344,26 @@ onMounted(() => {
             <PlugIcon class="mr-2 size-4" />
             {{ isTestingConnection ? 'Testing…' : 'Test Connection' }}
           </Button>
+          <TooltipProvider v-if="isObserveMode">
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span class="inline-flex">
+                  <Button
+                    type="button"
+                    disabled
+                  >
+                    <ServerCogIcon class="mr-2 size-4" />
+                    Provision Server
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" class="max-w-xs text-xs">
+                Switch this server to Managed mode before provisioning. Observe mode keeps your existing stack unchanged.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button
+            v-else
             type="button"
             :disabled="isAwaitingDeletion"
             @click="isProvisionDrawerOpen = true"
@@ -360,6 +404,8 @@ onMounted(() => {
           </p>
         </div>
       </div>
+
+      <ServerObserveModeAlert v-if="isObserveMode" />
 
       <Tabs v-model="activeTab">
         <TabsList>
@@ -420,7 +466,7 @@ onMounted(() => {
                 </li>
               </ul>
               <p v-else class="text-sm text-muted-foreground">
-                No services detected yet. HelixDeploy scans the server after SSH connects, or you can provision a stack manually.
+                {{ installedServicesEmptyMessage }}
               </p>
             </div>
           </section>
@@ -477,6 +523,7 @@ onMounted(() => {
         v-if="isProvisionDrawerOpen"
         v-model:open="isProvisionDrawerOpen"
         :server-id="server.id"
+        :detected-services="installedServiceNames"
       />
 
       <ConfirmDestructiveDialog

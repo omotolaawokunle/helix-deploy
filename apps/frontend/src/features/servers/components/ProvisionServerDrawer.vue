@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { isAxiosError } from 'axios'
+import { InfoIcon, ShieldCheckIcon } from '@lucide/vue'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -40,9 +44,12 @@ import {
 interface Props {
   open: boolean
   serverId: string
+  detectedServices?: string[]
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  detectedServices: () => [],
+})
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
@@ -52,6 +59,7 @@ const router = useRouter()
 const { orgId } = useActiveOrg()
 
 const templates = ref<ProvisioningTemplateRecord[]>([])
+const templatesLoadedForOrgId = ref<string | null>(null)
 const isLoadingTemplates = ref(false)
 const selectedScripts = ref<Set<ProvisioningScript>>(new Set())
 const phpVersion = ref<string>('8.3')
@@ -83,6 +91,14 @@ const estimatedMinutes = computed(() =>
 const showPhpSelector = computed(() => selectedScripts.value.has('php'))
 const showNodeSelector = computed(() => selectedScripts.value.has('nodejs'))
 
+const detectedServiceLabels = computed((): string[] =>
+  props.detectedServices.map((service) => scriptLabels[service as ProvisioningScript] ?? service),
+)
+
+const skippedSelectedCount = computed((): number =>
+  [...selectedScripts.value].filter((script) => props.detectedServices.includes(script)).length,
+)
+
 function toggleScript(script: ProvisioningScript): void {
   const next = new Set(selectedScripts.value)
 
@@ -95,21 +111,35 @@ function toggleScript(script: ProvisioningScript): void {
   selectedScripts.value = next
 }
 
+function resetDrawerState(): void {
+  selectedScripts.value = new Set()
+  phpVersion.value = '8.3'
+  nodeVersion.value = 20
+  apiError.value = null
+}
+
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen) {
-      void loadTemplates()
+    if (!isOpen) {
+      resetDrawerState()
+      return
     }
+
+    void ensureTemplatesLoaded()
   },
 )
 
-async function loadTemplates(): Promise<void> {
+async function ensureTemplatesLoaded(): Promise<void> {
   const activeOrgId = orgId.value
 
   if (activeOrgId === null) {
     templates.value = []
+    templatesLoadedForOrgId.value = null
+    return
+  }
 
+  if (templatesLoadedForOrgId.value === activeOrgId && templates.value.length > 0) {
     return
   }
 
@@ -117,8 +147,10 @@ async function loadTemplates(): Promise<void> {
 
   try {
     templates.value = await fetchProvisioningTemplates(activeOrgId)
+    templatesLoadedForOrgId.value = activeOrgId
   } catch {
     templates.value = []
+    templatesLoadedForOrgId.value = null
   } finally {
     isLoadingTemplates.value = false
   }
@@ -142,6 +174,14 @@ function applyTemplate(template: ProvisioningTemplateRecord): void {
   if (typeof node === 'number') {
     nodeVersion.value = node
   }
+}
+
+function resolveProvisionError(error: unknown): string {
+  if (isAxiosError(error) && error.response?.status === 403) {
+    return 'Provisioning is disabled while this server is in Observe mode.'
+  }
+
+  return 'Unable to start provisioning. Please try again.'
 }
 
 async function handleSubmit(): Promise<void> {
@@ -168,8 +208,8 @@ async function handleSubmit(): Promise<void> {
       path: `/servers/${props.serverId}/provisioning`,
       query: { runId: response.jobId },
     })
-  } catch {
-    apiError.value = 'Unable to start provisioning. Please try again.'
+  } catch (error: unknown) {
+    apiError.value = resolveProvisionError(error)
   } finally {
     isSubmitting.value = false
   }
@@ -182,11 +222,46 @@ async function handleSubmit(): Promise<void> {
       <SheetHeader>
         <SheetTitle>Provision server</SheetTitle>
         <SheetDescription>
-          Select services to install on this server.
+          Install missing services only. Existing nginx configs and packages are detected and left in place.
         </SheetDescription>
       </SheetHeader>
 
       <SheetBody class="space-y-6">
+        <Alert
+          class="border-primary/20 bg-primary/5 text-foreground *:data-[slot=alert-description]:text-muted-foreground"
+          data-testid="provision-safe-stack-alert"
+        >
+          <ShieldCheckIcon class="text-primary" aria-hidden="true" />
+          <AlertTitle>Safe for imported servers</AlertTitle>
+          <AlertDescription>
+            HelixDeploy skips services already on the box, preserves existing nginx configuration, and
+            disables Apache if it would conflict with nginx on port 80.
+          </AlertDescription>
+        </Alert>
+
+        <div
+          v-if="detectedServiceLabels.length > 0"
+          class="rounded-lg border border-border bg-muted/30 px-4 py-3"
+          data-testid="provision-detected-services"
+        >
+          <p class="text-sm font-medium text-foreground">
+            Already detected on this server
+          </p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            These services will be skipped if selected again.
+          </p>
+          <div class="mt-3 flex flex-wrap gap-1.5">
+            <Badge
+              v-for="service in detectedServiceLabels"
+              :key="service"
+              variant="secondary"
+              class="capitalize"
+            >
+              {{ service }}
+            </Badge>
+          </div>
+        </div>
+
         <div class="space-y-2">
           <Label>Quick templates</Label>
           <div v-if="isLoadingTemplates" class="flex flex-wrap gap-2">
@@ -215,7 +290,7 @@ async function handleSubmit(): Promise<void> {
             <label
               v-for="script in PROVISIONING_SCRIPTS"
               :key="script"
-              class="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-3 text-sm text-foreground transition-colors hover:bg-muted/50"
+              class="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-3 text-sm text-foreground transition-colors duration-200 hover:bg-muted/50"
               :class="selectedScripts.has(script) ? 'border-primary bg-primary/5' : ''"
             >
               <input
@@ -224,7 +299,16 @@ async function handleSubmit(): Promise<void> {
                 :checked="selectedScripts.has(script)"
                 @change="toggleScript(script)"
               >
-              {{ scriptLabels[script] }}
+              <span class="flex min-w-0 flex-1 items-center justify-between gap-2">
+                <span>{{ scriptLabels[script] }}</span>
+                <Badge
+                  v-if="detectedServices.includes(script)"
+                  variant="outline"
+                  class="shrink-0 text-[10px] uppercase tracking-wide"
+                >
+                  Detected
+                </Badge>
+              </span>
             </label>
           </div>
         </div>
@@ -268,11 +352,18 @@ async function handleSubmit(): Promise<void> {
           </Select>
         </div>
 
-        <p class="text-sm text-muted-foreground">
-          Estimated time: ~{{ estimatedMinutes }} min
-        </p>
+        <div class="space-y-1 text-sm text-muted-foreground">
+          <p>Estimated time: ~{{ estimatedMinutes }} min</p>
+          <p v-if="skippedSelectedCount > 0" class="flex items-start gap-1.5">
+            <InfoIcon class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              {{ skippedSelectedCount }} selected service{{ skippedSelectedCount === 1 ? '' : 's' }}
+              already detected and will be skipped on the server.
+            </span>
+          </p>
+        </div>
 
-        <p v-if="apiError" class="text-sm text-destructive">
+        <p v-if="apiError" class="text-sm text-destructive" role="alert">
           {{ apiError }}
         </p>
       </SheetBody>

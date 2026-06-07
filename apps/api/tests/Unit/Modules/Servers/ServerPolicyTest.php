@@ -55,6 +55,28 @@ it('developer cannot provision or delete a server', function (): void {
         ->and($policy->delete($developer, $server))->toBeFalse();
 });
 
+it('owner cannot provision a server in observe mode', function (): void {
+    [$organization, $owner] = createOrganizationOwnerForServerPolicy();
+
+    $server = Server::query()->create([
+        'organization_id' => (string) $organization->getKey(),
+        'hostname' => 'observe-policy.example.test',
+        'ip_address' => '10.0.0.13',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'provider' => 'generic',
+        'status' => 'active',
+        'management_mode' => 'observe',
+        'created_by' => (string) $owner->getKey(),
+        'tags' => [],
+        'installed_services' => [],
+    ]);
+
+    $policy = new ServerPolicy();
+
+    expect($policy->provision($owner, $server))->toBeFalse();
+});
+
 /**
  * @return array{Organization, User}
  */

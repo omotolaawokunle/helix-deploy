@@ -40,6 +40,14 @@ class InstallRedis extends BaseProvisioningScript
     {
         $this->prepare($options);
 
+        if ($this->commandExists($ssh, 'redis-cli')) {
+            $this->logInfo($options, 'redis already installed — skipping package installation');
+            $this->runStep($ssh, 'systemctl enable redis-server', 'enable-redis');
+            $this->runStep($ssh, 'systemctl restart redis-server', 'restart-redis');
+
+            return;
+        }
+
         $this->runStep($ssh, $this->apt('apt-get update -y'), 'apt-update');
         $this->runStep($ssh, $this->apt('apt-get install -y redis-server'), 'install-redis');
         $this->runStep(

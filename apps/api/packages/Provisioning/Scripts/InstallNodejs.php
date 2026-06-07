@@ -49,6 +49,16 @@ class InstallNodejs extends BaseProvisioningScript
             ));
         }
 
+        if ($this->commandExists($ssh, 'node')) {
+            $this->logInfo($options, 'nodejs already installed — skipping package installation');
+
+            if (! $this->commandExists($ssh, 'pm2')) {
+                $this->runStep($ssh, 'npm install -g pm2', 'install-pm2');
+            }
+
+            return;
+        }
+
         $version = $configuredVersion->value;
 
         $this->runStep($ssh, $this->apt('apt-get update -y'), 'apt-update');

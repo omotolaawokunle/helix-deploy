@@ -52,3 +52,45 @@ it('dispatches provisioning job and returns channel metadata', function (): void
 
     Queue::assertPushed(ProvisionServerJob::class, 1);
 });
+
+it('returns forbidden when server is in observe mode', function (): void {
+    Queue::fake();
+
+    $organization = Organization::query()->create([
+        'name' => 'Observe Provisioning Org',
+        'slug' => 'observe-provisioning-org-'.Str::random(6),
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $owner = User::factory()->create([
+        'email_verified_at' => now(),
+        'current_organization_id' => (string) $organization->getKey(),
+    ]);
+    $organization->users()->attach($owner->getKey(), ['role' => 'owner']);
+
+    $server = Server::query()->withoutGlobalScope('owned_by_organization')->create([
+        'organization_id' => (string) $organization->getKey(),
+        'hostname' => 'observe-provisioning.test',
+        'ip_address' => '10.0.0.100',
+        'ssh_port' => 22,
+        'ssh_user' => 'root',
+        'provider' => 'generic',
+        'status' => 'active',
+        'management_mode' => 'observe',
+        'credential_id' => null,
+        'created_by' => (string) $owner->getKey(),
+        'tags' => [],
+        'installed_services' => [],
+    ]);
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/servers/{$server->id}/provision", [
+            'scripts' => ['supervisor'],
+            'options' => [],
+        ])
+        ->assertForbidden();
+
+    Queue::assertNothingPushed();
+});

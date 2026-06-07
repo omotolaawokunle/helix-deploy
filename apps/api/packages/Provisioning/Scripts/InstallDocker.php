@@ -31,6 +31,13 @@ class InstallDocker extends BaseProvisioningScript
     {
         $this->prepare($options);
 
+        if ($this->commandExists($ssh, 'docker')) {
+            $this->logInfo($options, 'docker already installed — skipping installation');
+            $this->runStep($ssh, 'usermod -aG docker deploy', 'add-deploy-to-docker-group');
+
+            return;
+        }
+
         $this->runStep($ssh, 'curl -fsSL https://get.docker.com | sh', 'install-docker');
         $this->runStep($ssh, 'usermod -aG docker deploy', 'add-deploy-to-docker-group');
         $this->runStep($ssh, $this->apt('apt-get install -y docker-compose-plugin'), 'install-docker-compose-plugin');
