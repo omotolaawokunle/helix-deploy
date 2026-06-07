@@ -31,6 +31,14 @@ class InstallSupervisor extends BaseProvisioningScript
     {
         $this->prepare($options);
 
+        if ($this->commandExists($ssh, 'supervisorctl')) {
+            $this->logInfo($options, 'supervisor already installed — skipping package installation');
+            $this->runStep($ssh, 'systemctl enable supervisor', 'enable-supervisor');
+            $this->runStep($ssh, 'systemctl start supervisor', 'start-supervisor');
+
+            return;
+        }
+
         $this->runStep($ssh, $this->apt('apt-get update -y'), 'apt-update');
         $this->runStep($ssh, $this->apt('apt-get install -y supervisor'), 'install-supervisor');
         $this->runStep($ssh, 'systemctl enable supervisor', 'enable-supervisor');

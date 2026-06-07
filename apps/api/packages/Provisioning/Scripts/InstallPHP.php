@@ -50,28 +50,37 @@ class InstallPHP extends BaseProvisioningScript
         }
 
         $version = $configuredVersion->value;
+        $fpmPackage = "php{$version}-fpm";
 
-        $packages = [
-            "php{$version}-fpm",
-            "php{$version}-mbstring",
-            "php{$version}-xml",
-            "php{$version}-curl",
-            "php{$version}-zip",
-            "php{$version}-bcmath",
-            "php{$version}-mysql",
-            "php{$version}-pgsql",
-            "php{$version}-redis",
-            "php{$version}-gd",
-            "php{$version}-intl",
-            "php{$version}-sqlite3",
-            'composer',
-        ];
+        if ($this->packageInstalled($ssh, $fpmPackage)) {
+            $this->logInfo($options, "{$fpmPackage} already installed — skipping package installation");
+        } else {
+            $packages = [
+                $fpmPackage,
+                "php{$version}-mbstring",
+                "php{$version}-xml",
+                "php{$version}-curl",
+                "php{$version}-zip",
+                "php{$version}-bcmath",
+                "php{$version}-mysql",
+                "php{$version}-pgsql",
+                "php{$version}-redis",
+                "php{$version}-gd",
+                "php{$version}-intl",
+                "php{$version}-sqlite3",
+                'composer',
+            ];
 
-        $this->runStep($ssh, $this->apt('apt-get install -y software-properties-common'), 'install-apt-prereqs');
-        $this->runStep($ssh, $this->apt('add-apt-repository -y ppa:ondrej/php'), 'add-php-ppa');
-        $this->runStep($ssh, $this->apt('apt-get update -y'), 'apt-update-php');
-        $this->runStep($ssh, $this->apt('apt-get install -y '.implode(' ', $packages)), 'install-php-packages');
-        $this->runStep($ssh, "systemctl enable php{$version}-fpm", 'enable-php-fpm');
-        $this->runStep($ssh, "systemctl start php{$version}-fpm", 'start-php-fpm');
+            $this->runStep($ssh, $this->apt('apt-get install -y software-properties-common'), 'install-apt-prereqs');
+            $this->runStep($ssh, $this->apt('add-apt-repository -y ppa:ondrej/php'), 'add-php-ppa');
+            $this->runStep($ssh, $this->apt('apt-get update -y'), 'apt-update-php');
+            $this->runStep($ssh, $this->apt('apt-get install -y '.implode(' ', $packages)), 'install-php-packages');
+        }
+
+        $this->runStep($ssh, "systemctl enable --now php{$version}-fpm", 'enable-php-fpm');
+
+        if ($this->commandExists($ssh, 'nginx')) {
+            $this->preventApachePortConflict($ssh);
+        }
     }
 }

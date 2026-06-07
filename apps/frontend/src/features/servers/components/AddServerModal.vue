@@ -320,8 +320,9 @@ async function handleSubmit(): Promise<void> {
               <AlertTitle>Disable existing deploy workflows</AlertTitle>
               <AlertDescription>
                 If this server already deploys via GitHub Actions or another CI pipeline,
-                turn those workflows off before importing as Managed. Otherwise two systems
-                may deploy at the same time.
+                turn those workflows off before importing as Managed. Provisioning can also install
+                or update stack packages — existing nginx configs are preserved, but only run it when
+                you intend to change the server setup.
               </AlertDescription>
             </Alert>
 
@@ -334,11 +335,11 @@ async function handleSubmit(): Promise<void> {
                 Observe mode
               </h3>
               <p class="mt-1 text-xs text-muted-foreground">
-                HelixDeploy monitors health and inventory without running deploy commands.
+                HelixDeploy monitors health and inventory without running deploy commands or provisioning.
               </p>
               <ol class="mt-3 list-decimal space-y-1.5 pl-4 text-sm text-foreground">
                 <li>Provide SSH credentials HelixDeploy can use for health checks.</li>
-                <li>Keep your existing CI/CD pipeline unchanged.</li>
+                <li>Keep your existing CI/CD pipeline and server stack unchanged.</li>
                 <li>Assign a project and environment for dashboard visibility.</li>
                 <li>Switch to Managed mode later when you are ready to migrate.</li>
               </ol>

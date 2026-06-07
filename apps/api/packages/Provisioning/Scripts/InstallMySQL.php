@@ -40,6 +40,14 @@ class InstallMySQL extends BaseProvisioningScript
     {
         $this->prepare($options);
 
+        if ($this->commandExists($ssh, 'mysql')) {
+            $this->logInfo($options, 'mysql already installed — skipping package installation');
+            $this->runStep($ssh, 'systemctl enable mysql', 'enable-mysql');
+            $this->runStep($ssh, 'systemctl start mysql', 'start-mysql');
+
+            return;
+        }
+
         $password = Str::random(32);
         $escapedPassword = escapeshellarg($password);
 

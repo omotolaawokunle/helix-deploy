@@ -40,6 +40,14 @@ class InstallPostgreSQL extends BaseProvisioningScript
     {
         $this->prepare($options);
 
+        if ($this->commandExists($ssh, 'psql')) {
+            $this->logInfo($options, 'postgresql already installed — skipping package installation');
+            $this->runStep($ssh, 'systemctl enable postgresql', 'enable-postgresql');
+            $this->runStep($ssh, 'systemctl start postgresql', 'start-postgresql');
+
+            return;
+        }
+
         $password = Str::random(32);
         $escapedPassword = str_replace("'", "''", $password);
 

@@ -6,6 +6,7 @@ namespace App\Modules\Servers\Policies;
 
 use App\Models\User;
 use App\Modules\Organizations\Models\Organization;
+use App\Modules\Servers\Enums\ManagementMode;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use App\Modules\Teams\Enums\TeamRole;
@@ -50,6 +51,10 @@ class ServerPolicy
 
     public function provision(User $user, Server $server): bool
     {
+        if ($server->management_mode === ManagementMode::OBSERVE) {
+            return false;
+        }
+
         return in_array($this->roleInOrganization($user, $server->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
     }
 
