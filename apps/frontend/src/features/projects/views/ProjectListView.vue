@@ -135,7 +135,7 @@ onMounted(() => {
     <EmptyState
       v-else-if="isEmpty"
       title="No projects yet"
-      description="Create a project to organize servers and environments before you deploy."
+      description="Optional but recommended — group servers and environments by application or client. Assign servers to a project when you add them."
       :icon="FolderKanbanIcon"
       data-testid="projects-empty"
       @action="canManage ? (isCreateOpen = true) : undefined"

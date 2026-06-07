@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
+import FirstVisitHint from '@/features/onboarding/components/FirstVisitHint.vue'
 import CloudflareConnectionPanel from '@/features/integrations/components/CloudflareConnectionPanel.vue'
 import DigitalOceanConnectionPanel from '@/features/integrations/components/DigitalOceanConnectionPanel.vue'
 
@@ -16,7 +17,14 @@ const canManage = computed(() => authStore.isAdmin)
   <div class="space-y-8">
     <PageHeader
       title="Integrations"
-      description="Connect external services your organization uses for DNS, credentials, and deployment workflows."
+      description="Connect DNS providers to automate records when you create sites. Tokens are encrypted and never shown after save."
+    />
+
+    <FirstVisitHint
+      v-if="orgId !== null"
+      hint-id="integrations-settings"
+      title="When to connect DNS"
+      description="Connect Cloudflare or DigitalOcean here, assign zones to a project, then enable auto-create DNS on each site. Skip this page if you manage DNS records manually."
     />
 
     <div

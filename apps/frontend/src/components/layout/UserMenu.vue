@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
+  ListChecksIcon,
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
   SunIcon,
   UserIcon,
 } from '@lucide/vue'
+import { useOnboardingDismiss } from '@/features/onboarding/composables/useOnboardingProgress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -31,6 +33,7 @@ import { getInitials } from '@/lib/utils'
 const authStore = useAuthStore()
 const router = useRouter()
 const { preference } = useTheme()
+const { restore: restoreOnboarding } = useOnboardingDismiss()
 
 const userName = computed(() => authStore.user?.name ?? 'User')
 
@@ -57,6 +60,16 @@ const themeLabel = computed(() => {
 async function handleLogout(): Promise<void> {
   await authStore.logout()
   await router.push('/login')
+}
+
+async function handleShowSetupGuide(): Promise<void> {
+  const orgId = authStore.currentOrg?.id
+
+  if (orgId !== undefined) {
+    restoreOnboarding(orgId)
+  }
+
+  await router.push('/dashboard')
 }
 </script>
 
@@ -110,6 +123,11 @@ async function handleLogout(): Promise<void> {
           </DropdownMenuRadioGroup>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
+
+      <DropdownMenuItem class="cursor-pointer" @select="handleShowSetupGuide">
+        <ListChecksIcon class="mr-2 size-4" />
+        Getting started
+      </DropdownMenuItem>
 
       <DropdownMenuSeparator />
       <DropdownMenuItem class="cursor-pointer" @select="handleLogout">

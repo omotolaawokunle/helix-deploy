@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
+import FirstVisitHint from '@/features/onboarding/components/FirstVisitHint.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import BackLink from '@/components/layout/BackLink.vue'
@@ -161,6 +162,12 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+      <FirstVisitHint
+        hint-id="site-detail"
+        title="Deploy from this page"
+        description="Use the Deployments tab to trigger deploys and watch logs stream in real time. Production environments require confirmation before deploy or rollback."
+      />
 
       <Tabs v-model="activeTab">
         <TabsList>
