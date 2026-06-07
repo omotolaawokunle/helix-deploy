@@ -11,6 +11,7 @@ import {
 import { toast } from 'vue-sonner'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
 import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
+import FirstVisitHint from '@/features/onboarding/components/FirstVisitHint.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import BackLink from '@/components/layout/BackLink.vue'
@@ -406,6 +407,12 @@ onMounted(() => {
       </div>
 
       <ServerObserveModeAlert v-if="isObserveMode" />
+
+      <FirstVisitHint
+        hint-id="server-detail"
+        title="Agentless SSH"
+        description="HelixDeploy connects over SSH — no agent is installed on your server. Use Provision Server to install Nginx, PHP, Node.js, and other services. Logs stream live during provisioning."
+      />
 
       <Tabs v-model="activeTab">
         <TabsList>

@@ -295,7 +295,7 @@ const canConfirmDelete = computed(
       v-else-if="isEmpty"
       :icon="CpuIcon"
       title="No build runners yet"
-      description="Register a build runner to offload compilation from your deployment servers."
+      description="Only needed when a site uses the build runner strategy. Skip this if you compile on the deployment server — register a runner to offload builds from your app servers."
       data-testid="build-runners-empty"
       @action="isAddModalOpen = true"
     >

@@ -6,6 +6,9 @@ import { RocketIcon, ServerIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import EnvironmentBadge from '@/components/common/EnvironmentBadge.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import GettingStartedPanel from '@/features/onboarding/components/GettingStartedPanel.vue'
+import { useOnboardingProgress } from '@/features/onboarding/composables/useOnboardingProgress'
+import type { OnboardingInput } from '@/features/onboarding/types'
 import LoadErrorPanel from '@/components/common/LoadErrorPanel.vue'
 import OverviewStatSkeleton from '@/components/common/OverviewStatSkeleton.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
@@ -34,6 +37,8 @@ import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { triggerDeployment } from '@/features/deployments/api'
 import { loadDashboardData } from '@/features/monitoring/api'
 import { patchServerMetricsInList } from '@/features/monitoring/lib/patchServerMetricsInList'
+import { fetchProjects } from '@/features/projects/api'
+import { fetchDnsProviderConnections } from '@/features/integrations/api'
 import { fetchOrgSites } from '@/features/sites/api'
 import { formatDurationSeconds, formatMetricPercent, formatRelativeTime, metricUsageClass } from '@/lib/format'
 import { useRealtimeStore } from '@/stores/useRealtimeStore'
@@ -49,8 +54,42 @@ const stats = ref<DashboardStats | null>(null)
 const servers = ref<Server[]>([])
 const deployments = ref<DeploymentListItem[]>([])
 const sites = ref<Site[]>([])
+const projectCount = ref(0)
+const hasDnsIntegration = ref(false)
 const isLoading = ref(true)
 const loadError = ref<string | null>(null)
+
+const orgId = computed(() => authStore.currentOrg?.id)
+
+const onboardingInput = computed((): OnboardingInput => {
+  const firstServer = servers.value[0] ?? null
+  const firstSite = sites.value[0] ?? null
+
+  return {
+    serverCount: servers.value.length,
+    hasProvisionedServer: servers.value.some(
+      server => (server.installedServices ?? []).length > 0,
+    ),
+    projectCount: projectCount.value,
+    siteCount: sites.value.length,
+    deploymentCount: deployments.value.length,
+    hasDnsIntegration: hasDnsIntegration.value,
+    firstServerId: firstServer?.id ?? null,
+    firstSiteId: firstSite?.id ?? null,
+    firstSiteServerId: firstSite?.serverId ?? null,
+  }
+})
+
+const {
+  steps: onboardingSteps,
+  completedCount: onboardingCompletedCount,
+  currentStep: onboardingCurrentStep,
+  showPanel: showGettingStarted,
+  dismiss: dismissOnboarding,
+} = useOnboardingProgress({
+  orgId,
+  input: onboardingInput,
+})
 
 const quickDeploySiteId = ref('')
 
@@ -170,14 +209,19 @@ async function refreshDashboard(): Promise<void> {
     }
 
     try {
-      const [data, orgSites] = await Promise.all([
+      const [data, orgSites, projects, dnsProviders] = await Promise.all([
         loadDashboardData(orgId),
         fetchOrgSites(orgId),
+        fetchProjects(orgId),
+        fetchDnsProviderConnections(orgId),
       ])
       stats.value = data.stats
       servers.value = data.servers
       deployments.value = data.deployments
       sites.value = orgSites
+      projectCount.value = projects.length
+      hasDnsIntegration.value = dnsProviders.cloudflare.connected
+        || dnsProviders.digitalocean.connected
       loadError.value = null
     } catch {
       loadError.value = 'Unable to load dashboard.'
@@ -307,6 +351,14 @@ onUnmounted(() => {
         :message="loadError"
         class="py-6"
         @retry="refreshDashboard"
+      />
+
+      <GettingStartedPanel
+        v-if="!isLoading && showGettingStarted"
+        :steps="onboardingSteps"
+        :completed-count="onboardingCompletedCount"
+        :current-step="onboardingCurrentStep"
+        @dismiss="dismissOnboarding"
       />
 
       <section>
@@ -462,7 +514,7 @@ onUnmounted(() => {
                 <div class="h-5 w-16 animate-pulse rounded-full bg-muted" />
               </li>
             </template>
-            <li v-else-if="servers.length === 0">
+            <li v-else-if="servers.length === 0 && !showGettingStarted">
               <EmptyState
                 :icon="ServerIcon"
                 title="No servers registered"

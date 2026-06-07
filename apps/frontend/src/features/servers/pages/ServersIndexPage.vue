@@ -222,7 +222,7 @@ function handleServerRegistered(payload: { publicKey: string | null; sshUser: st
     <EmptyState
       v-else-if="isEmpty && !hasActiveFilters"
       title="No servers yet"
-      description="Register your first server to start deploying applications."
+      description="Servers are the machines HelixDeploy connects to over SSH. Register one, then provision it and create sites to deploy."
       :icon="ServerIcon"
       data-testid="servers-empty"
       @action="isAddModalOpen = true"
