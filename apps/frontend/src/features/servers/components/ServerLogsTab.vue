@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, toRef, watch } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import LogViewerControls from '@/components/common/LogViewerControls.vue'
 import LogViewerPanel from '@/components/common/LogViewerPanel.vue'
 import { useServerLogsChannel } from '@/composables/useServerLogsChannel'
 import { useSnapshotLogViewer } from '@/composables/useSnapshotLogViewer'
+import { LOG_LINE_COUNT_OPTIONS } from '@/features/logs/constants'
 import { fetchServerLogs } from '@/features/servers/api'
 import type { ServerLogType } from '@/features/logs/types'
 
@@ -18,12 +19,18 @@ const serverId = toRef(props, 'serverId')
 const logType = ref<ServerLogType>('nginx_access')
 const lineCount = ref(100)
 
-const lineCountOptions = [50, 100, 200, 500] as const
-
 const logTypeOptions: Array<{ value: ServerLogType; label: string }> = [
   { value: 'nginx_access', label: 'Access log' },
   { value: 'nginx_error', label: 'Error log' },
 ]
+
+const description = computed((): string => {
+  if (logType.value === 'nginx_access') {
+    return 'Snapshot of the nginx access log. Use Refresh to fetch the latest lines from the server.'
+  }
+
+  return 'Snapshot of the nginx error log. Use Refresh to fetch the latest lines from the server.'
+})
 
 const {
   logLines,
@@ -58,14 +65,15 @@ void loadLogs(false)
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 animate-page-in motion-reduce:animate-none">
     <LogViewerControls
+      controls-id="server-logs"
       :log-type="logType"
       :line-count="lineCount"
       :log-type-options="logTypeOptions"
-      :line-count-options="lineCountOptions"
+      :line-count-options="LOG_LINE_COUNT_OPTIONS"
       :is-loading="isLoading"
-      description="Snapshot of the selected nginx log file. Use Refresh to fetch the latest lines from the server."
+      :description="description"
       refresh-test-id="server-logs-refresh"
       @update:log-type="handleLogTypeUpdate"
       @update:line-count="lineCount = $event"

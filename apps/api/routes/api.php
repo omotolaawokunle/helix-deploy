@@ -18,6 +18,7 @@ use App\Modules\Projects\Controllers\EnvironmentController;
 use App\Modules\Projects\Controllers\ProjectController;
 use App\Modules\Provisioning\Controllers\ProvisioningController;
 use App\Modules\Provisioning\Controllers\ProvisioningTemplateController;
+use App\Modules\Servers\Controllers\ServerSslController;
 use App\Modules\Servers\Controllers\ServerController;
 use App\Modules\Servers\Controllers\ServerGroupController;
 use App\Modules\Servers\Controllers\ServerLogController;
@@ -194,6 +195,10 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::post('/servers/{server}/services/{service}/start', [ServerServiceController::class, 'start']);
     Route::post('/servers/{server}/services/{service}/stop', [ServerServiceController::class, 'stop']);
     Route::post('/servers/{server}/services/{service}/restart', [ServerServiceController::class, 'restart']);
+    Route::get('/servers/{server}/ssl-certificates', [ServerSslController::class, 'index']);
+    Route::post('/servers/{server}/ssl-certificates/sync', [ServerSslController::class, 'sync']);
+    Route::post('/servers/{server}/ssl-certificates/adopt', [ServerSslController::class, 'adopt']);
+    Route::post('/servers/{server}/ssl-certificates/renew', [ServerSslController::class, 'renew']);
     Route::get('/sites/{site}/deployments', [DeploymentController::class, 'indexForSite']);
     Route::post('/sites/{site}/deployments', [DeploymentController::class, 'store']);
     Route::get('/deployments/{deployment}', [DeploymentController::class, 'show']);

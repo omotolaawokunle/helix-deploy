@@ -8,20 +8,51 @@ use App\Modules\Sites\Enums\SiteLogReadMode;
 
 final readonly class SiteLogReadTarget
 {
+    /**
+     * @param list<string> $candidatePaths Directory paths for LATEST_GLOB, file paths for FILE
+     */
     public function __construct(
         public SiteLogReadMode $mode,
         public string $path,
         public string $globPattern = '',
+        public array $candidatePaths = [],
     ) {
     }
 
-    public static function file(string $path): self
+    /**
+     * @return list<string>
+     */
+    public function resolvedPaths(): array
     {
-        return new self(SiteLogReadMode::FILE, $path);
+        return $this->candidatePaths !== [] ? $this->candidatePaths : [$this->path];
     }
 
-    public static function latestGlob(string $directory, string $pattern): self
+    /**
+     * @param list<string> $candidateDirectories
+     */
+    public static function latestGlob(string $directory, string $pattern, array $candidateDirectories = []): self
     {
-        return new self(SiteLogReadMode::LATEST_GLOB, $directory, $pattern);
+        $candidates = $candidateDirectories !== [] ? $candidateDirectories : [$directory];
+
+        return new self(
+            mode: SiteLogReadMode::LATEST_GLOB,
+            path: $candidates[0],
+            globPattern: $pattern,
+            candidatePaths: $candidates,
+        );
+    }
+
+    /**
+     * @param list<string> $candidateFiles
+     */
+    public static function file(string $path, array $candidateFiles = []): self
+    {
+        $candidates = $candidateFiles !== [] ? $candidateFiles : [$path];
+
+        return new self(
+            mode: SiteLogReadMode::FILE,
+            path: $candidates[0],
+            candidatePaths: $candidates,
+        );
     }
 }

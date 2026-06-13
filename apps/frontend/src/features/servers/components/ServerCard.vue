@@ -21,6 +21,42 @@ const environmentName = computed(
 )
 
 const isProduction = computed(() => props.server.environment?.isProduction ?? false)
+
+const sslBadgeLabel = computed((): string | null => {
+  const summary = props.server.sslSummary
+
+  if (summary === null || summary.activeCount === 0) {
+    return null
+  }
+
+  if (summary.expiringSoonCount > 0) {
+    return 'SSL expiring soon'
+  }
+
+  return 'SSL active'
+})
+
+const sslBadgeVariant = computed((): 'warning' | 'success' => {
+  if ((props.server.sslSummary?.expiringSoonCount ?? 0) > 0) {
+    return 'warning'
+  }
+
+  return 'success'
+})
+
+const sslBadgeAriaLabel = computed((): string | null => {
+  const summary = props.server.sslSummary
+
+  if (summary === null || summary.activeCount === 0) {
+    return null
+  }
+
+  if (summary.expiringSoonCount > 0) {
+    return `${summary.expiringSoonCount} of ${summary.activeCount} SSL certificate${summary.activeCount === 1 ? '' : 's'} expiring within 30 days`
+  }
+
+  return `${summary.activeCount} active SSL certificate${summary.activeCount === 1 ? '' : 's'}`
+})
 </script>
 
 <template>
@@ -75,7 +111,28 @@ const isProduction = computed(() => props.server.environment?.isProduction ?? fa
       />
 
       <div class="mt-4 flex items-center justify-between border-t pt-4">
-        <StatusBadge :status="server.status" type="server" />
+        <div class="flex flex-wrap items-center gap-2">
+          <StatusBadge :status="server.status" type="server" />
+          <Transition name="fade-up">
+            <Badge
+              v-if="sslBadgeLabel !== null"
+              :variant="sslBadgeVariant === 'warning' ? 'outline' : 'secondary'"
+              class="text-xs font-normal transition-colors duration-200 motion-reduce:transition-none"
+              :class="sslBadgeVariant === 'warning'
+                ? 'border-amber-500/40 text-amber-700 dark:text-amber-400'
+                : 'border-emerald-500/30 text-emerald-700 dark:text-emerald-400'"
+              :aria-label="sslBadgeAriaLabel ?? undefined"
+              data-testid="server-ssl-badge"
+            >
+              <span
+                v-if="sslBadgeVariant === 'warning'"
+                class="mr-1.5 inline-flex size-1.5 animate-pulse rounded-full bg-amber-500 motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+              {{ sslBadgeLabel }}
+            </Badge>
+          </Transition>
+        </div>
         <span
           v-if="server.managementMode === 'observe'"
           class="text-xs text-muted-foreground"

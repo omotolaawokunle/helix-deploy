@@ -33,6 +33,7 @@ const LOADING_MESSAGES = [
 ] as const
 
 const linesRef = toRef(props, 'lines')
+const contentRef = ref<HTMLElement | null>(null)
 const showReadyFlash = ref(false)
 let readyFlashTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -110,9 +111,9 @@ watch(
       return
     }
 
-    const element = document.querySelector('[data-testid="log-viewer-content"]')
+    const element = contentRef.value
 
-    if (element instanceof HTMLElement) {
+    if (element !== null) {
       element.scrollTop = element.scrollHeight
     }
   },
@@ -244,6 +245,7 @@ onUnmounted(() => {
         </div>
         <pre
           v-else
+          ref="contentRef"
           class="log-panel max-h-[70vh] min-h-48 overflow-auto whitespace-pre-wrap p-4 text-zinc-300"
           data-testid="log-viewer-content"
         >{{ displayText }}</pre>

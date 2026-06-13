@@ -49,6 +49,9 @@ const CommandRunnerTab = defineAsyncComponent(
 const ServerLogsTab = defineAsyncComponent(
   () => import('@/features/servers/components/ServerLogsTab.vue'),
 )
+const ServerSslTab = defineAsyncComponent(
+  () => import('@/features/servers/components/ServerSslTab.vue'),
+)
 const ProvisionServerDrawer = defineAsyncComponent(
   () => import('@/features/servers/components/ProvisionServerDrawer.vue'),
 )
@@ -68,6 +71,18 @@ const isDeleteDialogOpen = ref(false)
 const isDeleting = ref(false)
 const isAwaitingDeletion = ref(false)
 const activeTab = ref('overview')
+
+const SERVER_TAB_IDS = ['overview', 'sites', 'ssl', 'cron', 'daemons', 'commands', 'logs'] as const
+
+function applyTabFromQuery(): void {
+  const tab = route.query.tab
+
+  if (typeof tab !== 'string' || !SERVER_TAB_IDS.includes(tab as typeof SERVER_TAB_IDS[number])) {
+    return
+  }
+
+  activeTab.value = tab
+}
 
 const serverId = computed(() => String(route.params.id))
 
@@ -285,8 +300,18 @@ async function handleTestConnection(): Promise<void> {
 }
 
 onMounted(() => {
+  applyTabFromQuery()
   void loadServer()
 })
+
+watch(
+  () => server.value?.managementMode,
+  (mode) => {
+    if (mode === ManagementMode.Observe && activeTab.value === 'ssl') {
+      activeTab.value = 'overview'
+    }
+  },
+)
 </script>
 
 <template>
@@ -434,6 +459,9 @@ onMounted(() => {
           <TabsTrigger value="sites">
             Sites
           </TabsTrigger>
+          <TabsTrigger v-if="!isObserveMode" value="ssl">
+            SSL
+          </TabsTrigger>
           <TabsTrigger value="cron">
             Cron Jobs
           </TabsTrigger>
@@ -501,6 +529,15 @@ onMounted(() => {
             v-if="activeTab === 'sites'"
             :server-id="server.id"
             :project-id="server.project?.id ?? null"
+          />
+        </TabsContent>
+
+        <TabsContent value="ssl" class="mt-6">
+          <ServerSslTab
+            v-if="activeTab === 'ssl' && !isObserveMode"
+            :server-id="server.id"
+            :is-production="isProduction"
+            :can-manage="canManageServices"
           />
         </TabsContent>
 

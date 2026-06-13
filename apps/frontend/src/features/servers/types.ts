@@ -47,6 +47,24 @@ export interface EnvironmentOption extends Pick<Environment, 'id' | 'name'> {
   isProduction?: boolean
 }
 
+export interface ServerSslCertificateRow {
+  siteId: string
+  domain: string
+  sslStatus: string
+  sslExpiresAt: string | null
+  sslCheckedAt: string | null
+  daysUntilExpiry: number | null
+}
+
+export interface ServerSslOverview {
+  hasCertbot: boolean
+  activeCertificateCount: number
+  expiringSoonCount: number
+  nearestExpiryAt: string | null
+  syncQueued: boolean
+  certificates: ServerSslCertificateRow[]
+}
+
 export const PROVISIONING_SCRIPTS = [
   'create-deploy-user',
   'nginx',

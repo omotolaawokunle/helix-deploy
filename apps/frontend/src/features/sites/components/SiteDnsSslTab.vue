@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { RefreshCwIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import StatusBadge from '@/components/common/StatusBadge.vue'
@@ -8,6 +9,8 @@ import { dnsRecordDescription } from '@/features/integrations/lib/dnsProviderCon
 import { DNS_PROVIDER_LABELS, dnsProviderLabel, type DnsProvider } from '@/features/integrations/types'
 import { retrySiteDns, retrySiteSsl } from '@/features/integrations/api'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
+import { formatSslExpiryRelative } from '@/features/sites/composables/useSslExpiryDisplay'
+import { formatRelativeTime } from '@/lib/format'
 import type { Site } from '@/types'
 
 interface Props {
@@ -72,6 +75,19 @@ const sslChallengeLabel = computed(() => {
   return '—'
 })
 
+const sslExpiryLabel = computed((): string | null => {
+  if (props.site.sslStatus !== 'active' || props.site.sslExpiresAt === null) {
+    return null
+  }
+
+  return formatSslExpiryRelative(props.site.sslExpiresAt)
+})
+
+const showAdoptHint = computed(
+  (): boolean => !props.site.enableSsl
+    && (props.site.sslStatus === null || props.site.sslStatus === 'none'),
+)
+
 async function handleRetryDns(): Promise<void> {
   isRetryingDns.value = true
 
@@ -111,7 +127,7 @@ async function handleRetrySsl(): Promise<void> {
   <div class="space-y-6">
     <div
       v-if="!showDnsSection && !showSslSection"
-      class="panel border-dashed p-8 text-center"
+      class="panel animate-panel-in border-dashed p-8 text-center motion-reduce:animate-none"
     >
       <p class="text-sm text-muted-foreground">
         DNS and SSL automation were not enabled for this site.
@@ -119,11 +135,27 @@ async function handleRetrySsl(): Promise<void> {
       <p class="mt-1 text-xs text-muted-foreground">
         Enable auto-create DNS or Let's Encrypt when creating a site, or configure records manually.
       </p>
+      <Transition name="fade-up">
+        <p
+          v-if="showAdoptHint"
+          class="mt-4 text-xs text-muted-foreground"
+          data-testid="site-ssl-adopt-hint"
+        >
+          If a certificate is already installed on the server, open the
+          <RouterLink
+            :to="`/servers/${site.serverId}?tab=ssl`"
+            class="font-medium text-primary underline-offset-4 transition-colors duration-150 hover:underline motion-reduce:transition-none"
+          >
+            server SSL tab
+          </RouterLink>
+          and click Adopt existing SSL.
+        </p>
+      </Transition>
     </div>
 
     <section
       v-if="showDnsSection"
-      class="panel space-y-4 p-6"
+      class="panel animate-panel-in space-y-4 p-6 motion-reduce:animate-none"
       data-testid="site-dns-section"
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -204,7 +236,7 @@ async function handleRetrySsl(): Promise<void> {
 
     <section
       v-if="showSslSection"
-      class="panel space-y-4 p-6"
+      class="panel animate-panel-in animate-panel-in-delay-1 space-y-4 p-6 motion-reduce:animate-none"
       data-testid="site-ssl-section"
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -246,6 +278,26 @@ async function handleRetrySsl(): Promise<void> {
           </dt>
           <dd class="font-medium">
             {{ site.sslProvider }}
+          </dd>
+        </div>
+        <div v-if="sslExpiryLabel !== null">
+          <dt class="text-muted-foreground">
+            Expires
+          </dt>
+          <dd class="font-medium">
+            <Transition name="status-crossfade" mode="out-in">
+              <span :key="sslExpiryLabel">
+                {{ sslExpiryLabel }}
+              </span>
+            </Transition>
+          </dd>
+        </div>
+        <div v-if="site.sslCheckedAt !== null">
+          <dt class="text-muted-foreground">
+            Last checked
+          </dt>
+          <dd class="font-medium">
+            {{ formatRelativeTime(site.sslCheckedAt) }}
           </dd>
         </div>
       </dl>

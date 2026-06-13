@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Servers\Resources;
 
+use App\Modules\Servers\Services\ServerSslOverviewBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -37,6 +38,10 @@ class ServerResource extends JsonResource
             'tags' => $this->tags ?? [],
             'installedServices' => $this->installed_services ?? [],
             'healthStatus' => $this->health_status,
+            'sslSummary' => $this->when(
+                array_key_exists('active_ssl_count', $this->resource->getAttributes()),
+                fn (): ?array => app(ServerSslOverviewBuilder::class)->buildListSummary($this->resource),
+            ),
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];

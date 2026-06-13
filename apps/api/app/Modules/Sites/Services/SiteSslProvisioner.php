@@ -10,6 +10,7 @@ use App\Modules\Integrations\Enums\DnsProvider;
 use App\Modules\Integrations\Services\DnsProviderRegistry;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Contracts\NginxConfigGeneratorInterface;
+use App\Modules\Sites\Contracts\SiteSslCertificateInspectorInterface;
 use App\Modules\Sites\Contracts\SiteSslProvisionerInterface;
 use App\Modules\Integrations\Events\SiteDnsSslStatusChanged;
 use App\Modules\Sites\Enums\SslChallenge;
@@ -29,6 +30,7 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
         private readonly NginxConfigGeneratorInterface $nginxConfigGenerator,
         private readonly SiteNginxProvisioner $siteNginxProvisioner,
         private readonly DnsProviderRegistry $dnsProviderRegistry,
+        private readonly SiteSslCertificateInspectorInterface $certificateInspector,
     ) {
     }
 
@@ -70,6 +72,8 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
 
             $config = $this->nginxConfigGenerator->generate($site->refresh());
             $this->siteNginxProvisioner->apply($server, $site, $config);
+
+            $this->refreshCertificateExpiry($site, $server);
 
             AuditLog::record(
                 operation: 'site.ssl_certificate.issued',
@@ -133,6 +137,8 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
                 'sudo certbot renew --cert-name %s --non-interactive',
                 escapeshellarg($site->domain),
             ))->throw();
+
+            $this->persistCertificateExpiry($site, $connection);
         });
 
         AuditLog::record(
@@ -370,5 +376,22 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
         } finally {
             $connection->disconnect();
         }
+    }
+
+    private function refreshCertificateExpiry(Site $site, Server $server): void
+    {
+        $this->withConnection($server, function (SSHConnectionInterface $connection) use ($site): void {
+            $this->persistCertificateExpiry($site, $connection);
+        });
+    }
+
+    private function persistCertificateExpiry(Site $site, SSHConnectionInterface $connection): void
+    {
+        $expiresAt = $this->certificateInspector->inspect($site, $connection);
+
+        $site->forceFill([
+            'ssl_expires_at' => $expiresAt,
+            'ssl_checked_at' => now(),
+        ])->save();
     }
 }

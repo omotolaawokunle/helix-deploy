@@ -9,6 +9,7 @@ import type {
   ProvisionServerResponse,
   RegisterServerPayload,
   ServerRegistrationResponse,
+  ServerSslOverview,
 } from '@/features/servers/types'
 
 interface PaginatedResponse<T> {
@@ -246,6 +247,26 @@ export async function stopServerService(serverId: string, serviceKey: string): P
 
 export async function restartServerService(serverId: string, serviceKey: string): Promise<void> {
   await api.post(`/api/v1/servers/${serverId}/services/${serviceKey}/restart`)
+}
+
+export async function fetchServerSslCertificates(serverId: string): Promise<ServerSslOverview> {
+  const response = await api.get<ResourceResponse<ServerSslOverview>>(
+    `/api/v1/servers/${serverId}/ssl-certificates`,
+  )
+
+  return response.data.data
+}
+
+export async function syncServerSslCertificates(serverId: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/ssl-certificates/sync`)
+}
+
+export async function adoptServerSslCertificates(serverId: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/ssl-certificates/adopt`)
+}
+
+export async function renewServerSslCertificates(serverId: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/ssl-certificates/renew`)
 }
 
 export async function fetchServerLogs(

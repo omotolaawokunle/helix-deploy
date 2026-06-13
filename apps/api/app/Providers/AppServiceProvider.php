@@ -44,7 +44,9 @@ use App\Modules\Integrations\Services\Cloudflare\CloudflareClient;
 use App\Modules\Integrations\Services\DigitalOcean\DigitalOceanDnsClient;
 use App\Modules\Integrations\Services\DnsProviderRegistry;
 use App\Modules\Integrations\Services\SiteDnsProvisioner;
+use App\Modules\Sites\Contracts\SiteSslCertificateInspectorInterface;
 use App\Modules\Sites\Contracts\SiteSslProvisionerInterface;
+use App\Modules\Sites\Services\SiteSslCertificateInspector;
 use App\Modules\Sites\Services\SiteSslProvisioner;
 use App\Modules\Servers\Models\CloudProviderIntegration;
 use App\Modules\Servers\Policies\CloudProviderPolicy;
@@ -81,6 +83,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(DigitalOceanDnsClient::class);
         $this->app->singleton(DnsProviderRegistry::class);
         $this->app->singleton(SiteDnsProvisionerInterface::class, SiteDnsProvisioner::class);
+        $this->app->singleton(SiteSslCertificateInspectorInterface::class, SiteSslCertificateInspector::class);
         $this->app->singleton(SiteSslProvisionerInterface::class, SiteSslProvisioner::class);
         $this->app->singleton(PipelineStageHandlerRegistry::class, function (): PipelineStageHandlerRegistry {
             /** @var list<PipelineStageHandlerInterface> $handlers */

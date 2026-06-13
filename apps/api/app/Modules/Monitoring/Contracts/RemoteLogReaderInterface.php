@@ -22,4 +22,25 @@ interface RemoteLogReaderInterface
         string $filenamePattern,
         int $lines,
     ): array;
+
+    /**
+     * @param list<string> $directories
+     * @return list<string>
+     */
+    public function tailLatestFromDirectories(
+        SSHConnectionInterface $ssh,
+        array $directories,
+        string $filenamePattern,
+        int $lines,
+    ): array;
+
+    /**
+     * @param list<string> $absolutePaths
+     * @return list<string>
+     */
+    public function tailFirstExisting(
+        SSHConnectionInterface $ssh,
+        array $absolutePaths,
+        int $lines,
+    ): array;
 }

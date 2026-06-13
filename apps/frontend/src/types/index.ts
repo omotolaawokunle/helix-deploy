@@ -158,6 +158,12 @@ export interface ServerHealthStatus {
   fingerprintVerified?: boolean
 }
 
+export interface ServerSslSummary {
+  activeCount: number
+  expiringSoonCount: number
+  nearestExpiryAt: string | null
+}
+
 export interface Server {
   id: string
   hostname: string
@@ -178,6 +184,7 @@ export interface Server {
   tags: string[]
   installedServices: string[]
   healthStatus: ServerHealthStatus | null
+  sslSummary: ServerSslSummary | null
   createdAt: string
   updatedAt: string
 }
@@ -236,6 +243,8 @@ export interface Site {
   sslProvider: string | null
   sslError: string | null
   sslChallenge: SslChallenge | null
+  sslExpiresAt: string | null
+  sslCheckedAt: string | null
   aliases: string[]
   createdAt: string
   updatedAt: string

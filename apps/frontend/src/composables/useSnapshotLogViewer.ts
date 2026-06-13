@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import type { LogFetchResponse, LogFetchStatus } from '@/features/logs/types'
 
 const POLL_INTERVAL_MS = 2000
+const MAX_POLL_ATTEMPTS = 90
 
 export interface SnapshotLogFetchParams<TType extends string> {
   type: TType
@@ -24,6 +25,7 @@ interface UseSnapshotLogViewerOptions<TType extends string> {
   buildRequestKey: (type: TType, lines: number) => string
   fetchLogs: (params: SnapshotLogFetchParams<TType>) => Promise<LogFetchResponse>
   defaultErrorMessage: string
+  pollTimeoutMessage?: string
 }
 
 export function useSnapshotLogViewer<TType extends string>(
@@ -43,19 +45,53 @@ export function useSnapshotLogViewer<TType extends string>(
   const awaitingKey = ref<string | null>(null)
 
   let pollTimer: ReturnType<typeof setInterval> | null = null
+  let pollAttempts = 0
   let inFlight = false
+
+  const pollTimeoutMessage = options.pollTimeoutMessage ?? 'Log fetch timed out. Try refreshing.'
 
   function stopPolling(): void {
     if (pollTimer !== null) {
       clearInterval(pollTimer)
       pollTimer = null
     }
+
+    pollAttempts = 0
   }
 
-  function startPolling(): void {
-    stopPolling()
+  function failPollingTimeout(): void {
+    if (pollTimer !== null) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+
+    pollAttempts = 0
+    isLoading.value = false
+    awaitingKey.value = null
+    inFlight = false
+    errorMessage.value = pollTimeoutMessage
+    toast.error(errorMessage.value)
+  }
+
+  function startPolling(resetAttempts = true): void {
+    if (pollTimer !== null) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+
+    if (resetAttempts) {
+      pollAttempts = 0
+    }
 
     pollTimer = setInterval(() => {
+      pollAttempts += 1
+
+      if (pollAttempts >= MAX_POLL_ATTEMPTS) {
+        failPollingTimeout()
+
+        return
+      }
+
       void loadLogs(false, true)
     }, POLL_INTERVAL_MS)
   }
@@ -115,7 +151,7 @@ export function useSnapshotLogViewer<TType extends string>(
           isLoading.value = true
         }
 
-        startPolling()
+        startPolling(!silent)
         inFlight = false
 
         return

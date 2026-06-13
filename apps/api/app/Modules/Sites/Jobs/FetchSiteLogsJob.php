@@ -28,7 +28,6 @@ final class FetchSiteLogsJob implements ShouldQueue
 
     public function __construct(
         public readonly string $siteId,
-        public readonly SiteLogType $logType,
         public readonly int $lines,
     ) {
         $this->onQueue('monitoring');
@@ -54,8 +53,8 @@ final class FetchSiteLogsJob implements ShouldQueue
             return;
         }
 
-        $cacheKey = self::cacheKey($this->siteId, $this->logType, $this->lines);
-        $target = $pathResolver->resolveTarget($site, $this->logType);
+        $cacheKey = self::cacheKey($this->siteId, $this->lines);
+        $target = $pathResolver->resolveTarget($site);
 
         if ($target === null) {
             Cache::put($cacheKey, [
@@ -68,7 +67,7 @@ final class FetchSiteLogsJob implements ShouldQueue
                 serverId: (string) $server->getKey(),
                 organizationId: (string) $site->organization_id,
                 siteId: (string) $site->getKey(),
-                logType: $this->logType->value,
+                logType: SiteLogType::APPLICATION->value,
                 linesRequested: $this->lines,
                 status: 'failed',
                 message: 'Application logs are not available for this site runtime.',
@@ -82,10 +81,10 @@ final class FetchSiteLogsJob implements ShouldQueue
 
             try {
                 $lines = match ($target->mode) {
-                    SiteLogReadMode::FILE => $logReader->tail($connection, $target->path, $this->lines),
-                    SiteLogReadMode::LATEST_GLOB => $logReader->tailLatestMatching(
+                    SiteLogReadMode::FILE => $logReader->tailFirstExisting($connection, $target->resolvedPaths(), $this->lines),
+                    SiteLogReadMode::LATEST_GLOB => $logReader->tailLatestFromDirectories(
                         $connection,
-                        $target->path,
+                        $target->resolvedPaths(),
                         $target->globPattern,
                         $this->lines,
                     ),
@@ -94,12 +93,12 @@ final class FetchSiteLogsJob implements ShouldQueue
                     'status' => 'ready',
                     'lines' => $lines,
                 ], now()->addMinutes(5));
-
+                \Illuminate\Support\Facades\Log::info('Fetch site logs job lines', ['lines' => $lines]);
                 event(new SiteLogsReady(
                     serverId: (string) $server->getKey(),
                     organizationId: (string) $site->organization_id,
                     siteId: (string) $site->getKey(),
-                    logType: $this->logType->value,
+                    logType: SiteLogType::APPLICATION->value,
                     linesRequested: $this->lines,
                     status: 'ready',
                     lines: $lines,
@@ -107,7 +106,8 @@ final class FetchSiteLogsJob implements ShouldQueue
             } finally {
                 $connection->disconnect();
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $th) {
+            \Illuminate\Support\Facades\Log::info('Fetch site logs job error', ['error' => $th->getMessage(), 'trace' => $th->getTraceAsString()]);
             Cache::put($cacheKey, [
                 'status' => 'failed',
                 'lines' => [],
@@ -118,7 +118,7 @@ final class FetchSiteLogsJob implements ShouldQueue
                 serverId: (string) $server->getKey(),
                 organizationId: (string) $site->organization_id,
                 siteId: (string) $site->getKey(),
-                logType: $this->logType->value,
+                logType: SiteLogType::APPLICATION->value,
                 linesRequested: $this->lines,
                 status: 'failed',
                 message: 'Unable to fetch site logs.',
@@ -126,8 +126,8 @@ final class FetchSiteLogsJob implements ShouldQueue
         }
     }
 
-    public static function cacheKey(string $siteId, SiteLogType $logType, int $lines): string
+    public static function cacheKey(string $siteId, int $lines): string
     {
-        return 'site_logs:'.$siteId.':'.$logType->value.':'.$lines;
+        return 'site_logs:' . $siteId . ':' . SiteLogType::APPLICATION->value . ':' . $lines;
     }
 }

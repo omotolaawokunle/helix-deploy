@@ -43,6 +43,50 @@ final class SiteDeployPathResolver
         return $this->sharedDirectory($site).'/.env';
     }
 
+    public function webrootPath(Site $site): string
+    {
+        return rtrim((string) $site->webroot, '/');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function logDirectoryCandidates(Site $site): array
+    {
+        $base = $this->deployBase($site);
+        $webroot = $this->webrootPath($site);
+        $relativeLogDirs = ['logs', 'storage/logs'];
+        $candidates = [];
+
+        foreach ($relativeLogDirs as $relativeLogDir) {
+            $candidates[] = $base.'/shared/'.$relativeLogDir;
+            $candidates[] = $base.'/current/'.$relativeLogDir;
+            $candidates[] = $webroot.'/'.$relativeLogDir;
+        }
+
+        if (str_ends_with($webroot, '/public')) {
+            $candidates[] = dirname($webroot).'/storage/logs';
+        }
+
+        return array_values(array_unique($candidates));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function logFileCandidates(Site $site, string $relativeFile): array
+    {
+        $relativeFile = ltrim($relativeFile, '/');
+        $base = $this->deployBase($site);
+        $webroot = $this->webrootPath($site);
+
+        return array_values(array_unique([
+            $base.'/shared/'.$relativeFile,
+            $base.'/current/'.$relativeFile,
+            $webroot.'/'.$relativeFile,
+        ]));
+    }
+
     /**
      * @return list<string>
      */
