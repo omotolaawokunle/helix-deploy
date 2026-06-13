@@ -69,6 +69,11 @@ class SitePolicy
         return $this->update($user, $site);
     }
 
+    public function pullEnvVars(User $user, Site $site): bool
+    {
+        return $this->update($user, $site);
+    }
+
     public function retryDns(User $user, Site $site): bool
     {
         return in_array($this->roleInOrganization($user, $site->organization), [TeamRole::OWNER, TeamRole::ADMIN, TeamRole::DEVELOPER], true);

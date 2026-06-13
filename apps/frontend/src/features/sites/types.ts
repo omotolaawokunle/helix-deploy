@@ -9,6 +9,8 @@ export const SITE_BROADCAST_EVENTS = {
   created: 'site.created',
   provisioningFailed: 'site.provisioning.failed',
   dnsSslStatusChanged: 'site.dns_ssl.status_changed',
+  envVarsPullPreviewReady: 'env.vars.pull.preview.ready',
+  envVarsPulled: 'env.vars.pulled',
 } as const
 
 export type SiteBroadcastEventName =
@@ -51,6 +53,32 @@ export interface SiteDnsSslStatusChangedPayload {
   dnsError: string | null
   sslStatus: string | null
   sslError: string | null
+}
+
+export interface EnvVarPullPreviewReadyPayload {
+  siteId: string
+  serverId: string
+  organizationId: string
+  status: 'ready' | 'failed'
+  diff?: {
+    serverFileExists: boolean
+    new: string[]
+    changed: string[]
+    unchanged: string[]
+    helixOnly: string[]
+    skipped: Array<{ key: string; reason: string }>
+  } | null
+  message?: string | null
+}
+
+export interface EnvVarsPulledPayload {
+  siteId: string
+  serverId: string
+  organizationId: string
+  strategy: string
+  created: number
+  updated: number
+  deleted: number
 }
 
 export interface CreateSiteAcceptedResponse {

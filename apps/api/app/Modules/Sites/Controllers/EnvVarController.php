@@ -11,14 +11,20 @@ use App\Modules\Sites\Actions\EnvVarActions\CreateEnvVarAction;
 use App\Modules\Sites\Actions\EnvVarActions\DeleteEnvVarAction;
 use App\Modules\Sites\Actions\EnvVarActions\RevealEnvVarAction;
 use App\Modules\Sites\Actions\EnvVarActions\UpdateEnvVarAction;
+use App\Modules\Sites\Jobs\ApplyEnvVarsPullJob;
+use App\Modules\Sites\Jobs\FetchEnvVarsPullPreviewJob;
 use App\Modules\Sites\Jobs\SyncEnvVarsJob;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Sites\Requests\ApplyEnvVarsPullRequest;
+use App\Modules\Sites\Requests\FetchEnvVarsPullPreviewRequest;
 use App\Modules\Sites\Requests\StoreEnvVarRequest;
 use App\Modules\Sites\Requests\UpdateEnvVarRequest;
+use App\Modules\Sites\Resources\EnvVarPullPreviewResource;
 use App\Modules\Sites\Resources\EnvVarResource;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class EnvVarController extends Controller
 {
@@ -143,6 +149,50 @@ class EnvVarController extends Controller
 
         return response()->json([
             'message' => 'Environment variable sync has been queued.',
+        ], 202);
+    }
+
+    public function pullPreview(string $site, FetchEnvVarsPullPreviewRequest $request): JsonResponse
+    {
+        $siteModel = $this->resolveSite($site);
+        $this->authorize('pullEnvVars', $siteModel);
+
+        $cacheKey = FetchEnvVarsPullPreviewJob::cacheKey((string) $siteModel->getKey());
+
+        if ($request->shouldRefresh()) {
+            Cache::forget($cacheKey);
+        }
+
+        /** @var array{status: string, diff?: array<string, mixed>, message?: string}|null $cached */
+        $cached = Cache::get($cacheKey);
+
+        if ($cached === null) {
+            FetchEnvVarsPullPreviewJob::dispatch((string) $siteModel->getKey());
+
+            return (new EnvVarPullPreviewResource([
+                'status' => 'loading',
+            ]))->response();
+        }
+
+        return (new EnvVarPullPreviewResource([
+            'status' => $cached['status'],
+            'diff' => $cached['diff'] ?? null,
+            'message' => $cached['message'] ?? null,
+        ]))->response();
+    }
+
+    public function pull(string $site, ApplyEnvVarsPullRequest $request): JsonResponse
+    {
+        $siteModel = $this->resolveSite($site);
+        $this->authorize('pullEnvVars', $siteModel);
+
+        ApplyEnvVarsPullJob::dispatch(
+            siteId: (string) $siteModel->getKey(),
+            strategy: $request->strategy(),
+        );
+
+        return response()->json([
+            'message' => 'Environment variable pull has been queued.',
         ], 202);
     }
 

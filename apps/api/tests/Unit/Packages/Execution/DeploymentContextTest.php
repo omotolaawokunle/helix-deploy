@@ -32,11 +32,23 @@ it('flushes buffered log lines to deployment step record', function (): void {
         ->and($record->output)->toContain('line 12');
 });
 
-it('deployment context paths follow domain layout', function (): void {
+it('deployment context paths follow webroot-derived layout', function (): void {
     [, $server, $site, $deployment] = executionFixture();
     $ctx = DeploymentContext::forDeployment($deployment, $site, $server, fakeSsh());
 
     expect($ctx->releasePath)->toBe('/var/www/app.example.test/releases/'.$deployment->getKey())
         ->and($ctx->sharedPath)->toBe('/var/www/app.example.test/shared')
         ->and($ctx->currentPath)->toBe('/var/www/app.example.test/current');
+});
+
+it('deployment context paths use webroot directory when it differs from domain', function (): void {
+    [, $server, $site, $deployment] = executionFixture(siteOverrides: [
+        'domain' => 'api.example.test',
+        'webroot' => '/var/www/api/public',
+    ]);
+    $ctx = DeploymentContext::forDeployment($deployment, $site, $server, fakeSsh());
+
+    expect($ctx->releasePath)->toBe('/var/www/api/releases/'.$deployment->getKey())
+        ->and($ctx->sharedPath)->toBe('/var/www/api/shared')
+        ->and($ctx->currentPath)->toBe('/var/www/api/current');
 });

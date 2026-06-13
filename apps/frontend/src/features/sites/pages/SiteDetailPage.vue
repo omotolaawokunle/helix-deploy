@@ -210,7 +210,11 @@ onMounted(() => {
           />
         </TabsContent>
         <TabsContent value="env-vars" class="mt-6">
-          <EnvVarsTab v-if="activeTab === 'env-vars'" :site-id="site.id" />
+          <EnvVarsTab
+            v-if="activeTab === 'env-vars'"
+            :site-id="site.id"
+            :server-id="serverId"
+          />
         </TabsContent>
         <TabsContent value="nginx" class="mt-6">
           <NginxConfigTab v-if="activeTab === 'nginx'" :site-id="site.id" />

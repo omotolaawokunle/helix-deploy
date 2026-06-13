@@ -10,6 +10,7 @@ use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Deployments\Models\DeploymentStep as DeploymentStepRecord;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Sites\Services\SiteDeployPathResolver;
 use App\Modules\Deployments\Services\DeploymentCancellationService;
 use App\Packages\Execution\Exceptions\DeploymentCancelledException;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
@@ -80,8 +81,7 @@ class DeploymentContext
         ?string $releaseId = null,
         ?string $repositoryCloneUrl = null,
     ): self {
-        $domain = $site->domain;
-        $base = '/var/www/'.$domain;
+        $paths = app(SiteDeployPathResolver::class);
         $releaseId ??= (string) $deployment->getKey();
 
         return new self(
@@ -89,9 +89,9 @@ class DeploymentContext
             site: $site,
             server: $server,
             ssh: $ssh,
-            releasePath: $base.'/releases/'.$releaseId,
-            sharedPath: $base.'/shared',
-            currentPath: $base.'/current',
+            releasePath: $paths->releasePath($site, $releaseId),
+            sharedPath: $paths->sharedDirectory($site),
+            currentPath: $paths->currentPath($site),
             releaseId: $releaseId,
             repositoryCloneUrl: $repositoryCloneUrl,
         );
@@ -103,9 +103,8 @@ class DeploymentContext
         Server $server,
         SSHConnectionInterface $ssh,
     ): self {
-        $domain = $site->domain;
-        $base = '/var/www/'.$domain;
-        $releasePath = $deployment->release_path ?? $base.'/releases/unknown';
+        $paths = app(SiteDeployPathResolver::class);
+        $releasePath = $deployment->release_path ?? $paths->releasePath($site, 'unknown');
 
         return new self(
             deployment: $deployment,
@@ -113,8 +112,8 @@ class DeploymentContext
             server: $server,
             ssh: $ssh,
             releasePath: $releasePath,
-            sharedPath: $base.'/shared',
-            currentPath: $base.'/current',
+            sharedPath: $paths->sharedDirectory($site),
+            currentPath: $paths->currentPath($site),
             releaseId: basename($releasePath),
             repositoryCloneUrl: null,
         );

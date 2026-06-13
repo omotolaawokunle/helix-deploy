@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Pipelines\StageHandlers;
 
 use App\Modules\Pipelines\Contracts\PipelineStageHandlerInterface;
+use App\Modules\Sites\Services\SiteDeployPathResolver;
 use App\Modules\Pipelines\DTOs\PipelineExecutionContext;
 use App\Modules\Pipelines\Enums\PipelineStageResult;
 use App\Modules\Pipelines\Enums\PipelineStepType;
@@ -34,7 +35,7 @@ class MigrateStageHandler implements PipelineStageHandlerInterface
         }
 
         $releasePath = $context->deployment->release_path
-            ?? '/var/www/'.$context->site->domain.'/current';
+            ?? app(SiteDeployPathResolver::class)->currentPath($context->site);
 
         $command = 'cd '.escapeshellarg($releasePath).' && php artisan migrate --force --no-interaction';
         $result = $ssh->run($command);

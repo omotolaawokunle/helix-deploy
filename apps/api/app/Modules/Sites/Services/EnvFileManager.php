@@ -11,11 +11,13 @@ use App\Modules\Credentials\Enums\CredentialType;
 use App\Modules\Credentials\Models\Credential;
 use App\Modules\Sites\Models\Site;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
+use Illuminate\Support\Facades\Cache;
 
 class EnvFileManager
 {
     public function __construct(
         private readonly CredentialVaultInterface $credentialVault,
+        private readonly SiteDeployPathResolver $deployPathResolver,
     ) {
     }
 
@@ -54,7 +56,7 @@ class EnvFileManager
             ->ofType(CredentialType::ENV_VAR)
             ->count();
 
-        $remotePath = '/var/www/'.$site->domain.'/shared/.env';
+        $remotePath = $this->cachedRemotePath($site) ?? $this->remotePath($site);
 
         if (! $ssh->upload($content, $remotePath)) {
             throw new \RuntimeException('Failed to upload .env file to server.');
@@ -71,6 +73,62 @@ class EnvFileManager
                 'count' => $count,
             ],
         );
+    }
+
+    public function remotePath(Site $site): string
+    {
+        return $this->deployPathResolver->defaultEnvPath($site);
+    }
+
+    public function read(Site $site, SSHConnectionInterface $ssh): string
+    {
+        $remotePath = $this->resolveRemotePath($site, $ssh);
+
+        if ($remotePath === null) {
+            return '';
+        }
+
+        return $ssh->run(sprintf('cat %s', escapeshellarg($remotePath)))->stdout;
+    }
+
+    public function resolveRemotePath(Site $site, SSHConnectionInterface $ssh): ?string
+    {
+        $cached = $this->cachedRemotePath($site);
+
+        if ($cached !== null && $this->remoteFileExists($ssh, $cached)) {
+            return $cached;
+        }
+
+        foreach ($this->deployPathResolver->envFileCandidates($site) as $candidate) {
+            if (! $this->remoteFileExists($ssh, $candidate)) {
+                continue;
+            }
+
+            Cache::put($this->resolvedPathCacheKey($site), $candidate, now()->addDays(7));
+
+            return $candidate;
+        }
+
+        Cache::forget($this->resolvedPathCacheKey($site));
+
+        return null;
+    }
+
+    public static function resolvedPathCacheKey(Site $site): string
+    {
+        return 'env_file_remote_path:'.(string) $site->getKey();
+    }
+
+    private function cachedRemotePath(Site $site): ?string
+    {
+        $cached = Cache::get(self::resolvedPathCacheKey($site));
+
+        return is_string($cached) && $cached !== '' ? $cached : null;
+    }
+
+    private function remoteFileExists(SSHConnectionInterface $ssh, string $remotePath): bool
+    {
+        return $ssh->run(sprintf('test -f %s', escapeshellarg($remotePath)))->successful();
     }
 
     private function quoteEnvValue(string $value): string
