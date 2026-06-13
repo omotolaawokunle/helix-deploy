@@ -79,6 +79,11 @@ class SitePolicy
         return in_array($this->roleInOrganization($user, $site->organization), [TeamRole::OWNER, TeamRole::ADMIN, TeamRole::DEVELOPER], true);
     }
 
+    public function viewLogs(User $user, Site $site): bool
+    {
+        return $this->view($user, $site);
+    }
+
     private function roleInOrganization(User $user, Organization $org): ?TeamRole
     {
         return $user->roleInOrganization($org);

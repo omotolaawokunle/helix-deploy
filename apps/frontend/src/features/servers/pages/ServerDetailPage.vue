@@ -46,6 +46,9 @@ const DaemonsTab = defineAsyncComponent(
 const CommandRunnerTab = defineAsyncComponent(
   () => import('@/features/commands/components/CommandRunnerTab.vue'),
 )
+const ServerLogsTab = defineAsyncComponent(
+  () => import('@/features/servers/components/ServerLogsTab.vue'),
+)
 const ProvisionServerDrawer = defineAsyncComponent(
   () => import('@/features/servers/components/ProvisionServerDrawer.vue'),
 )
@@ -440,6 +443,9 @@ onMounted(() => {
           <TabsTrigger value="commands">
             Commands
           </TabsTrigger>
+          <TabsTrigger value="logs">
+            Logs
+          </TabsTrigger>
           <TabsTrigger value="audit">
             Audit
           </TabsTrigger>
@@ -512,6 +518,10 @@ onMounted(() => {
             :server-id="server.id"
             :is-production="isProduction"
           />
+        </TabsContent>
+
+        <TabsContent value="logs" class="mt-6">
+          <ServerLogsTab v-if="activeTab === 'logs'" :server-id="server.id" />
         </TabsContent>
 
         <TabsContent value="audit" class="mt-6">

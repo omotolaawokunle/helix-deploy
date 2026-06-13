@@ -84,6 +84,11 @@ class ServerPolicy
         return in_array($environmentName, ['staging', 'stage', 'development', 'dev'], true);
     }
 
+    public function viewLogs(User $user, Server $server): bool
+    {
+        return $this->view($user, $server);
+    }
+
     private function roleInOrganization(User $user, Organization $org): ?TeamRole
     {
         return $user->roleInOrganization($org);

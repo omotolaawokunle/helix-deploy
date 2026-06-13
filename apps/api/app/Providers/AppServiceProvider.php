@@ -28,7 +28,9 @@ use App\Modules\Pipelines\StageHandlers\HealthCheckStageHandler;
 use App\Modules\Pipelines\StageHandlers\MigrateStageHandler;
 use App\Modules\Pipelines\StageHandlers\NotifyStageHandler;
 use App\Modules\Pipelines\StageHandlers\ScriptStageHandler;
+use App\Modules\Monitoring\Contracts\RemoteLogReaderInterface;
 use App\Modules\Monitoring\Contracts\ServerMetricsCollectorInterface;
+use App\Modules\Monitoring\Services\RemoteLogReader;
 use App\Modules\Monitoring\Services\ServerMetricsCollector;
 use App\Modules\Integrations\Contracts\CloudflareClientInterface;
 use App\Modules\Integrations\Contracts\SiteDnsProvisionerInterface;
@@ -73,6 +75,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(DeploymentStreamPublisher::class);
         $this->app->singleton(TeamProjectVisibilityServiceInterface::class, TeamProjectVisibilityService::class);
         $this->app->singleton(ServerMetricsCollectorInterface::class, ServerMetricsCollector::class);
+        $this->app->singleton(RemoteLogReaderInterface::class, RemoteLogReader::class);
         $this->app->singleton(RunnerSlotStoreInterface::class, RedisRunnerSlotStore::class);
         $this->app->singleton(CloudflareClientInterface::class, CloudflareClient::class);
         $this->app->singleton(DigitalOceanDnsClient::class);
