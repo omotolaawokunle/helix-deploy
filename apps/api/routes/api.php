@@ -172,6 +172,8 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::delete('/sites/{site}/env-vars/{credential}', [EnvVarController::class, 'destroy']);
     Route::get('/sites/{site}/env-vars/{credential}/reveal', [EnvVarController::class, 'reveal']);
     Route::post('/sites/{site}/env-vars/sync', [EnvVarController::class, 'sync']);
+    Route::get('/sites/{site}/env-vars/pull', [EnvVarController::class, 'pullPreview']);
+    Route::post('/sites/{site}/env-vars/pull', [EnvVarController::class, 'pull']);
     Route::get('/sites/{site}/logs', [SiteLogController::class, 'show']);
     Route::get('/servers/{server}/cron-jobs', [CronJobController::class, 'index']);
     Route::post('/servers/{server}/cron-jobs', [CronJobController::class, 'store']);

@@ -249,6 +249,26 @@ export interface EnvVarListItem {
   updatedAt: string | null
 }
 
+export type EnvVarPullPreviewStatus = 'loading' | 'ready' | 'failed'
+
+export type EnvVarPullStrategy = 'add_new' | 'overwrite_changed' | 'mirror_server'
+
+export interface EnvVarPullSkippedKey {
+  key: string
+  reason: string
+}
+
+export interface EnvVarPullPreview {
+  status: EnvVarPullPreviewStatus
+  serverFileExists: boolean
+  new: string[]
+  changed: string[]
+  unchanged: string[]
+  helixOnly: string[]
+  skipped: EnvVarPullSkippedKey[]
+  message?: string | null
+}
+
 export interface NginxConfig {
   siteId: string
   domain: string

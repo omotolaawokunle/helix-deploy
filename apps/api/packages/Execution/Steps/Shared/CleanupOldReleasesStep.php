@@ -16,8 +16,7 @@ final class CleanupOldReleasesStep extends BaseDeploymentStep
 
     public function run(DeploymentContext $ctx): void
     {
-        $domain = $ctx->site->domain;
-        $releasesGlob = '/var/www/'.$domain.'/releases/*/';
+        $releasesGlob = dirname($ctx->releasePath).'/*/';
 
         $listResult = $this->runCommand($ctx, 'ls -1dt '.$releasesGlob);
         $paths = array_values(array_filter(

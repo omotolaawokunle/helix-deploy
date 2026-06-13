@@ -1,6 +1,6 @@
 import { api } from '@/lib/axios'
 import type { LogFetchResponse, SiteLogType } from '@/features/logs/types'
-import type { EnvVarListItem, GitProviderType, NginxConfig, Site } from '@/types'
+import type { EnvVarListItem, EnvVarPullPreview, EnvVarPullStrategy, GitProviderType, NginxConfig, Site } from '@/types'
 
 interface ResourceResponse<T> {
   data: T
@@ -203,6 +203,29 @@ export async function revealEnvVar(
 
 export async function syncEnvVars(siteId: string): Promise<void> {
   await api.post(`/api/v1/sites/${siteId}/env-vars/sync`)
+}
+
+export async function fetchEnvVarsPullPreview(
+  siteId: string,
+  options?: { refresh?: boolean },
+): Promise<EnvVarPullPreview> {
+  const response = await api.get<ResourceResponse<EnvVarPullPreview>>(
+    `/api/v1/sites/${siteId}/env-vars/pull`,
+    {
+      params: {
+        refresh: options?.refresh === true ? 1 : undefined,
+      },
+    },
+  )
+
+  return response.data.data
+}
+
+export async function applyEnvVarsPull(
+  siteId: string,
+  payload: { strategy: EnvVarPullStrategy },
+): Promise<void> {
+  await api.post(`/api/v1/sites/${siteId}/env-vars/pull`, payload)
 }
 
 export async function fetchNginxConfig(siteId: string): Promise<NginxConfig> {

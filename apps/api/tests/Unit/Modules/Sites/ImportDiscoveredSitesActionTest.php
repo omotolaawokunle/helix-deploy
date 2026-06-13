@@ -10,8 +10,10 @@ use App\Modules\Servers\Enums\ServerStatus;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Actions\ImportDiscoveredSitesAction;
 use App\Modules\Sites\Enums\SiteStatus;
+use App\Modules\Sites\Jobs\ApplyEnvVarsPullJob;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Teams\Enums\TeamRole;
+use Illuminate\Support\Facades\Queue;
 
 it('imports discovered sites and skips managed active sites', function (): void {
     [$organization, $owner, $server] = createImportDiscoveredSitesFixture();
@@ -52,6 +54,36 @@ it('imports discovered sites and skips managed active sites', function (): void 
 
     expect($secondPass)->toBe(['created' => 0, 'updated' => 1]);
     expect(AuditLog::query()->where('operation', 'server.sites_discovered')->exists())->toBeTrue();
+});
+
+it('dispatches env var pull job when importing discovered sites on managed servers', function (): void {
+    Queue::fake();
+
+    [$organization, $owner, $server] = createImportDiscoveredSitesFixture();
+
+    $server->forceFill(['management_mode' => 'managed'])->save();
+
+    $action = app(ImportDiscoveredSitesAction::class);
+
+    $action->import($server, [
+        new DiscoveredSiteSnapshot('auto-env.example.com', '/var/www/auto-env/public', 'php'),
+    ]);
+
+    Queue::assertPushed(ApplyEnvVarsPullJob::class);
+});
+
+it('does not dispatch env var pull job on observe servers', function (): void {
+    Queue::fake();
+
+    [$organization, $owner, $server] = createImportDiscoveredSitesFixture();
+
+    $action = app(ImportDiscoveredSitesAction::class);
+
+    $action->import($server, [
+        new DiscoveredSiteSnapshot('observe-env.example.com', '/var/www/observe-env/public', 'php'),
+    ]);
+
+    Queue::assertNotPushed(ApplyEnvVarsPullJob::class);
 });
 
 /**

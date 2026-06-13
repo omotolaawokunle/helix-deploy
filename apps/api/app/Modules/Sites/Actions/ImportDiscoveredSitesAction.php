@@ -9,6 +9,8 @@ use App\Modules\Servers\DTOs\DiscoveredSiteSnapshot;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Contracts\DiscoveredSiteImporterInterface;
 use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\EnvVarPullStrategy;
+use App\Modules\Sites\Jobs\ApplyEnvVarsPullJob;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Enums\SiteStatus;
 use App\Modules\Sites\Models\Site;
@@ -65,7 +67,7 @@ class ImportDiscoveredSitesAction implements DiscoveredSiteImporterInterface
             ->first();
 
         if ($existing === null) {
-            Site::query()->create([
+            $site = Site::query()->create([
                 'id' => (string) Str::uuid(),
                 'server_id' => (string) $server->getKey(),
                 'organization_id' => (string) $server->organization_id,
@@ -80,6 +82,13 @@ class ImportDiscoveredSitesAction implements DiscoveredSiteImporterInterface
                 'php_version' => $this->resolvePhpVersion($server, $discoveredSite->runtime),
                 'status' => SiteStatus::DISCOVERED->value,
             ]);
+
+            if ($server->isManaged()) {
+                ApplyEnvVarsPullJob::dispatch(
+                    siteId: (string) $site->getKey(),
+                    strategy: EnvVarPullStrategy::ADD_NEW,
+                );
+            }
 
             return 'created';
         }
