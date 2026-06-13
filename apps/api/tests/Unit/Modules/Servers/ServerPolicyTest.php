@@ -77,6 +77,57 @@ it('owner cannot provision a server in observe mode', function (): void {
     expect($policy->provision($owner, $server))->toBeFalse();
 });
 
+it('developer cannot manage server services', function (): void {
+    [$organization, $owner] = createOrganizationOwnerForServerPolicy();
+
+    $server = Server::query()->create([
+        'organization_id' => (string) $organization->getKey(),
+        'hostname' => 'service-policy.example.test',
+        'ip_address' => '10.0.0.14',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'provider' => 'generic',
+        'status' => 'active',
+        'management_mode' => 'managed',
+        'created_by' => (string) $owner->getKey(),
+        'tags' => [],
+        'installed_services' => [],
+    ]);
+
+    $developer = User::factory()->create([
+        'email_verified_at' => now(),
+        'current_organization_id' => (string) $organization->getKey(),
+    ]);
+    $organization->users()->attach($developer->getKey(), ['role' => TeamRole::DEVELOPER->value]);
+
+    $policy = new ServerPolicy();
+
+    expect($policy->manageServices($developer, $server))->toBeFalse()
+        ->and($policy->manageServices($owner, $server))->toBeTrue();
+});
+
+it('owner cannot manage services on observe mode servers', function (): void {
+    [$organization, $owner] = createOrganizationOwnerForServerPolicy();
+
+    $server = Server::query()->create([
+        'organization_id' => (string) $organization->getKey(),
+        'hostname' => 'observe-service-policy.example.test',
+        'ip_address' => '10.0.0.15',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'provider' => 'generic',
+        'status' => 'active',
+        'management_mode' => 'observe',
+        'created_by' => (string) $owner->getKey(),
+        'tags' => [],
+        'installed_services' => [],
+    ]);
+
+    $policy = new ServerPolicy();
+
+    expect($policy->manageServices($owner, $server))->toBeFalse();
+});
+
 /**
  * @return array{Organization, User}
  */

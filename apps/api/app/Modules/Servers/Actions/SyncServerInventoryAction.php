@@ -6,10 +6,12 @@ namespace App\Modules\Servers\Actions;
 
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Servers\Contracts\ServerInventoryIntrospectorInterface;
+use App\Modules\Servers\Contracts\ServerServiceManagerInterface;
 use App\Modules\Servers\DTOs\ServerInventorySnapshot;
 use App\Modules\Servers\Events\ServerInventoryDiscovered;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Contracts\DiscoveredSiteImporterInterface;
+use App\Modules\Servers\Services\InstalledServiceRegistry;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
 
 class SyncServerInventoryAction
@@ -17,6 +19,8 @@ class SyncServerInventoryAction
     public function __construct(
         private readonly ServerInventoryIntrospectorInterface $introspector,
         private readonly DiscoveredSiteImporterInterface $discoveredSiteImporter,
+        private readonly InstalledServiceRegistry $serviceRegistry,
+        private readonly ServerServiceManagerInterface $serviceManager,
     ) {
     }
 
@@ -32,6 +36,7 @@ class SyncServerInventoryAction
     {
         $snapshot = $this->introspector->inspect($connection);
         $installedServices = $this->buildInstalledServices($server, $snapshot);
+        $installedServices = $this->attachServiceStatuses($server, $installedServices, $connection);
         $siteImport = $this->discoveredSiteImporter->import($server, $snapshot->sites);
 
         $beforeServices = (array) $server->installed_services;
@@ -89,5 +94,36 @@ class SyncServerInventoryAction
         }
 
         return $services;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $installedServices
+     * @return array<string, array<string, mixed>>
+     */
+    private function attachServiceStatuses(
+        Server $server,
+        array $installedServices,
+        SSHConnectionInterface $connection,
+    ): array {
+        $server->forceFill(['installed_services' => $installedServices]);
+        $serviceKeys = $this->serviceRegistry->installedControllableKeys($server);
+
+        if ($serviceKeys === []) {
+            return $installedServices;
+        }
+
+        $statuses = $this->serviceManager->syncStatuses($connection, $server, $serviceKeys);
+        $checkedAt = now()->toIso8601String();
+
+        foreach ($statuses as $serviceKey => $status) {
+            $existing = is_array($installedServices[$serviceKey] ?? null) ? $installedServices[$serviceKey] : [];
+            $installedServices[$serviceKey] = array_merge($existing, [
+                'installed' => true,
+                'status' => $status->value,
+                'statusCheckedAt' => $checkedAt,
+            ]);
+        }
+
+        return $installedServices;
     }
 }

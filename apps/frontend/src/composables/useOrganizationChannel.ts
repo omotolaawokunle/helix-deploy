@@ -12,6 +12,7 @@ import {
   type ServerHealthChangedPayload,
   type ServerInventoryDiscoveredPayload,
   type ServerMetricsUpdatedPayload,
+  type ServerServiceStatusUpdatedPayload,
 } from '@/features/realtime/types'
 import { getEcho, initEcho } from '@/lib/echo'
 
@@ -26,6 +27,7 @@ export interface OrganizationChannelCallbacks {
   onBuildRunnerStatus?: (payload: BuildRunnerStatusPayload) => void
   onBuildRunnerSlotsUpdated?: (payload: BuildRunnerSlotsPayload) => void
   onDaemonChanged?: (payload: DaemonChangedPayload) => void
+  onServerServiceStatusUpdated?: (payload: ServerServiceStatusUpdatedPayload) => void
 }
 
 export function useOrganizationChannel(
@@ -141,6 +143,15 @@ export function useOrganizationChannel(
       channel.listen(`.${ORGANIZATION_BROADCAST_EVENTS.daemonChanged}`, (payload: unknown) => {
         callbacks.onDaemonChanged?.(payload as DaemonChangedPayload)
       })
+    }
+
+    if (callbacks.onServerServiceStatusUpdated !== undefined) {
+      channel.listen(
+        `.${ORGANIZATION_BROADCAST_EVENTS.serverServiceStatusUpdated}`,
+        (payload: unknown) => {
+          callbacks.onServerServiceStatusUpdated?.(payload as ServerServiceStatusUpdatedPayload)
+        },
+      )
     }
   }
 

@@ -9,7 +9,9 @@ use App\Modules\Auth\Services\AuthService;
 use App\Modules\Credentials\Contracts\CredentialVaultInterface;
 use App\Modules\Credentials\CredentialVault;
 use App\Modules\Servers\Contracts\ServerInventoryIntrospectorInterface;
+use App\Modules\Servers\Contracts\ServerServiceManagerInterface;
 use App\Modules\Servers\Services\ServerInventoryIntrospector;
+use App\Modules\Servers\Services\ServerServiceManager;
 use App\Modules\Sites\Contracts\DiscoveredSiteImporterInterface;
 use App\Modules\Sites\Contracts\NginxConfigGeneratorInterface;
 use App\Modules\Sites\Actions\ImportDiscoveredSitesAction;
@@ -65,6 +67,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CredentialVaultInterface::class, CredentialVault::class);
         $this->app->singleton(NginxConfigGeneratorInterface::class, NginxConfigGenerator::class);
         $this->app->singleton(ServerInventoryIntrospectorInterface::class, ServerInventoryIntrospector::class);
+        $this->app->singleton(ServerServiceManagerInterface::class, ServerServiceManager::class);
         $this->app->singleton(DiscoveredSiteImporterInterface::class, ImportDiscoveredSitesAction::class);
         $this->app->singleton(ExecutionRunnerInterface::class, DeploymentRunner::class);
         $this->app->singleton(DeploymentStreamPublisher::class);

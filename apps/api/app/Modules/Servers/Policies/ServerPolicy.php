@@ -58,6 +58,15 @@ class ServerPolicy
         return in_array($this->roleInOrganization($user, $server->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
     }
 
+    public function manageServices(User $user, Server $server): bool
+    {
+        if ($server->management_mode === ManagementMode::OBSERVE) {
+            return false;
+        }
+
+        return in_array($this->roleInOrganization($user, $server->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
+    }
+
     public function runCommands(User $user, Server $server): bool
     {
         $role = $this->roleInOrganization($user, $server->organization);
