@@ -131,3 +131,14 @@ export const SCRIPT_ESTIMATED_MINUTES: Record<ProvisioningScript, number> = {
 
 export const PHP_VERSIONS = ['8.1', '8.2', '8.3'] as const
 export const NODE_VERSIONS = [18, 20, 22] as const
+
+export type ServiceRuntimeStatus = 'running' | 'stopped' | 'failed' | 'unknown'
+
+export interface InstalledServiceRecord {
+  key: string
+  label: string
+  installed: boolean
+  status: ServiceRuntimeStatus
+  statusCheckedAt: string | null
+  controllable: boolean
+}

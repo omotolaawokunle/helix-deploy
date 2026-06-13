@@ -120,6 +120,24 @@ export function useOrganizationRealtime(): void {
     onBuildRunnerSlotsUpdated: (payload) => {
       realtimeStore.emitBuildRunnerPatch(payload)
     },
+    onServerServiceStatusUpdated: (payload) => {
+      realtimeStore.emitServerServiceStatusUpdate({
+        serverId: payload.serverId,
+        services: payload.services.map(service => ({
+          key: service.key,
+          label: service.label,
+          installed: service.installed,
+          status: service.status === 'running'
+            || service.status === 'stopped'
+            || service.status === 'failed'
+            || service.status === 'unknown'
+            ? service.status
+            : 'unknown',
+          statusCheckedAt: service.statusCheckedAt,
+          controllable: service.controllable,
+        })),
+      })
+    },
   })
 
   onUnmounted(() => {

@@ -148,6 +148,10 @@
   .animate-page-in-delay-1 {
     animation-delay: 60ms;
   }
+
+  .animate-service-row-in {
+    animation: serviceRowIn 0.32s cubic-bezier(0.25, 1, 0.5, 1) both;
+  }
 }
 
 @keyframes pageIn {
@@ -171,6 +175,42 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes serviceRowIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.status-crossfade-enter-active {
+  transition: opacity 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.status-crossfade-leave-active {
+  transition: opacity 120ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.status-crossfade-enter-from,
+.status-crossfade-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-service-row-in {
+    animation: none;
+  }
+
+  .status-crossfade-enter-active,
+  .status-crossfade-leave-active {
+    transition: none;
   }
 }
 

@@ -2,7 +2,6 @@
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
-  CheckIcon,
   LoaderCircleIcon,
   PlugIcon,
   ServerCogIcon,
@@ -27,6 +26,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import ProviderIcon from '@/features/servers/components/ProviderIcon.vue'
+import InstalledServicesPanel from '@/features/servers/components/InstalledServicesPanel.vue'
 import ServerObserveModeAlert from '@/features/servers/components/ServerObserveModeAlert.vue'
 
 import { deleteServer, testServerConnection } from '@/features/servers/api'
@@ -76,6 +76,8 @@ const isProduction = computed(() => server.value?.environment?.isProduction ?? f
 
 const canDeleteServer = computed(() => authStore.isOwner)
 
+const canManageServices = computed(() => authStore.isAdmin)
+
 const installedServiceNames = computed((): string[] => {
   const services = server.value?.installedServices
 
@@ -91,6 +93,8 @@ const installedServiceNames = computed((): string[] => {
     .filter(([, value]) => value?.installed === true)
     .map(([name]) => name)
 })
+
+const installedServicesPanelRef = ref<InstanceType<typeof InstalledServicesPanel> | null>(null)
 
 const diskLabel = computed((): string | null => {
   const health = server.value?.healthStatus
@@ -141,14 +145,6 @@ interface OverviewRow {
   value: string
 }
 
-const installedServicesEmptyMessage = computed((): string => {
-  if (isObserveMode.value) {
-    return 'No services detected yet. HelixDeploy scans the server after SSH connects.'
-  }
-
-  return 'No services detected yet. HelixDeploy scans the server after SSH connects, or you can provision a stack manually.'
-})
-
 const overviewRows = computed((): OverviewRow[] => {
   if (server.value === null) {
     return []
@@ -197,6 +193,19 @@ function handleServerDeleted(deletedId: string): void {
   toast.success('Server deleted.')
   void router.push('/servers')
 }
+
+watch(
+  () => realtimeStore.serverServiceStatusUpdateSeq,
+  () => {
+    const update = realtimeStore.serverServiceStatusUpdate
+
+    if (update === null || update.serverId !== serverId.value) {
+      return
+    }
+
+    installedServicesPanelRef.value?.applyServicesUpdate(update.services)
+  },
+)
 
 watch(
   () => realtimeStore.serverInventoryRefreshId,
@@ -457,26 +466,14 @@ onMounted(() => {
             </dl>
           </section>
 
-          <section>
-            <h2 class="section-label">
-              Installed services
-            </h2>
-            <div class="panel px-4 py-3">
-              <ul v-if="installedServiceNames.length > 0" class="space-y-2">
-                <li
-                  v-for="service in installedServiceNames"
-                  :key="service"
-                  class="flex items-center gap-2 text-sm capitalize"
-                >
-                  <CheckIcon class="size-4 text-primary" />
-                  {{ service }}
-                </li>
-              </ul>
-              <p v-else class="text-sm text-muted-foreground">
-                {{ installedServicesEmptyMessage }}
-              </p>
-            </div>
-          </section>
+          <InstalledServicesPanel
+            v-if="server !== null"
+            ref="installedServicesPanelRef"
+            :server-id="server.id"
+            :management-mode="server.managementMode"
+            :is-production="isProduction"
+            :can-manage="canManageServices"
+          />
 
           <section>
             <h2 class="section-label">

@@ -2,6 +2,7 @@ import { api } from '@/lib/axios'
 import type { Server, ServerGroup } from '@/types'
 import type {
   EnvironmentOption,
+  InstalledServiceRecord,
   ProjectOption,
   ProvisionServerPayload,
   ProvisionServerResponse,
@@ -220,4 +221,28 @@ export async function syncServerGroupServers(
   )
 
   return response.data
+}
+
+export async function fetchServerServices(serverId: string): Promise<InstalledServiceRecord[]> {
+  const response = await api.get<CollectionResponse<InstalledServiceRecord>>(
+    `/api/v1/servers/${serverId}/services`,
+  )
+
+  return response.data.data
+}
+
+export async function syncServerServiceStatuses(serverId: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/services/sync-status`)
+}
+
+export async function startServerService(serverId: string, serviceKey: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/services/${serviceKey}/start`)
+}
+
+export async function stopServerService(serverId: string, serviceKey: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/services/${serviceKey}/stop`)
+}
+
+export async function restartServerService(serverId: string, serviceKey: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/services/${serviceKey}/restart`)
 }

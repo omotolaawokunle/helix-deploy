@@ -13,6 +13,7 @@ export const ORGANIZATION_BROADCAST_EVENTS = {
   buildRunnerSlotsUpdated: 'build_runner.slots_updated',
   serverMetricsUpdated: 'server.metrics_updated',
   daemonChanged: 'daemon.changed',
+  serverServiceStatusUpdated: 'server.service_status_updated',
 } as const
 
 export type OrganizationBroadcastEventName =
@@ -83,4 +84,16 @@ export interface DaemonChangedPayload {
   daemonId: string
   action: 'created' | 'updated' | 'deleted'
   daemon: Record<string, unknown> | null
+}
+
+export interface ServerServiceStatusUpdatedPayload {
+  serverId: string
+  services: Array<{
+    key: string
+    label: string
+    installed: boolean
+    status: string
+    statusCheckedAt: string | null
+    controllable: boolean
+  }>
 }
