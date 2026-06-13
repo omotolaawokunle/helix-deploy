@@ -33,6 +33,9 @@ const SiteSettingsTab = defineAsyncComponent(
 const SiteDnsSslTab = defineAsyncComponent(
   () => import('@/features/sites/components/SiteDnsSslTab.vue'),
 )
+const SiteLogsTab = defineAsyncComponent(
+  () => import('@/features/sites/components/SiteLogsTab.vue'),
+)
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -174,6 +177,9 @@ onMounted(() => {
           <TabsTrigger value="deployments">
             Deployments
           </TabsTrigger>
+          <TabsTrigger value="logs">
+            Logs
+          </TabsTrigger>
           <TabsTrigger value="env-vars">
             Environment Variables
           </TabsTrigger>
@@ -193,6 +199,14 @@ onMounted(() => {
             :site="site"
             :is-production="isProduction"
             :member-role="memberRole"
+          />
+        </TabsContent>
+        <TabsContent value="logs" class="mt-6">
+          <SiteLogsTab
+            v-if="activeTab === 'logs'"
+            :site-id="site.id"
+            :server-id="serverId"
+            :runtime="site.runtime"
           />
         </TabsContent>
         <TabsContent value="env-vars" class="mt-6">

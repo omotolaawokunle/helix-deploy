@@ -1,4 +1,5 @@
 import { api } from '@/lib/axios'
+import type { LogFetchResponse, SiteLogType } from '@/features/logs/types'
 import type { EnvVarListItem, GitProviderType, NginxConfig, Site } from '@/types'
 
 interface ResourceResponse<T> {
@@ -217,6 +218,25 @@ export async function saveNginxConfig(siteId: string, config: string): Promise<N
     `/api/v1/sites/${siteId}/nginx-config`,
     { config },
   )
+
+  return response.data.data
+}
+
+export async function fetchSiteLogs(
+  siteId: string,
+  options: {
+    type: SiteLogType
+    lines?: number
+    refresh?: boolean
+  },
+): Promise<LogFetchResponse> {
+  const response = await api.get<ResourceResponse<LogFetchResponse>>(`/api/v1/sites/${siteId}/logs`, {
+    params: {
+      type: options.type,
+      lines: options.lines,
+      refresh: options.refresh === true ? 1 : undefined,
+    },
+  })
 
   return response.data.data
 }

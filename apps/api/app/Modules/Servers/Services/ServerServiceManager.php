@@ -158,7 +158,7 @@ class ServerServiceManager implements ServerServiceManagerInterface
             $escapedUnit = escapeshellarg($unit);
             $escapedKey = escapeshellarg($serviceKey);
             $lines[] = "status=\$(systemctl is-active {$escapedUnit} 2>/dev/null || true)";
-            $lines[] = "echo \"STATUS:{$serviceKey}|{\$status}\"";
+            $lines[] = "echo \"STATUS:{$serviceKey}|\$status\"";
         }
 
         return implode("\n", $lines);
@@ -173,6 +173,7 @@ class ServerServiceManager implements ServerServiceManagerInterface
 
         foreach (preg_split('/\r\n|\r|\n/', $output) ?: [] as $line) {
             $line = trim($line);
+
 
             if (! str_starts_with($line, 'STATUS:')) {
                 continue;

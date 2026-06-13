@@ -1,4 +1,5 @@
 import { api } from '@/lib/axios'
+import type { LogFetchResponse, ServerLogType } from '@/features/logs/types'
 import type { Server, ServerGroup } from '@/types'
 import type {
   EnvironmentOption,
@@ -245,4 +246,26 @@ export async function stopServerService(serverId: string, serviceKey: string): P
 
 export async function restartServerService(serverId: string, serviceKey: string): Promise<void> {
   await api.post(`/api/v1/servers/${serverId}/services/${serviceKey}/restart`)
+}
+
+export async function fetchServerLogs(
+  serverId: string,
+  options: {
+    type: ServerLogType
+    lines?: number
+    refresh?: boolean
+  },
+): Promise<LogFetchResponse> {
+  const response = await api.get<ResourceResponse<LogFetchResponse>>(
+    `/api/v1/servers/${serverId}/logs`,
+    {
+      params: {
+        type: options.type,
+        lines: options.lines,
+        refresh: options.refresh === true ? 1 : undefined,
+      },
+    },
+  )
+
+  return response.data.data
 }
