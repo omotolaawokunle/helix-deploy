@@ -132,7 +132,9 @@ final class BrowseSiteDatabaseJob implements ShouldQueue
                 status: 'failed',
                 message: $message,
             ));
-        } catch (\Throwable) {
+        } catch (\Throwable $th) {
+            report($th);
+
             Cache::put($cacheKey, [
                 'status' => 'failed',
                 'message' => 'Unable to browse site database.',

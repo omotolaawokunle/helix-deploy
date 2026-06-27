@@ -134,7 +134,7 @@ final class ReadOnlyDatabaseClient implements ReadOnlyDatabaseClientInterface
     private function listMysqlDatabases(SSHConnectionInterface $ssh, DatabaseConnectionConfig $config): array
     {
         $command = $this->mysqlCommand($config, null, 'SHOW DATABASES', true);
-        $output = $this->runOrFail($ssh, $command);
+        $output = $this->runMysqlOrFail($ssh, $command);
 
         return array_values(array_filter(
             $this->nonEmptyLines($output),
@@ -151,7 +151,7 @@ final class ReadOnlyDatabaseClient implements ReadOnlyDatabaseClientInterface
         string $database,
     ): array {
         $command = $this->mysqlCommand($config, $database, 'SHOW TABLES', true);
-        $output = $this->runOrFail($ssh, $command);
+        $output = $this->runMysqlOrFail($ssh, $command);
 
         return $this->nonEmptyLines($output);
     }
@@ -176,7 +176,7 @@ final class ReadOnlyDatabaseClient implements ReadOnlyDatabaseClientInterface
             $query->offset(),
         );
         $command = $this->mysqlCommand($config, $database, $sql, false);
-        $output = $this->runOrFail($ssh, $command);
+        $output = $this->runMysqlOrFail($ssh, $command);
 
         return $this->parseTabularOutput($output);
     }
@@ -211,15 +211,58 @@ final class ReadOnlyDatabaseClient implements ReadOnlyDatabaseClientInterface
         $headerFlag = $skipHeaders ? '-N ' : '';
 
         return sprintf(
-            'mysql -h %s -P %d -u %s -p%s %s%s-B -e %s',
+            'MYSQL_PWD=%s mysql -h %s -P %d -u %s %s%s-B -e %s 2>/dev/null',
+            escapeshellarg($config->password),
             escapeshellarg($config->host),
             $config->port,
             escapeshellarg($config->username),
-            escapeshellarg($config->password),
             $databaseFlag,
             $headerFlag,
             escapeshellarg($sql),
         );
+    }
+
+    private function runMysqlOrFail(SSHConnectionInterface $ssh, string $command): string
+    {
+        $result = $ssh->run($command);
+
+        if ($result->exitCode !== 0) {
+            throw new RuntimeException('Database query failed.');
+        }
+
+        return $this->sanitizeMysqlCliOutput(trim($result->stdout));
+    }
+
+    private function sanitizeMysqlCliOutput(string $output): string
+    {
+        if ($output === '') {
+            return '';
+        }
+
+        $lines = preg_split('/\r\n|\r|\n/', $output) ?: [];
+        $filtered = [];
+
+        foreach ($lines as $line) {
+            if ($this->isMysqlCliNoiseLine($line)) {
+                continue;
+            }
+
+            $filtered[] = $line;
+        }
+
+        return trim(implode("\n", $filtered));
+    }
+
+    private function isMysqlCliNoiseLine(string $line): bool
+    {
+        $trimmed = trim($line);
+
+        if ($trimmed === '') {
+            return false;
+        }
+
+        return str_starts_with($trimmed, 'mysql: [Warning]')
+            || str_starts_with($trimmed, 'mysql: [Note]');
     }
 
     private function runOrFail(SSHConnectionInterface $ssh, string $command): string

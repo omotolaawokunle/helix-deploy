@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Requests;
 
+use App\Http\Requests\Concerns\NormalizesRefreshQueryParameter;
 use App\Packages\DatabaseBrowser\DTOs\DatabaseRowQuery;
 use App\Packages\DatabaseBrowser\Support\DatabaseRowQueryFactory;
 use Illuminate\Foundation\Http\FormRequest;
@@ -11,6 +12,8 @@ use Illuminate\Validation\Validator;
 
 class BrowseSiteDatabaseRowsRequest extends FormRequest
 {
+    use NormalizesRefreshQueryParameter;
+
     public function authorize(): bool
     {
         return true;

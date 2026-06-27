@@ -440,6 +440,7 @@ watch(isConfirmOpen, (isOpen) => {
 })
 
 onBeforeUnmount(() => {
+  updateFlashTimers.forEach((timer) => {
     clearTimeout(timer)
   })
 
