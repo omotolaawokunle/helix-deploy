@@ -65,7 +65,7 @@ class InstallRedis extends BaseProvisioningScript
                 'configure-redis-password',
             );
 
-            $this->credentialVault->storeSecret(
+            $this->credentialVault->storeServerSecret(
                 organization: $this->organization,
                 owner: $server,
                 name: sprintf('%s-redis-password', $server->hostname),

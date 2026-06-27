@@ -5,6 +5,7 @@ import { toast } from 'vue-sonner'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -453,6 +454,13 @@ defineExpose({
               <div class="space-y-1">
                 <div class="inline-flex items-center gap-2 font-medium">
                   {{ service.label }}
+                  <Badge
+                    v-if="service.version !== null"
+                    variant="outline"
+                    class="text-[10px] font-normal"
+                  >
+                    v{{ service.version }}
+                  </Badge>
                   <span
                     v-if="isServicePending(service.key)"
                     class="inline-flex size-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none"

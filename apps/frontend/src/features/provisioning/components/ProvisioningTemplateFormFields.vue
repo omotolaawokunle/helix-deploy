@@ -44,6 +44,14 @@ const selectedServices = computed(() => new Set(form.value.services))
 
 const showPhpSelector = computed(() => selectedServices.value.has('php'))
 const showNodeSelector = computed(() => selectedServices.value.has('nodejs'))
+const showPostgresqlSelector = computed(() => selectedServices.value.has('postgresql'))
+const showMysqlSelector = computed(() => selectedServices.value.has('mysql'))
+const showPythonSelector = computed(() => selectedServices.value.has('python'))
+const showRedisPassword = computed(() => selectedServices.value.has('redis'))
+
+const POSTGRESQL_VERSIONS = ['14', '15', '16', '17', '18'] as const
+const MYSQL_VERSIONS = ['8.0', '8.4'] as const
+const PYTHON_VERSIONS = ['3.10', '3.11', '3.12', '3.13'] as const
 
 function toggleService(script: ProvisioningScript): void {
   if (props.readOnly) {
@@ -162,6 +170,85 @@ function updateField<K extends keyof ProvisioningTemplateFormState>(
           </SelectItem>
         </SelectContent>
       </Select>
+    </div>
+
+    <div v-if="showPostgresqlSelector" class="space-y-2">
+      <Label for="template-postgresql-version">PostgreSQL version</Label>
+      <Select
+        :model-value="form.postgresqlVersion"
+        :disabled="readOnly"
+        @update:model-value="(value) => updateField('postgresqlVersion', String(value))"
+      >
+        <SelectTrigger id="template-postgresql-version">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem
+            v-for="version in POSTGRESQL_VERSIONS"
+            :key="version"
+            :value="version"
+          >
+            PostgreSQL {{ version }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    <div v-if="showMysqlSelector" class="space-y-2">
+      <Label for="template-mysql-version">MySQL version</Label>
+      <Select
+        :model-value="form.mysqlVersion"
+        :disabled="readOnly"
+        @update:model-value="(value) => updateField('mysqlVersion', String(value))"
+      >
+        <SelectTrigger id="template-mysql-version">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem
+            v-for="version in MYSQL_VERSIONS"
+            :key="version"
+            :value="version"
+          >
+            MySQL {{ version }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    <div v-if="showPythonSelector" class="space-y-2">
+      <Label for="template-python-version">Python version</Label>
+      <Select
+        :model-value="form.pythonVersion"
+        :disabled="readOnly"
+        @update:model-value="(value) => updateField('pythonVersion', String(value))"
+      >
+        <SelectTrigger id="template-python-version">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem
+            v-for="version in PYTHON_VERSIONS"
+            :key="version"
+            :value="version"
+          >
+            Python {{ version }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    <div v-if="showRedisPassword" class="space-y-2">
+      <Label for="template-redis-password">Redis password (optional)</Label>
+      <Input
+        id="template-redis-password"
+        :model-value="form.redisPassword"
+        :disabled="readOnly"
+        type="password"
+        autocomplete="new-password"
+        placeholder="Auto-generated if left blank"
+        @update:model-value="(value) => updateField('redisPassword', String(value))"
+      />
     </div>
   </div>
 </template>

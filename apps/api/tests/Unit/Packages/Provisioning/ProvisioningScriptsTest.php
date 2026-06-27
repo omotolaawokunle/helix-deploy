@@ -182,7 +182,7 @@ it('install php skips package installation when fpm is already installed', funct
 it('install mysql stores generated deploy password in vault', function (): void {
     [$organization, $server] = provisioningServerFixture();
     $vault = \Mockery::mock(CredentialVaultInterface::class);
-    $vault->shouldReceive('storeSecret')->once();
+    $vault->shouldReceive('storeServerSecret')->once();
     $script = new InstallMySQL($vault, $organization);
     $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 6);
 
@@ -194,7 +194,7 @@ it('install mysql stores generated deploy password in vault', function (): void 
 it('install mysql skips package installation when mysql is already installed', function (): void {
     [$organization, $server] = provisioningServerFixture();
     $vault = \Mockery::mock(CredentialVaultInterface::class);
-    $vault->shouldReceive('storeSecret')->never();
+    $vault->shouldReceive('storeServerSecret')->never();
     $script = new InstallMySQL($vault, $organization);
     $connection = serviceProvisioningConnection(serviceInstalled: true, installSteps: 0, serviceBinary: 'mysql');
 
@@ -206,19 +206,21 @@ it('install mysql skips package installation when mysql is already installed', f
 it('install postgresql stores generated deploy password in vault', function (): void {
     [$organization, $server] = provisioningServerFixture();
     $vault = \Mockery::mock(CredentialVaultInterface::class);
-    $vault->shouldReceive('storeSecret')->once();
+    $vault->shouldReceive('storeServerSecret')->once();
     $script = new InstallPostgreSQL($vault, $organization);
-    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 5);
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 7);
 
-    $script->handle($connection, $server);
+    $script->handle($connection, $server, ['postgresqlVersion' => '18']);
 
-    expect($connection->getExecutedCommands())->toHaveCount(6);
+    expect(collect($connection->getExecutedCommands())->contains(
+        fn (string $command): bool => str_contains($command, 'postgresql-18'),
+    ))->toBeTrue();
 });
 
 it('install redis sets password when provided and stores it in vault', function (): void {
     [$organization, $server] = provisioningServerFixture();
     $vault = \Mockery::mock(CredentialVaultInterface::class);
-    $vault->shouldReceive('storeSecret')->once();
+    $vault->shouldReceive('storeServerSecret')->once();
     $script = new InstallRedis($vault, $organization, 'redis-secret-123');
     $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 6, serviceBinary: 'redis-cli');
 
@@ -244,11 +246,13 @@ it('install python runs expected command sequence', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
     $script = new InstallPython();
-    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 3, serviceBinary: 'python3');
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 5, serviceBinary: 'python3.12');
 
-    $script->handle($connection, $server);
+    $script->handle($connection, $server, ['pythonVersion' => '3.12']);
 
-    expect($connection->getExecutedCommands())->toHaveCount(4);
+    expect(collect($connection->getExecutedCommands())->contains(
+        fn (string $command): bool => str_contains($command, 'python3.12'),
+    ))->toBeTrue();
 });
 
 it('install supervisor runs expected command sequence', function (): void {

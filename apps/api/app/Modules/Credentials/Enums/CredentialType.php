@@ -10,6 +10,7 @@ enum CredentialType: string
     case SSH_PASSWORD = 'ssh_password';
     case API_TOKEN = 'api_token';
     case ENV_VAR = 'env_var';
+    case SERVER_SECRET = 'server_secret';
     case REGISTRY_PASSWORD = 'registry_password';
     case GIT_PROVIDER_TOKEN = 'git_provider_token';
     case CLOUD_PROVIDER_CREDENTIAL = 'cloud_provider_credential';
@@ -22,6 +23,7 @@ enum CredentialType: string
             self::SSH_PASSWORD => 'SSH Password',
             self::API_TOKEN => 'API Token',
             self::ENV_VAR => 'Environment Variable',
+            self::SERVER_SECRET => 'Server Secret',
             self::REGISTRY_PASSWORD => 'Registry Password',
             self::GIT_PROVIDER_TOKEN => 'Git Provider Token',
             self::CLOUD_PROVIDER_CREDENTIAL => 'Cloud Provider Credential',
@@ -36,6 +38,7 @@ enum CredentialType: string
             self::SSH_PASSWORD => 'warning',
             self::API_TOKEN => 'success',
             self::ENV_VAR => 'secondary',
+            self::SERVER_SECRET => 'warning',
             self::REGISTRY_PASSWORD => 'danger',
             self::GIT_PROVIDER_TOKEN => 'success',
             self::CLOUD_PROVIDER_CREDENTIAL => 'success',

@@ -1,6 +1,7 @@
 import { api } from '@/lib/axios'
 import type {
   CreateProvisioningTemplatePayload,
+  ProvisioningServiceVersionCatalog,
   ProvisioningTemplateRecord,
   UpdateProvisioningTemplatePayload,
 } from '@/features/provisioning/types'
@@ -50,4 +51,12 @@ export async function updateProvisioningTemplate(
 
 export async function deleteProvisioningTemplate(templateId: string): Promise<void> {
   await api.delete(`/api/v1/provisioning-templates/${templateId}`)
+}
+
+export async function fetchProvisioningServiceVersions(): Promise<ProvisioningServiceVersionCatalog> {
+  const response = await api.get<{ data: ProvisioningServiceVersionCatalog }>(
+    '/api/v1/provisioning/service-versions',
+  )
+
+  return response.data.data
 }

@@ -43,6 +43,7 @@ class ListServerServicesAction
                 status: $status,
                 statusCheckedAt: is_string($metadata['statusCheckedAt'] ?? null) ? $metadata['statusCheckedAt'] : null,
                 controllable: $controllable,
+                version: is_string($metadata['version'] ?? null) ? $metadata['version'] : null,
             );
         }
 

@@ -17,11 +17,15 @@ interface CredentialVaultInterface
 
     public function storeSecret(Organization $organization, Model $owner, string $name, string $value): Credential;
 
+    public function storeServerSecret(Organization $organization, Model $owner, string $name, string $value): Credential;
+
     public function updateSecret(string $credentialId, Organization $organization, string $value): Credential;
 
     public function getPrivateKey(string $credentialId, Organization $organization): string;
 
     public function getSecret(string $credentialId, Organization $organization): string;
+
+    public function getServerSecret(string $credentialId, Organization $organization): string;
 
     public function getPublicKey(string $credentialId, Organization $organization): string;
 

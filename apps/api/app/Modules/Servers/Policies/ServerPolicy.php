@@ -94,6 +94,16 @@ class ServerPolicy
         return $this->view($user, $server);
     }
 
+    public function viewServiceCredentials(User $user, Server $server): bool
+    {
+        return $this->view($user, $server);
+    }
+
+    public function revealServiceCredentials(User $user, Server $server): bool
+    {
+        return in_array($this->roleInOrganization($user, $server->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
+    }
+
     public function syncSslCertificates(User $user, Server $server): bool
     {
         if ($server->management_mode === ManagementMode::OBSERVE) {

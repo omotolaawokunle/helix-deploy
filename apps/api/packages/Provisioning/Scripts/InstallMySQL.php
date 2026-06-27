@@ -7,14 +7,17 @@ namespace App\Packages\Provisioning\Scripts;
 use App\Models\Organization;
 use App\Modules\Credentials\Contracts\CredentialVaultInterface;
 use App\Modules\Servers\Models\Server;
+use App\Packages\Provisioning\Enums\MysqlVersion;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class InstallMySQL extends BaseProvisioningScript
 {
     public function __construct(
         private readonly CredentialVaultInterface $credentialVault,
         private readonly Organization $organization,
+        private readonly MysqlVersion $configuredVersion = MysqlVersion::V8_4,
     ) {
     }
 
@@ -40,6 +43,20 @@ class InstallMySQL extends BaseProvisioningScript
     {
         $this->prepare($options);
 
+        $configuredVersion = isset($options['mysqlVersion'])
+            ? MysqlVersion::tryFrom((string) $options['mysqlVersion'])
+            : $this->configuredVersion;
+
+        if ($configuredVersion === null) {
+            throw new InvalidArgumentException(sprintf(
+                'Unsupported MySQL version. Allowed values: %s.',
+                implode(', ', MysqlVersion::values()),
+            ));
+        }
+
+        $version = $configuredVersion->value;
+        $package = "mysql-server-{$version}";
+
         if ($this->commandExists($ssh, 'mysql')) {
             $this->logInfo($options, 'mysql already installed — skipping package installation');
             $this->runStep($ssh, 'systemctl enable mysql', 'enable-mysql');
@@ -52,7 +69,7 @@ class InstallMySQL extends BaseProvisioningScript
         $escapedPassword = escapeshellarg($password);
 
         $this->runStep($ssh, $this->apt('apt-get update -y'), 'apt-update');
-        $this->runStep($ssh, $this->apt('apt-get install -y mysql-server-8.0'), 'install-mysql');
+        $this->runStep($ssh, $this->apt("apt-get install -y {$package}"), 'install-mysql');
         $this->runStep($ssh, 'systemctl enable mysql', 'enable-mysql');
         $this->runStep($ssh, 'systemctl start mysql', 'start-mysql');
         $this->runStep(
@@ -66,7 +83,7 @@ class InstallMySQL extends BaseProvisioningScript
             'grant-mysql-deploy-user',
         );
 
-        $this->credentialVault->storeSecret(
+        $this->credentialVault->storeServerSecret(
             organization: $this->organization,
             owner: $server,
             name: sprintf('%s-mysql-deploy-password', $server->hostname),

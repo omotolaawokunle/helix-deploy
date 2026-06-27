@@ -27,6 +27,7 @@ import {
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import ProviderIcon from '@/features/servers/components/ProviderIcon.vue'
 import InstalledServicesPanel from '@/features/servers/components/InstalledServicesPanel.vue'
+import ServerCredentialsPanel from '@/features/servers/components/ServerCredentialsPanel.vue'
 import ServerObserveModeAlert from '@/features/servers/components/ServerObserveModeAlert.vue'
 
 import { deleteServer, testServerConnection } from '@/features/servers/api'
@@ -507,6 +508,12 @@ watch(
             :management-mode="server.managementMode"
             :is-production="isProduction"
             :can-manage="canManageServices"
+          />
+
+          <ServerCredentialsPanel
+            v-if="server !== null"
+            :server-id="server.id"
+            :can-reveal="canManageServices"
           />
 
           <section>

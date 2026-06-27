@@ -25,17 +25,22 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Input } from '@/components/ui/input'
 import {
+  fetchProvisioningServiceVersions,
   fetchProvisioningTemplates,
 } from '@/features/provisioning/api'
-import type { ProvisioningTemplateRecord } from '@/features/provisioning/types'
+import type {
+  ProvisioningServiceVersionCatalog,
+  ProvisioningTemplateRecord,
+  ServiceVersionDefinition,
+} from '@/features/provisioning/types'
 import { formatProvisioningTemplateName } from '@/features/provisioning/constants'
 import {
   provisionServer,
 } from '@/features/servers/api'
+import type { ProvisionServerPayload } from '@/features/servers/types'
 import {
-  NODE_VERSIONS,
-  PHP_VERSIONS,
   PROVISIONING_SCRIPTS,
   SCRIPT_ESTIMATED_MINUTES,
   type ProvisioningScript,
@@ -59,11 +64,13 @@ const router = useRouter()
 const { orgId } = useActiveOrg()
 
 const templates = ref<ProvisioningTemplateRecord[]>([])
+const versionCatalog = ref<ProvisioningServiceVersionCatalog>({})
 const templatesLoadedForOrgId = ref<string | null>(null)
 const isLoadingTemplates = ref(false)
+const isLoadingVersions = ref(false)
 const selectedScripts = ref<Set<ProvisioningScript>>(new Set())
-const phpVersion = ref<string>('8.3')
-const nodeVersion = ref<number>(20)
+const versionSelections = ref<Record<string, string>>({})
+const redisPassword = ref('')
 const isSubmitting = ref(false)
 const apiError = ref<string | null>(null)
 
@@ -88,8 +95,13 @@ const estimatedMinutes = computed(() =>
   ),
 )
 
-const showPhpSelector = computed(() => selectedScripts.value.has('php'))
-const showNodeSelector = computed(() => selectedScripts.value.has('nodejs'))
+const activeVersionDefinitions = computed((): ServiceVersionDefinition[] => {
+  return [...selectedScripts.value]
+    .map((script) => versionCatalog.value[script])
+    .filter((definition): definition is ServiceVersionDefinition => definition !== undefined)
+})
+
+const showRedisPassword = computed(() => selectedScripts.value.has('redis'))
 
 const detectedServiceLabels = computed((): string[] =>
   props.detectedServices.map((service) => scriptLabels[service as ProvisioningScript] ?? service),
@@ -99,6 +111,17 @@ const skippedSelectedCount = computed((): number =>
   [...selectedScripts.value].filter((script) => props.detectedServices.includes(script)).length,
 )
 
+function ensureVersionDefault(definition: ServiceVersionDefinition): void {
+  if (versionSelections.value[definition.optionKey] !== undefined) {
+    return
+  }
+
+  versionSelections.value = {
+    ...versionSelections.value,
+    [definition.optionKey]: String(definition.default),
+  }
+}
+
 function toggleScript(script: ProvisioningScript): void {
   const next = new Set(selectedScripts.value)
 
@@ -106,6 +129,11 @@ function toggleScript(script: ProvisioningScript): void {
     next.delete(script)
   } else {
     next.add(script)
+    const definition = versionCatalog.value[script]
+
+    if (definition !== undefined) {
+      ensureVersionDefault(definition)
+    }
   }
 
   selectedScripts.value = next
@@ -113,8 +141,8 @@ function toggleScript(script: ProvisioningScript): void {
 
 function resetDrawerState(): void {
   selectedScripts.value = new Set()
-  phpVersion.value = '8.3'
-  nodeVersion.value = 20
+  versionSelections.value = {}
+  redisPassword.value = ''
   apiError.value = null
 }
 
@@ -127,8 +155,25 @@ watch(
     }
 
     void ensureTemplatesLoaded()
+    void ensureVersionsLoaded()
   },
 )
+
+async function ensureVersionsLoaded(): Promise<void> {
+  if (Object.keys(versionCatalog.value).length > 0) {
+    return
+  }
+
+  isLoadingVersions.value = true
+
+  try {
+    versionCatalog.value = await fetchProvisioningServiceVersions()
+  } catch {
+    versionCatalog.value = {}
+  } finally {
+    isLoadingVersions.value = false
+  }
+}
 
 async function ensureTemplatesLoaded(): Promise<void> {
   const activeOrgId = orgId.value
@@ -163,17 +208,60 @@ function templateLabel(template: ProvisioningTemplateRecord): string {
 function applyTemplate(template: ProvisioningTemplateRecord): void {
   selectedScripts.value = new Set(template.services as ProvisioningScript[])
 
-  const php = template.options.phpVersion
+  const nextSelections: Record<string, string> = {}
 
-  if (typeof php === 'string') {
-    phpVersion.value = php
+  for (const script of selectedScripts.value) {
+    const definition = versionCatalog.value[script]
+
+    if (definition === undefined) {
+      continue
+    }
+
+    const templateValue = template.options[definition.optionKey]
+
+    nextSelections[definition.optionKey] = templateValue !== undefined && templateValue !== null
+      ? String(templateValue)
+      : String(definition.default)
   }
 
-  const node = template.options.nodeVersion
+  versionSelections.value = nextSelections
 
-  if (typeof node === 'number') {
-    nodeVersion.value = node
+  const templateRedisPassword = template.options.redisPassword
+
+  redisPassword.value = typeof templateRedisPassword === 'string' ? templateRedisPassword : ''
+}
+
+function updateVersionSelection(optionKey: string, value: unknown): void {
+  versionSelections.value = {
+    ...versionSelections.value,
+    [optionKey]: String(value),
   }
+}
+
+function buildProvisionOptions(): ProvisionServerPayload['options'] {
+  const options: NonNullable<ProvisionServerPayload['options']> = {}
+
+  for (const definition of activeVersionDefinitions.value) {
+    const value = versionSelections.value[definition.optionKey] ?? String(definition.default)
+
+    if (definition.optionKey === 'nodeVersion') {
+      options.nodeVersion = Number(value)
+    } else if (definition.optionKey === 'phpVersion') {
+      options.phpVersion = value
+    } else if (definition.optionKey === 'postgresqlVersion') {
+      options.postgresqlVersion = value
+    } else if (definition.optionKey === 'mysqlVersion') {
+      options.mysqlVersion = value
+    } else if (definition.optionKey === 'pythonVersion') {
+      options.pythonVersion = value
+    }
+  }
+
+  if (showRedisPassword.value && redisPassword.value.trim() !== '') {
+    options.redisPassword = redisPassword.value.trim()
+  }
+
+  return options
 }
 
 function resolveProvisionError(error: unknown): string {
@@ -196,10 +284,7 @@ async function handleSubmit(): Promise<void> {
   try {
     const response = await provisionServer(props.serverId, {
       scripts: [...selectedScripts.value],
-      options: {
-        ...(showPhpSelector.value ? { phpVersion: phpVersion.value } : {}),
-        ...(showNodeSelector.value ? { nodeVersion: nodeVersion.value } : {}),
-      },
+      options: buildProvisionOptions(),
     })
 
     emit('update:open', false)
@@ -313,43 +398,44 @@ async function handleSubmit(): Promise<void> {
           </div>
         </div>
 
-        <div v-if="showPhpSelector" class="space-y-2">
-          <Label>PHP version</Label>
-          <Select v-model="phpVersion">
+        <div
+          v-for="definition in activeVersionDefinitions"
+          :key="definition.optionKey"
+          class="space-y-2"
+        >
+          <Label>{{ definition.label }} version</Label>
+          <Select
+            :model-value="versionSelections[definition.optionKey] ?? String(definition.default)"
+            :disabled="isLoadingVersions"
+            @update:model-value="(value) => updateVersionSelection(definition.optionKey, value)"
+          >
             <SelectTrigger>
-              <SelectValue placeholder="Select PHP version" />
+              <SelectValue :placeholder="`Select ${definition.label} version`" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem
-                v-for="version in PHP_VERSIONS"
-                :key="version"
-                :value="version"
+                v-for="version in definition.values"
+                :key="String(version)"
+                :value="String(version)"
               >
-                PHP {{ version }}
+                {{ definition.label }} {{ version }}
               </SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <div v-if="showNodeSelector" class="space-y-2">
-          <Label>Node.js version</Label>
-          <Select
-            :model-value="String(nodeVersion)"
-            @update:model-value="nodeVersion = Number($event)"
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select Node version" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="version in NODE_VERSIONS"
-                :key="version"
-                :value="String(version)"
-              >
-                Node {{ version }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+        <div v-if="showRedisPassword" class="space-y-2">
+          <Label for="redis-password">Redis password (optional)</Label>
+          <Input
+            id="redis-password"
+            v-model="redisPassword"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Auto-generated if left blank"
+          />
+          <p class="text-xs text-muted-foreground">
+            Minimum 8 characters when provided. Stored as a server credential.
+          </p>
         </div>
 
         <div class="space-y-1 text-sm text-muted-foreground">
