@@ -94,6 +94,11 @@ class SitePolicy
         return $this->view($user, $site);
     }
 
+    public function browseDatabase(User $user, Site $site): bool
+    {
+        return $this->view($user, $site);
+    }
+
     private function roleInOrganization(User $user, Organization $org): ?TeamRole
     {
         return $user->roleInOrganization($org);

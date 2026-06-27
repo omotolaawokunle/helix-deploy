@@ -47,6 +47,9 @@ const DaemonsTab = defineAsyncComponent(
 const CommandRunnerTab = defineAsyncComponent(
   () => import('@/features/commands/components/CommandRunnerTab.vue'),
 )
+const ServerDatabasesTab = defineAsyncComponent(
+  () => import('@/features/servers/components/ServerDatabasesTab.vue'),
+)
 const ServerLogsTab = defineAsyncComponent(
   () => import('@/features/servers/components/ServerLogsTab.vue'),
 )
@@ -73,7 +76,7 @@ const isDeleting = ref(false)
 const isAwaitingDeletion = ref(false)
 const activeTab = ref('overview')
 
-const SERVER_TAB_IDS = ['overview', 'sites', 'ssl', 'cron', 'daemons', 'commands', 'logs'] as const
+const SERVER_TAB_IDS = ['overview', 'sites', 'ssl', 'cron', 'daemons', 'commands', 'databases', 'logs'] as const
 
 function applyTabFromQuery(): void {
   const tab = route.query.tab
@@ -472,6 +475,9 @@ watch(
           <TabsTrigger value="commands">
             Commands
           </TabsTrigger>
+          <TabsTrigger value="databases">
+            Databases
+          </TabsTrigger>
           <TabsTrigger value="logs">
             Logs
           </TabsTrigger>
@@ -559,6 +565,14 @@ watch(
         <TabsContent value="commands" class="mt-6">
           <CommandRunnerTab
             v-if="activeTab === 'commands'"
+            :server-id="server.id"
+            :is-production="isProduction"
+          />
+        </TabsContent>
+
+        <TabsContent value="databases" class="mt-6">
+          <ServerDatabasesTab
+            v-if="activeTab === 'databases'"
             :server-id="server.id"
             :is-production="isProduction"
           />

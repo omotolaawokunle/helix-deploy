@@ -33,6 +33,9 @@ const SiteSettingsTab = defineAsyncComponent(
 const SiteDnsSslTab = defineAsyncComponent(
   () => import('@/features/sites/components/SiteDnsSslTab.vue'),
 )
+const SiteDatabaseTab = defineAsyncComponent(
+  () => import('@/features/sites/components/SiteDatabaseTab.vue'),
+)
 const SiteLogsTab = defineAsyncComponent(
   () => import('@/features/sites/components/SiteLogsTab.vue'),
 )
@@ -183,6 +186,9 @@ onMounted(() => {
           <TabsTrigger value="env-vars">
             Environment Variables
           </TabsTrigger>
+          <TabsTrigger value="database">
+            Database
+          </TabsTrigger>
           <TabsTrigger value="nginx">
             Nginx Config
           </TabsTrigger>
@@ -214,6 +220,14 @@ onMounted(() => {
             v-if="activeTab === 'env-vars'"
             :site-id="site.id"
             :server-id="serverId"
+          />
+        </TabsContent>
+        <TabsContent value="database" class="mt-6">
+          <SiteDatabaseTab
+            v-if="activeTab === 'database'"
+            :site-id="site.id"
+            :server-id="serverId"
+            :is-production="isProduction"
           />
         </TabsContent>
         <TabsContent value="nginx" class="mt-6">

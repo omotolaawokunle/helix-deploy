@@ -32,6 +32,8 @@ use App\Modules\Monitoring\Contracts\RemoteLogReaderInterface;
 use App\Modules\Monitoring\Contracts\ServerMetricsCollectorInterface;
 use App\Modules\Monitoring\Services\RemoteLogReader;
 use App\Modules\Monitoring\Services\ServerMetricsCollector;
+use App\Packages\DatabaseBrowser\Contracts\ReadOnlyDatabaseClientInterface;
+use App\Packages\DatabaseBrowser\ReadOnlyDatabaseClient;
 use App\Modules\Integrations\Contracts\CloudflareClientInterface;
 use App\Modules\Integrations\Contracts\SiteDnsProvisionerInterface;
 use App\Modules\Integrations\Models\CloudflareIntegration;
@@ -78,6 +80,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(TeamProjectVisibilityServiceInterface::class, TeamProjectVisibilityService::class);
         $this->app->singleton(ServerMetricsCollectorInterface::class, ServerMetricsCollector::class);
         $this->app->singleton(RemoteLogReaderInterface::class, RemoteLogReader::class);
+        $this->app->singleton(ReadOnlyDatabaseClientInterface::class, ReadOnlyDatabaseClient::class);
         $this->app->singleton(RunnerSlotStoreInterface::class, RedisRunnerSlotStore::class);
         $this->app->singleton(CloudflareClientInterface::class, CloudflareClient::class);
         $this->app->singleton(DigitalOceanDnsClient::class);

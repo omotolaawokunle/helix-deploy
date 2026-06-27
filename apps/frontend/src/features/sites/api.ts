@@ -1,3 +1,4 @@
+import type { DatabaseBrowseResponse, DatabaseRowQueryParams } from '@/features/databases/types'
 import type { ServerServiceCredentialRecord } from '@/features/servers/types'
 import { api } from '@/lib/axios'
 import type { LogFetchResponse } from '@/features/logs/types'
@@ -235,6 +236,38 @@ export async function applyEnvVarsPull(
   payload: { strategy: EnvVarPullStrategy },
 ): Promise<void> {
   await api.post(`/api/v1/sites/${siteId}/env-vars/pull`, payload)
+}
+
+export async function fetchSiteDatabaseTables(
+  siteId: string,
+  options?: { refresh?: boolean },
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/sites/${siteId}/database/tables`,
+    { params: { refresh: options?.refresh ?? false } },
+  )
+
+  return response.data.data
+}
+
+export async function fetchSiteDatabaseRows(
+  siteId: string,
+  table: string,
+  options?: { refresh?: boolean } & DatabaseRowQueryParams,
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/sites/${siteId}/database/tables/${encodeURIComponent(table)}/rows`,
+    {
+      params: {
+        page: options?.page ?? 1,
+        limit: options?.limit ?? 50,
+        filter: options?.filter ?? [],
+        refresh: options?.refresh ?? false,
+      },
+    },
+  )
+
+  return response.data.data
 }
 
 export async function fetchNginxConfig(siteId: string): Promise<NginxConfig> {

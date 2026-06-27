@@ -104,6 +104,17 @@ class ServerPolicy
         return in_array($this->roleInOrganization($user, $server->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
     }
 
+    public function browseDatabases(User $user, Server $server, \App\Packages\DatabaseBrowser\Enums\DatabaseEngine $engine): bool
+    {
+        if (! $this->view($user, $server)) {
+            return false;
+        }
+
+        $installed = collect($server->installed_services ?? []);
+
+        return $installed->get($engine->value)['installed'] ?? false;
+    }
+
     public function syncSslCertificates(User $user, Server $server): bool
     {
         if ($server->management_mode === ManagementMode::OBSERVE) {

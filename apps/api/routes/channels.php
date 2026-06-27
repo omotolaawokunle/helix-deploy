@@ -87,3 +87,18 @@ Broadcast::channel('server.{serverId}.logs', function ($user, $serverId) {
         ->whereKey($server->organization_id)
         ->exists();
 });
+
+Broadcast::channel('server.{serverId}.databases', function ($user, $serverId) {
+    $server = Server::query()
+        ->withoutGlobalScope('owned_by_organization')
+        ->whereKey($serverId)
+        ->first();
+
+    if ($server === null) {
+        return false;
+    }
+
+    return $user->organizations()
+        ->whereKey($server->organization_id)
+        ->exists();
+});

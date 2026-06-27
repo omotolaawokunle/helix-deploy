@@ -1,5 +1,6 @@
-import { api } from '@/lib/axios'
+import type { DatabaseBrowseResponse, DatabaseRowQueryParams } from '@/features/databases/types'
 import type { LogFetchResponse, ServerLogType } from '@/features/logs/types'
+import { api } from '@/lib/axios'
 import type { Server, ServerGroup } from '@/types'
 import type {
   EnvironmentOption,
@@ -269,6 +270,53 @@ export async function revealServerServiceCredential(
   )
 
   return response.data.data.value
+}
+
+export async function fetchServerDatabases(
+  serverId: string,
+  params: { engine: 'postgresql' | 'mysql'; refresh?: boolean },
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/servers/${serverId}/databases`,
+    { params: { engine: params.engine, refresh: params.refresh ?? false } },
+  )
+
+  return response.data.data
+}
+
+export async function fetchServerDatabaseTables(
+  serverId: string,
+  database: string,
+  params: { engine: 'postgresql' | 'mysql'; refresh?: boolean },
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/servers/${serverId}/databases/${encodeURIComponent(database)}/tables`,
+    { params: { engine: params.engine, refresh: params.refresh ?? false } },
+  )
+
+  return response.data.data
+}
+
+export async function fetchServerDatabaseRows(
+  serverId: string,
+  database: string,
+  table: string,
+  params: { engine: 'postgresql' | 'mysql'; refresh?: boolean } & DatabaseRowQueryParams,
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/servers/${serverId}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/rows`,
+    {
+      params: {
+        engine: params.engine,
+        page: params.page ?? 1,
+        limit: params.limit ?? 50,
+        filter: params.filter ?? [],
+        refresh: params.refresh ?? false,
+      },
+    },
+  )
+
+  return response.data.data
 }
 
 export async function fetchServerSslCertificates(serverId: string): Promise<ServerSslOverview> {
