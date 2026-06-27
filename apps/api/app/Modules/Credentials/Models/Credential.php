@@ -28,6 +28,7 @@ class Credential extends Model
         'organization_id',
         'credentialable_type',
         'credentialable_id',
+        'referenced_credential_id',
         'type',
         'name',
         'encrypted_value',
@@ -61,6 +62,11 @@ class Credential extends Model
     public function credentialable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    public function referencedCredential(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'referenced_credential_id');
     }
 
     public function createdBy(): BelongsTo

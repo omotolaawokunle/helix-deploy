@@ -18,6 +18,7 @@ class EnvFileManager
     public function __construct(
         private readonly CredentialVaultInterface $credentialVault,
         private readonly SiteDeployPathResolver $deployPathResolver,
+        private readonly EnvVarValueResolver $envVarValueResolver,
     ) {
     }
 
@@ -34,7 +35,7 @@ class EnvFileManager
         $lines = [];
 
         foreach ($credentials as $credential) {
-            $value = $this->credentialVault->getSecret((string) $credential->getKey(), $org);
+            $value = $this->envVarValueResolver->resolve($credential, $org);
             $lines[] = $credential->name.'='.$this->quoteEnvValue($value);
             sodium_memzero($value);
         }

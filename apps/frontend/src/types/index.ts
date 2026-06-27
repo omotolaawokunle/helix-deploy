@@ -254,6 +254,9 @@ export interface EnvVarListItem {
   id: string
   key: string
   maskedValue: string
+  isReference: boolean
+  referencedCredentialId: string | null
+  referencedCredentialLabel: string | null
   createdAt: string | null
   updatedAt: string | null
 }

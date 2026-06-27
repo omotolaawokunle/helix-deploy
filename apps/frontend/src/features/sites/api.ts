@@ -1,3 +1,4 @@
+import type { ServerServiceCredentialRecord } from '@/features/servers/types'
 import { api } from '@/lib/axios'
 import type { LogFetchResponse } from '@/features/logs/types'
 import type { EnvVarListItem, EnvVarPullPreview, EnvVarPullStrategy, GitProviderType, NginxConfig, Site } from '@/types'
@@ -161,9 +162,17 @@ export async function fetchEnvVars(siteId: string): Promise<EnvVarListItem[]> {
   return response.data.data
 }
 
+export async function fetchLinkableCredentials(siteId: string): Promise<ServerServiceCredentialRecord[]> {
+  const response = await api.get<CollectionResponse<ServerServiceCredentialRecord>>(
+    `/api/v1/sites/${siteId}/linkable-credentials`,
+  )
+
+  return response.data.data
+}
+
 export async function createEnvVar(
   siteId: string,
-  payload: { key: string; value: string },
+  payload: { key: string; value?: string; referencedCredentialId?: string },
 ): Promise<EnvVarListItem> {
   const response = await api.post<ResourceResponse<EnvVarListItem>>(
     `/api/v1/sites/${siteId}/env-vars`,

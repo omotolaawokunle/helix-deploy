@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, toRef, watch } from 'vue'
-import { ArrowDownToLineIcon, CheckCircle2Icon, EyeIcon, EyeOffIcon, PencilIcon, RefreshCwIcon, Trash2Icon, XIcon } from '@lucide/vue'
+import { ArrowDownToLineIcon, CheckCircle2Icon, EyeIcon, EyeOffIcon, LinkIcon, PencilIcon, RefreshCwIcon, Trash2Icon, XIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { useRotatingStatusMessage } from '@/composables/useRotatingStatusMessage'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -31,6 +39,7 @@ import {
   createEnvVar,
   deleteEnvVar,
   fetchEnvVars,
+  fetchLinkableCredentials,
   revealEnvVar,
   syncEnvVars,
   updateEnvVar,
@@ -38,6 +47,7 @@ import {
 import { useEnvVarsPullPreview } from '@/features/sites/composables/useEnvVarsPullPreview'
 import { useEnvVarsSiteChannel } from '@/features/sites/composables/useEnvVarsSiteChannel'
 import { parseEnvContent } from '@/lib/parseEnv'
+import type { ServerServiceCredentialRecord } from '@/features/servers/types'
 import type { EnvVarListItem, EnvVarPullStrategy } from '@/types'
 
 interface Props {
@@ -58,8 +68,12 @@ const serverId = toRef(props, 'serverId')
 
 const envVars = ref<EnvVarListItem[]>([])
 const isLoading = ref(true)
+const addMode = ref<'literal' | 'reference'>('literal')
 const newKey = ref('')
 const newValue = ref('')
+const selectedCredentialId = ref('')
+const linkableCredentials = ref<ServerServiceCredentialRecord[]>([])
+const isLoadingLinkable = ref(false)
 const isAdding = ref(false)
 
 const revealedValues = ref<Record<string, string>>({})
@@ -106,6 +120,34 @@ const pullLoadingMessage = useRotatingStatusMessage(
   PULL_LOADING_MESSAGES,
   isPullPreviewLoading,
 )
+
+const canLinkCredentials = computed((): boolean => serverId.value !== undefined && serverId.value !== '')
+
+async function loadLinkableCredentials(): Promise<void> {
+  if (!canLinkCredentials.value) {
+    linkableCredentials.value = []
+
+    return
+  }
+
+  isLoadingLinkable.value = true
+
+  try {
+    linkableCredentials.value = await fetchLinkableCredentials(siteId.value)
+  } catch {
+    toast.error('Unable to load server credentials.')
+  } finally {
+    isLoadingLinkable.value = false
+  }
+}
+
+watch(addMode, (mode) => {
+  if (mode === 'reference') {
+    void loadLinkableCredentials()
+  } else {
+    selectedCredentialId.value = ''
+  }
+})
 
 const pullStrategyOptions: Array<{ value: EnvVarPullStrategy; label: string; description: string }> = [
   {
@@ -431,19 +473,36 @@ async function saveEdit(envVar: EnvVarListItem): Promise<void> {
 }
 
 async function handleAdd(): Promise<void> {
-  if (newKey.value.trim() === '' || newValue.value.trim() === '') {
+  if (newKey.value.trim() === '') {
+    return
+  }
+
+  if (addMode.value === 'literal' && newValue.value.trim() === '') {
+    return
+  }
+
+  if (addMode.value === 'reference' && selectedCredentialId.value === '') {
     return
   }
 
   isAdding.value = true
 
   try {
-    await createEnvVar(siteId.value, {
-      key: newKey.value.trim(),
-      value: newValue.value,
-    })
+    if (addMode.value === 'reference') {
+      await createEnvVar(siteId.value, {
+        key: newKey.value.trim(),
+        referencedCredentialId: selectedCredentialId.value,
+      })
+    } else {
+      await createEnvVar(siteId.value, {
+        key: newKey.value.trim(),
+        value: newValue.value,
+      })
+    }
+
     newKey.value = ''
     newValue.value = ''
+    selectedCredentialId.value = ''
     await loadEnvVars()
     toast.success('Environment variable added.')
   } catch {
@@ -638,7 +697,25 @@ onUnmounted(() => {
             :style="{ animationDelay: rowEntranceDelay(index) }"
           >
             <TableCell class="font-mono text-sm">
-              {{ envVar.key }}
+              <div class="flex flex-col gap-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span>{{ envVar.key }}</span>
+                  <Badge
+                    v-if="envVar.isReference"
+                    variant="secondary"
+                    class="gap-1 font-sans text-[10px] font-normal"
+                  >
+                    <LinkIcon class="size-3" aria-hidden="true" />
+                    Linked
+                  </Badge>
+                </div>
+                <p
+                  v-if="envVar.isReference && envVar.referencedCredentialLabel"
+                  class="font-sans text-xs text-muted-foreground"
+                >
+                  {{ envVar.referencedCredentialLabel }}
+                </p>
+              </div>
             </TableCell>
             <TableCell>
               <Input
@@ -690,7 +767,7 @@ onUnmounted(() => {
                   Save
                 </Button>
                 <Button
-                  v-else
+                  v-else-if="!envVar.isReference"
                   type="button"
                   size="sm"
                   variant="ghost"
@@ -719,14 +796,55 @@ onUnmounted(() => {
       <h3 class="text-sm font-medium">
         Add variable
       </h3>
+      <div v-if="canLinkCredentials" class="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          :variant="addMode === 'literal' ? 'default' : 'outline'"
+          @click="addMode = 'literal'"
+        >
+          Literal value
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          :variant="addMode === 'reference' ? 'default' : 'outline'"
+          @click="addMode = 'reference'"
+        >
+          Link server credential
+        </Button>
+      </div>
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-2">
           <Label for="new-env-key">Key</Label>
           <Input id="new-env-key" v-model="newKey" class="font-mono" />
         </div>
-        <div class="space-y-2">
+        <div v-if="addMode === 'literal'" class="space-y-2">
           <Label for="new-env-value">Value</Label>
           <Input id="new-env-value" v-model="newValue" class="font-mono" />
+        </div>
+        <div v-else class="space-y-2">
+          <Label for="new-env-credential">Server credential</Label>
+          <Select v-model="selectedCredentialId" :disabled="isLoadingLinkable">
+            <SelectTrigger id="new-env-credential">
+              <SelectValue :placeholder="isLoadingLinkable ? 'Loading…' : 'Select credential'" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="credential in linkableCredentials"
+                :key="credential.id"
+                :value="credential.id"
+              >
+                {{ credential.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p
+            v-if="!isLoadingLinkable && linkableCredentials.length === 0"
+            class="text-xs text-muted-foreground"
+          >
+            No linkable credentials on this server. Provision PostgreSQL, MySQL, or Redis first.
+          </p>
         </div>
       </div>
       <Button type="button" :disabled="isAdding" @click="handleAdd">

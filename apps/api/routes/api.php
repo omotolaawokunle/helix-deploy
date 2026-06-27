@@ -171,6 +171,7 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::get('/sites/{site}/nginx-config', [NginxConfigController::class, 'show']);
     Route::put('/sites/{site}/nginx-config', [NginxConfigController::class, 'update']);
     Route::get('/sites/{site}/env-vars', [EnvVarController::class, 'index']);
+    Route::get('/sites/{site}/linkable-credentials', [EnvVarController::class, 'linkableCredentials']);
     Route::post('/sites/{site}/env-vars', [EnvVarController::class, 'store']);
     Route::patch('/sites/{site}/env-vars/{credential}', [EnvVarController::class, 'update']);
     Route::delete('/sites/{site}/env-vars/{credential}', [EnvVarController::class, 'destroy']);

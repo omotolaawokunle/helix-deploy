@@ -4,18 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Actions\EnvVarActions;
 
-use App\Modules\Organizations\Models\Organization;
 use App\Modules\Audit\Models\AuditLog;
-use App\Modules\Credentials\Contracts\CredentialVaultInterface;
-use App\Modules\Credentials\Enums\CredentialType;
 use App\Modules\Credentials\Models\Credential;
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Sites\Services\EnvVarValueResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 
 class RevealEnvVarAction
 {
     public function __construct(
-        private readonly CredentialVaultInterface $credentialVault,
+        private readonly EnvVarValueResolver $envVarValueResolver,
     ) {
     }
 
@@ -27,7 +26,7 @@ class RevealEnvVarAction
             throw new AuthorizationException('Credential access denied for this organization.');
         }
 
-        $value = $this->credentialVault->getSecret((string) $credential->getKey(), $org);
+        $value = $this->envVarValueResolver->resolve($credential, $org);
 
         AuditLog::record(
             operation: 'env_var.revealed',
@@ -35,6 +34,8 @@ class RevealEnvVarAction
             afterState: [
                 'key_name' => $credential->name,
                 'site_id' => (string) $site->getKey(),
+                'is_reference' => $credential->referenced_credential_id !== null,
+                'referenced_credential_id' => $credential->referenced_credential_id,
             ],
         );
 
@@ -43,7 +44,7 @@ class RevealEnvVarAction
 
     private function assertSiteEnvVar(Site $site, Credential $credential): void
     {
-        if ($credential->type !== CredentialType::ENV_VAR) {
+        if ($credential->type !== \App\Modules\Credentials\Enums\CredentialType::ENV_VAR) {
             throw new AuthorizationException('Credential is not an environment variable.');
         }
 

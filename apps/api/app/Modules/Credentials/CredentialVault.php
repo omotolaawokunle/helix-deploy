@@ -100,6 +100,39 @@ class CredentialVault implements CredentialVaultInterface
         return $credential;
     }
 
+    public function storeEnvVarReference(
+        Organization $organization,
+        Model $owner,
+        string $name,
+        string $referencedCredentialId,
+    ): Credential {
+        $credential = $this->storeEncrypted(
+            organization: $organization,
+            owner: $owner,
+            name: $name,
+            type: CredentialType::ENV_VAR,
+            plaintext: '',
+            publicKey: null,
+        );
+
+        $credential->forceFill([
+            'referenced_credential_id' => $referencedCredentialId,
+        ])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.created',
+            resourceId: (string) $credential->getKey(),
+            afterState: [
+                'name' => $credential->name,
+                'type' => $credential->type?->value,
+                'referenced_credential_id' => $referencedCredentialId,
+            ],
+        );
+
+        return $credential;
+    }
+
     public function storeServerSecret(Organization $organization, Model $owner, string $name, string $value): Credential
     {
         $credential = $this->storeEncrypted(

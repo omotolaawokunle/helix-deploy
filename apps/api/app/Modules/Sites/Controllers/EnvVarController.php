@@ -7,6 +7,8 @@ namespace App\Modules\Sites\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Credentials\Enums\CredentialType;
 use App\Modules\Credentials\Models\Credential;
+use App\Modules\Servers\Actions\ListServerServiceCredentialsAction;
+use App\Modules\Servers\Resources\ServerServiceCredentialResource;
 use App\Modules\Sites\Actions\EnvVarActions\CreateEnvVarAction;
 use App\Modules\Sites\Actions\EnvVarActions\DeleteEnvVarAction;
 use App\Modules\Sites\Actions\EnvVarActions\RevealEnvVarAction;
@@ -41,6 +43,7 @@ class EnvVarController extends Controller
             ->where('credentialable_type', $siteModel->getMorphClass())
             ->where('credentialable_id', (string) $siteModel->getKey())
             ->ofType(CredentialType::ENV_VAR)
+            ->with('referencedCredential')
             ->orderBy('name')
             ->get();
 
@@ -61,12 +64,18 @@ class EnvVarController extends Controller
         $actor = $request->user();
         abort_unless($actor !== null, 401);
 
+        $validated = $request->validated();
+        $value = $validated['value'] ?? null;
+
         $credential = $createEnvVarAction->execute(
             site: $siteModel,
             org: $org,
             actor: $actor,
-            key: (string) $request->validated('key'),
-            value: (string) $request->validated('value'),
+            key: (string) $validated['key'],
+            value: is_string($value) && $value !== '' ? $value : null,
+            referencedCredentialId: isset($validated['referencedCredentialId'])
+                ? (string) $validated['referencedCredentialId']
+                : null,
         );
 
         return EnvVarResource::make($credential);
@@ -194,6 +203,24 @@ class EnvVarController extends Controller
         return response()->json([
             'message' => 'Environment variable pull has been queued.',
         ], 202);
+    }
+
+    public function linkableCredentials(
+        string $site,
+        ListServerServiceCredentialsAction $listServerServiceCredentialsAction,
+    ): \Illuminate\Http\Resources\Json\AnonymousResourceCollection {
+        $siteModel = $this->resolveSite($site);
+        $this->authorize('manageEnvVars', $siteModel);
+
+        $org = $siteModel->organization;
+        abort_if($org === null, 404);
+
+        $server = $siteModel->server;
+        abort_if($server === null, 404);
+
+        return ServerServiceCredentialResource::collection(
+            $listServerServiceCredentialsAction->execute($server, $org),
+        );
     }
 
     private function resolveSite(string $siteId): Site

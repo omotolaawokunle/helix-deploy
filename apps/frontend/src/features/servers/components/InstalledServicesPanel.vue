@@ -1,12 +1,30 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
-import { RefreshCwIcon, ServerCogIcon } from '@lucide/vue'
+import { LinkIcon, RefreshCwIcon, ServerCogIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -18,14 +36,16 @@ import {
 } from '@/components/ui/table'
 import {
   fetchServerServices,
+  fetchServerServiceCredentials,
   restartServerService,
   startServerService,
   stopServerService,
   syncServerServiceStatuses,
 } from '@/features/servers/api'
-import type { InstalledServiceRecord } from '@/features/servers/types'
+import type { InstalledServiceRecord, ServerServiceCredentialRecord } from '@/features/servers/types'
+import { createEnvVar, fetchServerSites } from '@/features/sites/api'
 import { formatRelativeTime } from '@/lib/format'
-import { ManagementMode } from '@/types'
+import { ManagementMode, type Site } from '@/types'
 
 interface Props {
   serverId: string
@@ -46,11 +66,21 @@ const SYNC_HINTS = [
   'Updating cached status…',
 ] as const
 
+const LINKABLE_SERVICE_KEYS = ['postgresql', 'mysql', 'redis'] as const
+
+const DEFAULT_ENV_KEYS: Record<string, string> = {
+  postgresql: 'DB_PASSWORD',
+  mysql: 'DB_PASSWORD',
+  redis: 'REDIS_PASSWORD',
+}
+
 const props = defineProps<Props>()
 
 const serverId = toRef(props, 'serverId')
 
 const services = ref<InstalledServiceRecord[]>([])
+const serviceCredentials = ref<ServerServiceCredentialRecord[]>([])
+const serverSites = ref<Site[]>([])
 const isLoading = ref(true)
 const isSyncing = ref(false)
 const loadError = ref<string | null>(null)
@@ -59,6 +89,11 @@ const recentlyUpdatedKeys = ref<string[]>([])
 const pendingAction = ref<'stop' | 'restart' | null>(null)
 const pendingService = ref<InstalledServiceRecord | null>(null)
 const isConfirmOpen = ref(false)
+const isAddToSiteOpen = ref(false)
+const addToSiteCredential = ref<ServerServiceCredentialRecord | null>(null)
+const addToSiteId = ref('')
+const addToSiteEnvKey = ref('')
+const isAddingToSite = ref(false)
 const syncHintIndex = ref(0)
 
 let syncHintTimer: ReturnType<typeof setInterval> | null = null
@@ -165,6 +200,59 @@ const servicesWithActions = computed((): Array<InstalledServiceRecord & { action
   }))
 })
 
+const credentialByServiceKey = computed((): Record<string, ServerServiceCredentialRecord> => {
+  const map: Record<string, ServerServiceCredentialRecord> = {}
+
+  for (const credential of serviceCredentials.value) {
+    map[credential.serviceKey] = credential
+  }
+
+  return map
+})
+
+function canAddToSiteEnv(serviceKey: string): boolean {
+  return props.canManage
+    && LINKABLE_SERVICE_KEYS.includes(serviceKey as typeof LINKABLE_SERVICE_KEYS[number])
+    && credentialByServiceKey.value[serviceKey] !== undefined
+}
+
+function openAddToSiteEnv(service: InstalledServiceRecord): void {
+  const credential = credentialByServiceKey.value[service.key]
+
+  if (credential === undefined) {
+    return
+  }
+
+  addToSiteCredential.value = credential
+  addToSiteId.value = serverSites.value[0]?.id ?? ''
+  addToSiteEnvKey.value = DEFAULT_ENV_KEYS[service.key] ?? ''
+  isAddToSiteOpen.value = true
+}
+
+async function confirmAddToSiteEnv(): Promise<void> {
+  if (addToSiteCredential.value === null || addToSiteId.value === '' || addToSiteEnvKey.value.trim() === '') {
+    return
+  }
+
+  isAddingToSite.value = true
+
+  try {
+    await createEnvVar(addToSiteId.value, {
+      key: addToSiteEnvKey.value.trim(),
+      referencedCredentialId: addToSiteCredential.value.id,
+    })
+    toast.success('Environment variable link created.')
+    isAddToSiteOpen.value = false
+    addToSiteCredential.value = null
+    addToSiteId.value = ''
+    addToSiteEnvKey.value = ''
+  } catch {
+    toast.error('Unable to add credential to site environment.')
+  } finally {
+    isAddingToSite.value = false
+  }
+}
+
 function formatLastChecked(checkedAt: string | null): string {
   if (checkedAt === null) {
     return 'Not checked yet'
@@ -209,7 +297,14 @@ async function loadServices(): Promise<void> {
   loadError.value = null
 
   try {
-    services.value = await fetchServerServices(serverId.value)
+    const [servicesResult, credentialsResult, sitesResult] = await Promise.all([
+      fetchServerServices(serverId.value),
+      fetchServerServiceCredentials(serverId.value),
+      fetchServerSites(serverId.value),
+    ])
+    services.value = servicesResult
+    serviceCredentials.value = credentialsResult
+    serverSites.value = sitesResult
   } catch {
     loadError.value = 'Unable to load installed services.'
   } finally {
@@ -498,10 +593,20 @@ defineExpose({
               <span v-else>{{ formatLastChecked(null) }}</span>
             </TableCell>
             <TableCell>
-              <div
-                v-if="service.actions.start || service.actions.stop || service.actions.restart"
-                class="flex flex-wrap justify-end gap-1"
-              >
+              <div class="flex flex-wrap justify-end gap-1">
+                <Button
+                  v-if="canAddToSiteEnv(service.key)"
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  class="min-h-9 transition-transform duration-100 active:scale-[0.98] motion-reduce:transform-none"
+                  :disabled="serverSites.length === 0"
+                  :aria-label="`Add ${service.label} credential to site env`"
+                  @click="openAddToSiteEnv(service)"
+                >
+                  <LinkIcon class="mr-1 size-4" aria-hidden="true" />
+                  Add to site env
+                </Button>
                 <Button
                   v-if="service.actions.start"
                   type="button"
@@ -540,12 +645,15 @@ defineExpose({
                 </Button>
               </div>
               <span
-                v-else-if="isObserveMode && service.controllable"
+                v-if="!canAddToSiteEnv(service.key) && (service.actions.start || service.actions.stop || service.actions.restart) === false && isObserveMode && service.controllable"
                 class="text-sm text-muted-foreground"
               >
                 Read-only in observe mode
               </span>
-              <span v-else class="text-sm text-muted-foreground">—</span>
+              <span
+                v-else-if="!canAddToSiteEnv(service.key) && !service.actions.start && !service.actions.stop && !service.actions.restart"
+                class="text-sm text-muted-foreground"
+              >—</span>
             </TableCell>
           </TableRow>
         </TableBody>
@@ -562,5 +670,55 @@ defineExpose({
       :confirm-button-label="pendingAction === 'stop' ? 'Stop service' : 'Restart service'"
       @confirm="confirmDestructiveAction"
     />
+
+    <Sheet v-model:open="isAddToSiteOpen">
+      <SheetContent side="right" class="flex w-full flex-col sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Add to site environment</SheetTitle>
+          <SheetDescription>
+            Link {{ addToSiteCredential?.label ?? 'server credential' }} as a site environment variable.
+            The value resolves from the server secret when syncing or deploying.
+          </SheetDescription>
+        </SheetHeader>
+        <SheetBody class="space-y-4">
+          <div class="space-y-2">
+            <Label for="add-to-site-target">Site</Label>
+            <Select v-model="addToSiteId" :disabled="serverSites.length === 0">
+              <SelectTrigger id="add-to-site-target">
+                <SelectValue placeholder="Select site" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="site in serverSites"
+                  :key="site.id"
+                  :value="site.id"
+                >
+                  {{ site.domain }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="serverSites.length === 0" class="text-xs text-muted-foreground">
+              No sites on this server yet.
+            </p>
+          </div>
+          <div class="space-y-2">
+            <Label for="add-to-site-key">Environment key</Label>
+            <Input id="add-to-site-key" v-model="addToSiteEnvKey" class="font-mono" />
+          </div>
+        </SheetBody>
+        <SheetFooter>
+          <Button variant="outline" type="button" @click="isAddToSiteOpen = false">
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            :disabled="isAddingToSite || addToSiteId === '' || addToSiteEnvKey.trim() === ''"
+            @click="confirmAddToSiteEnv"
+          >
+            {{ isAddingToSite ? 'Adding…' : 'Add link' }}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   </section>
 </template>
