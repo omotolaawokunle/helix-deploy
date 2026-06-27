@@ -28,6 +28,7 @@ class ServerServiceResource extends JsonResource
             'status' => $service->status->value,
             'statusCheckedAt' => $service->statusCheckedAt,
             'controllable' => $service->controllable,
+            'version' => $service->version,
         ];
     }
 }

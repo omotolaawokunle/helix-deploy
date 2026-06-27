@@ -1,5 +1,6 @@
-import { api } from '@/lib/axios'
+import type { DatabaseBrowseResponse, DatabaseRowQueryParams } from '@/features/databases/types'
 import type { LogFetchResponse, ServerLogType } from '@/features/logs/types'
+import { api } from '@/lib/axios'
 import type { Server, ServerGroup } from '@/types'
 import type {
   EnvironmentOption,
@@ -9,6 +10,8 @@ import type {
   ProvisionServerResponse,
   RegisterServerPayload,
   ServerRegistrationResponse,
+  ServerServiceCredentialRecord,
+  ServerSslOverview,
 } from '@/features/servers/types'
 
 interface PaginatedResponse<T> {
@@ -246,6 +249,94 @@ export async function stopServerService(serverId: string, serviceKey: string): P
 
 export async function restartServerService(serverId: string, serviceKey: string): Promise<void> {
   await api.post(`/api/v1/servers/${serverId}/services/${serviceKey}/restart`)
+}
+
+export async function fetchServerServiceCredentials(
+  serverId: string,
+): Promise<ServerServiceCredentialRecord[]> {
+  const response = await api.get<CollectionResponse<ServerServiceCredentialRecord>>(
+    `/api/v1/servers/${serverId}/service-credentials`,
+  )
+
+  return response.data.data
+}
+
+export async function revealServerServiceCredential(
+  serverId: string,
+  credentialId: string,
+): Promise<string> {
+  const response = await api.post<ResourceResponse<{ id: string; name: string; value: string }>>(
+    `/api/v1/servers/${serverId}/service-credentials/${credentialId}/reveal`,
+  )
+
+  return response.data.data.value
+}
+
+export async function fetchServerDatabases(
+  serverId: string,
+  params: { engine: 'postgresql' | 'mysql'; refresh?: boolean },
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/servers/${serverId}/databases`,
+    { params: { engine: params.engine, refresh: params.refresh ?? false } },
+  )
+
+  return response.data.data
+}
+
+export async function fetchServerDatabaseTables(
+  serverId: string,
+  database: string,
+  params: { engine: 'postgresql' | 'mysql'; refresh?: boolean },
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/servers/${serverId}/databases/${encodeURIComponent(database)}/tables`,
+    { params: { engine: params.engine, refresh: params.refresh ?? false } },
+  )
+
+  return response.data.data
+}
+
+export async function fetchServerDatabaseRows(
+  serverId: string,
+  database: string,
+  table: string,
+  params: { engine: 'postgresql' | 'mysql'; refresh?: boolean } & DatabaseRowQueryParams,
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/servers/${serverId}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/rows`,
+    {
+      params: {
+        engine: params.engine,
+        page: params.page ?? 1,
+        limit: params.limit ?? 50,
+        filter: params.filter ?? [],
+        refresh: params.refresh ?? false,
+      },
+    },
+  )
+
+  return response.data.data
+}
+
+export async function fetchServerSslCertificates(serverId: string): Promise<ServerSslOverview> {
+  const response = await api.get<ResourceResponse<ServerSslOverview>>(
+    `/api/v1/servers/${serverId}/ssl-certificates`,
+  )
+
+  return response.data.data
+}
+
+export async function syncServerSslCertificates(serverId: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/ssl-certificates/sync`)
+}
+
+export async function adoptServerSslCertificates(serverId: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/ssl-certificates/adopt`)
+}
+
+export async function renewServerSslCertificates(serverId: string): Promise<void> {
+  await api.post(`/api/v1/servers/${serverId}/ssl-certificates/renew`)
 }
 
 export async function fetchServerLogs(

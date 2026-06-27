@@ -8,6 +8,7 @@ use App\Modules\Monitoring\Models\InfrastructureEvent;
 use App\Modules\Servers\Actions\ReportFingerprintMismatchAction;
 use App\Modules\Servers\Actions\SyncServerInventoryAction;
 use App\Modules\Servers\Enums\ServerStatus;
+use App\Modules\Sites\Jobs\AdoptServerSslCertificatesJob;
 use App\Modules\Servers\Events\ServerConnected;
 use App\Modules\Servers\Events\ServerConnectionFailed;
 use App\Modules\Servers\Models\Server;
@@ -69,6 +70,10 @@ class VerifyServerConnectionJob implements ShouldQueue
             ])->save();
 
             event(new ServerConnected($server->refresh()));
+
+            if ($server->isManaged()) {
+                AdoptServerSslCertificatesJob::dispatch((string) $server->getKey());
+            }
 
             InfrastructureEvent::query()->create([
                 'organization_id' => (string) $server->organization_id,

@@ -29,6 +29,9 @@ export interface ProvisionServerPayload {
   options?: {
     phpVersion?: string
     nodeVersion?: number
+    postgresqlVersion?: string
+    mysqlVersion?: string
+    pythonVersion?: string
     redisPassword?: string
   }
 }
@@ -45,6 +48,24 @@ export interface ProjectOption extends Pick<Project, 'id' | 'name'> {
 export interface EnvironmentOption extends Pick<Environment, 'id' | 'name'> {
   label?: string | null
   isProduction?: boolean
+}
+
+export interface ServerSslCertificateRow {
+  siteId: string
+  domain: string
+  sslStatus: string
+  sslExpiresAt: string | null
+  sslCheckedAt: string | null
+  daysUntilExpiry: number | null
+}
+
+export interface ServerSslOverview {
+  hasCertbot: boolean
+  activeCertificateCount: number
+  expiringSoonCount: number
+  nearestExpiryAt: string | null
+  syncQueued: boolean
+  certificates: ServerSslCertificateRow[]
 }
 
 export const PROVISIONING_SCRIPTS = [
@@ -129,8 +150,8 @@ export const SCRIPT_ESTIMATED_MINUTES: Record<ProvisioningScript, number> = {
   certbot: 2,
 }
 
-export const PHP_VERSIONS = ['8.1', '8.2', '8.3'] as const
-export const NODE_VERSIONS = [18, 20, 22] as const
+export const PHP_VERSIONS = ['8.1', '8.2', '8.3', '8.4'] as const
+export const NODE_VERSIONS = [18, 20, 22, 24] as const
 
 export type ServiceRuntimeStatus = 'running' | 'stopped' | 'failed' | 'unknown'
 
@@ -141,4 +162,13 @@ export interface InstalledServiceRecord {
   status: ServiceRuntimeStatus
   statusCheckedAt: string | null
   controllable: boolean
+  version: string | null
+}
+
+export interface ServerServiceCredentialRecord {
+  id: string
+  name: string
+  serviceKey: string
+  label: string
+  createdAt: string | null
 }

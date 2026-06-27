@@ -23,16 +23,15 @@ class SiteLogController extends Controller
         $siteModel = $this->resolveSite($site);
         $this->authorize('viewLogs', $siteModel);
 
-        $logType = $request->logType();
         $lines = $request->lineCount();
 
-        if ($logType === SiteLogType::APPLICATION && ! $pathResolver->supportsApplicationLogs($siteModel)) {
+        if (! $pathResolver->supportsApplicationLogs($siteModel)) {
             return response()->json([
                 'message' => 'Application logs are not available for this site runtime.',
             ], 422);
         }
 
-        $cacheKey = FetchSiteLogsJob::cacheKey((string) $siteModel->getKey(), $logType, $lines);
+        $cacheKey = FetchSiteLogsJob::cacheKey((string) $siteModel->getKey(), $lines);
 
         if ($request->shouldRefresh()) {
             Cache::forget($cacheKey);
@@ -44,7 +43,6 @@ class SiteLogController extends Controller
         if ($cached === null) {
             FetchSiteLogsJob::dispatch(
                 siteId: (string) $siteModel->getKey(),
-                logType: $logType,
                 lines: $lines,
             );
 
@@ -52,7 +50,7 @@ class SiteLogController extends Controller
                 operation: 'site.logs.viewed',
                 resource: $siteModel,
                 metadata: [
-                    'log_type' => $logType->value,
+                    'log_type' => SiteLogType::APPLICATION->value,
                     'lines' => $lines,
                 ],
             );
@@ -60,7 +58,7 @@ class SiteLogController extends Controller
             return (new SiteLogResource([
                 'status' => 'loading',
                 'lines' => [],
-                'logType' => $logType->value,
+                'logType' => SiteLogType::APPLICATION->value,
                 'linesRequested' => $lines,
             ]))->response();
         }
@@ -69,7 +67,7 @@ class SiteLogController extends Controller
             'status' => $cached['status'],
             'lines' => $cached['lines'] ?? [],
             'message' => $cached['message'] ?? null,
-            'logType' => $logType->value,
+            'logType' => SiteLogType::APPLICATION->value,
             'linesRequested' => $lines,
         ]))->response();
     }

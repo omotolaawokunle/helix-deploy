@@ -15,6 +15,7 @@ use App\Modules\Sites\Events\EnvVarsPulled;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Sites\Services\EnvFileManager;
 use App\Modules\Sites\Services\EnvFileParser;
+use App\Modules\Sites\Services\EnvVarValueResolver;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
 use App\Packages\SSH\SSHManager;
 
@@ -24,6 +25,7 @@ final class ApplyEnvVarsPullAction
         private readonly EnvFileManager $envFileManager,
         private readonly EnvFileParser $envFileParser,
         private readonly CredentialVault $credentialVault,
+        private readonly EnvVarValueResolver $envVarValueResolver,
         private readonly SSHManager $sshManager,
     ) {
     }
@@ -75,7 +77,13 @@ final class ApplyEnvVarsPullAction
                     continue;
                 }
 
-                $existingValue = $this->credentialVault->getSecret((string) $credential->getKey(), $org);
+                if ($credential->referenced_credential_id !== null) {
+                    sodium_memzero($value);
+
+                    continue;
+                }
+
+                $existingValue = $this->envVarValueResolver->resolve($credential, $org);
 
                 if ($existingValue !== $value) {
                     $this->credentialVault->updateSecret((string) $credential->getKey(), $org, $value);
@@ -88,6 +96,10 @@ final class ApplyEnvVarsPullAction
 
             if ($strategy === EnvVarPullStrategy::MIRROR_SERVER) {
                 foreach ($helixCredentials as $key => $credential) {
+                    if ($credential->referenced_credential_id !== null) {
+                        continue;
+                    }
+
                     if (! array_key_exists($key, $serverEntries)) {
                         $this->credentialVault->delete((string) $credential->getKey(), $org);
                         $deleted++;

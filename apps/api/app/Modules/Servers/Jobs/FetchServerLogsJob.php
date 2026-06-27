@@ -68,7 +68,6 @@ final class FetchServerLogsJob implements ShouldQueue
                     logType: $this->logType->value,
                     linesRequested: $this->lines,
                     status: 'ready',
-                    lines: $lines,
                 ));
             } finally {
                 $connection->disconnect();

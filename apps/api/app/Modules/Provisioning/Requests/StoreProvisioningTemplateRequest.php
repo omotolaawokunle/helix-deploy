@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Provisioning\Requests;
 
+use App\Packages\Provisioning\Enums\MysqlVersion;
 use App\Packages\Provisioning\Enums\NodejsVersion;
 use App\Packages\Provisioning\Enums\PhpVersion;
+use App\Packages\Provisioning\Enums\PostgresqlVersion;
+use App\Packages\Provisioning\Enums\PythonVersion;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -33,6 +36,9 @@ class StoreProvisioningTemplateRequest extends FormRequest
             'options' => ['nullable', 'array'],
             'options.phpVersion' => ['nullable', 'string', Rule::in(PhpVersion::values())],
             'options.nodeVersion' => ['nullable', 'integer', Rule::in(NodejsVersion::values())],
+            'options.postgresqlVersion' => ['nullable', 'string', Rule::in(PostgresqlVersion::values())],
+            'options.mysqlVersion' => ['nullable', 'string', Rule::in(MysqlVersion::values())],
+            'options.pythonVersion' => ['nullable', 'string', Rule::in(PythonVersion::values())],
         ];
     }
 

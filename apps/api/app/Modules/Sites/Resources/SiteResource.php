@@ -76,6 +76,8 @@ class SiteResource extends JsonResource
             'sslChallenge' => $this->ssl_challenge instanceof \App\Modules\Sites\Enums\SslChallenge
                 ? $this->ssl_challenge->value
                 : $this->ssl_challenge,
+            'sslExpiresAt' => $this->ssl_expires_at?->toIso8601String(),
+            'sslCheckedAt' => $this->ssl_checked_at?->toIso8601String(),
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];

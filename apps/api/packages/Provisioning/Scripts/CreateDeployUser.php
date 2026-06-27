@@ -69,6 +69,8 @@ deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart nginx
 deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart supervisor
 deploy ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl *
 deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart *
+deploy ALL=(ALL) NOPASSWD: /usr/bin/certbot
+deploy ALL=(ALL) NOPASSWD: /usr/bin/certbot *
 EOF
 SHELL,
             'write-sudoers',

@@ -89,6 +89,51 @@ class ServerPolicy
         return $this->view($user, $server);
     }
 
+    public function viewSslCertificates(User $user, Server $server): bool
+    {
+        return $this->view($user, $server);
+    }
+
+    public function viewServiceCredentials(User $user, Server $server): bool
+    {
+        return $this->view($user, $server);
+    }
+
+    public function revealServiceCredentials(User $user, Server $server): bool
+    {
+        return in_array($this->roleInOrganization($user, $server->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
+    }
+
+    public function browseDatabases(User $user, Server $server, \App\Packages\DatabaseBrowser\Enums\DatabaseEngine $engine): bool
+    {
+        if (! $this->view($user, $server)) {
+            return false;
+        }
+
+        $installed = collect($server->installed_services ?? []);
+
+        return $installed->get($engine->value)['installed'] ?? false;
+    }
+
+    public function syncSslCertificates(User $user, Server $server): bool
+    {
+        if ($server->management_mode === ManagementMode::OBSERVE) {
+            return false;
+        }
+
+        return in_array($this->roleInOrganization($user, $server->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
+    }
+
+    public function renewSslCertificates(User $user, Server $server): bool
+    {
+        return $this->syncSslCertificates($user, $server);
+    }
+
+    public function adoptSslCertificates(User $user, Server $server): bool
+    {
+        return $this->syncSslCertificates($user, $server);
+    }
+
     private function roleInOrganization(User $user, Organization $org): ?TeamRole
     {
         return $user->roleInOrganization($org);

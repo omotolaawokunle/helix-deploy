@@ -229,3 +229,61 @@ it('sync writes to cached resolved path discovered during read', function (): vo
     expect($syncSsh->getUploads())->toHaveKey('/var/www/api/.env')
         ->and($syncSsh->getUploads()['/var/www/api/.env'])->toBe("APP_KEY=\"from-helix\"\n");
 });
+
+it('resolves referenced env vars from server secrets when generating env file', function (): void {
+    $organization = Organization::query()->create([
+        'name' => 'Env Reference Org',
+        'slug' => 'env-reference-'.Str::random(6),
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $owner = User::factory()->create();
+    $organization->users()->attach($owner->getKey(), ['role' => 'owner']);
+
+    $server = Server::query()->withoutGlobalScope('owned_by_organization')->create([
+        'organization_id' => (string) $organization->getKey(),
+        'hostname' => 'env-reference.test',
+        'ip_address' => '10.0.0.28',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'provider' => 'generic',
+        'status' => 'active',
+        'management_mode' => 'managed',
+        'created_by' => (string) $owner->getKey(),
+        'tags' => [],
+        'installed_services' => [],
+    ]);
+
+    $site = Site::query()->withoutGlobalScope('owned_by_organization')->create([
+        'server_id' => (string) $server->getKey(),
+        'organization_id' => (string) $organization->getKey(),
+        'domain' => 'env-reference.example.test',
+        'aliases' => [],
+        'webroot' => '/var/www/env-reference.example.test/current/public',
+        'runtime' => Runtime::PHP->value,
+        'deploy_mode' => DeployMode::GIT->value,
+        'deploy_branch' => 'main',
+        'run_migrations' => false,
+        'status' => SiteStatus::ACTIVE->value,
+    ]);
+
+    $vault = app(CredentialVaultInterface::class);
+    $serverSecret = $vault->storeServerSecret(
+        $organization,
+        $server,
+        'env-reference.test-postgresql-deploy-password',
+        'linked-postgres-password',
+    );
+    $vault->storeEnvVarReference(
+        $organization,
+        $site,
+        'DB_PASSWORD',
+        (string) $serverSecret->getKey(),
+    );
+
+    $content = app(EnvFileManager::class)->generate($site, $organization);
+
+    expect($content)->toBe("DB_PASSWORD=\"linked-postgres-password\"\n");
+});

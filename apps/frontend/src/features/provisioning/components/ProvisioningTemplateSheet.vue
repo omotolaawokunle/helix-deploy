@@ -71,6 +71,10 @@ function createEmptyForm(): ProvisioningTemplateFormState {
     services: ['create-deploy-user', 'nginx'],
     phpVersion: '8.3',
     nodeVersion: 20,
+    postgresqlVersion: '16',
+    mysqlVersion: '8.4',
+    pythonVersion: '3.12',
+    redisPassword: '',
   }
 }
 
@@ -81,6 +85,10 @@ function formFromTemplate(template: ProvisioningTemplateRecord): ProvisioningTem
     services: [...template.services],
     phpVersion: typeof template.options.phpVersion === 'string' ? template.options.phpVersion : '8.3',
     nodeVersion: typeof template.options.nodeVersion === 'number' ? template.options.nodeVersion : 20,
+    postgresqlVersion: typeof template.options.postgresqlVersion === 'string' ? template.options.postgresqlVersion : '16',
+    mysqlVersion: typeof template.options.mysqlVersion === 'string' ? template.options.mysqlVersion : '8.4',
+    pythonVersion: typeof template.options.pythonVersion === 'string' ? template.options.pythonVersion : '3.12',
+    redisPassword: typeof template.options.redisPassword === 'string' ? template.options.redisPassword : '',
   }
 }
 

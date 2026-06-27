@@ -23,29 +23,40 @@ interface Props {
   isLoading: boolean
   description?: string
   refreshTestId?: string
+  controlsId?: string
 }
 
-defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  description: undefined,
+  refreshTestId: undefined,
+  controlsId: 'log-viewer',
+})
 
 const emit = defineEmits<{
   'update:logType': [value: string]
   'update:lineCount': [value: number]
   refresh: []
 }>()
+
+const logTypeSelectId = `${props.controlsId}-log-type`
+const lineCountSelectId = `${props.controlsId}-lines`
 </script>
 
 <template>
-  <div class="space-y-3 animate-page-in">
+  <div class="space-y-3 animate-page-in motion-reduce:animate-none">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
-        <div class="space-y-2">
-          <Label for="log-type-select">Log type</Label>
+        <div
+          v-if="logTypeOptions.length > 1"
+          class="space-y-2"
+        >
+          <Label :for="logTypeSelectId">Log type</Label>
           <Select
             :model-value="logType"
             @update:model-value="emit('update:logType', $event)"
           >
             <SelectTrigger
-              id="log-type-select"
+              :id="logTypeSelectId"
               class="w-full transition-colors duration-150 sm:w-[200px]"
             >
               <SelectValue />
@@ -62,13 +73,13 @@ const emit = defineEmits<{
           </Select>
         </div>
         <div class="space-y-2">
-          <Label for="log-lines-select">Lines</Label>
+          <Label :for="lineCountSelectId">Lines</Label>
           <Select
             :model-value="String(lineCount)"
             @update:model-value="emit('update:lineCount', Number($event))"
           >
             <SelectTrigger
-              id="log-lines-select"
+              :id="lineCountSelectId"
               class="w-full transition-colors duration-150 sm:w-[120px]"
             >
               <SelectValue />
@@ -90,19 +101,21 @@ const emit = defineEmits<{
         variant="outline"
         class="shrink-0 transition-transform duration-100 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
         :disabled="isLoading"
+        :aria-busy="isLoading"
         :data-testid="refreshTestId"
         @click="emit('refresh')"
       >
         <RefreshCwIcon
           class="mr-2 size-4 motion-reduce:animate-none"
           :class="{ 'animate-spin': isLoading }"
+          aria-hidden="true"
         />
         {{ isLoading ? 'Fetching…' : 'Refresh' }}
       </Button>
     </div>
     <p
       v-if="description !== undefined && description !== ''"
-      class="animate-page-in-delay-1 text-sm text-muted-foreground"
+      class="animate-page-in-delay-1 text-sm leading-relaxed text-muted-foreground motion-reduce:animate-none"
     >
       {{ description }}
     </p>

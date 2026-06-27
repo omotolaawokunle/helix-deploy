@@ -63,9 +63,23 @@ function buildPayload(state: ProvisioningTemplateFormState): {
   name: string
   description: string | null
   services: string[]
-  options: { phpVersion?: string; nodeVersion?: number }
+  options: {
+    phpVersion?: string
+    nodeVersion?: number
+    postgresqlVersion?: string
+    mysqlVersion?: string
+    pythonVersion?: string
+    redisPassword?: string
+  }
 } {
-  const options: { phpVersion?: string; nodeVersion?: number } = {}
+  const options: {
+    phpVersion?: string
+    nodeVersion?: number
+    postgresqlVersion?: string
+    mysqlVersion?: string
+    pythonVersion?: string
+    redisPassword?: string
+  } = {}
 
   if (state.services.includes('php')) {
     options.phpVersion = state.phpVersion
@@ -73,6 +87,22 @@ function buildPayload(state: ProvisioningTemplateFormState): {
 
   if (state.services.includes('nodejs')) {
     options.nodeVersion = state.nodeVersion
+  }
+
+  if (state.services.includes('postgresql')) {
+    options.postgresqlVersion = state.postgresqlVersion
+  }
+
+  if (state.services.includes('mysql')) {
+    options.mysqlVersion = state.mysqlVersion
+  }
+
+  if (state.services.includes('python')) {
+    options.pythonVersion = state.pythonVersion
+  }
+
+  if (state.services.includes('redis') && state.redisPassword.trim() !== '') {
+    options.redisPassword = state.redisPassword.trim()
   }
 
   return {

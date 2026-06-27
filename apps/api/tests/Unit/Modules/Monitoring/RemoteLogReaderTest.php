@@ -53,6 +53,43 @@ it('tails the newest laravel log file including daily rotated logs', function ()
         ->and($ssh->getExecutedCommands()[0])->toContain('laravel.log');
 });
 
+it('tails the first existing laravel log directory from candidates', function (): void {
+    $ssh = (new FakeSSHConnection())
+        ->connect()
+        ->addResponse('*laravel*.log*', new SSHResult('tail', 0, "[2026-06-13] local.ERROR: shared\n", '', 0.01));
+
+    $lines = (new RemoteLogReader())->tailLatestFromDirectories(
+        $ssh,
+        [
+            '/var/www/app.example.test/shared/storage/logs',
+            '/var/www/app.example.test/current/storage/logs',
+        ],
+        'laravel*.log',
+        50,
+    );
+
+    expect($lines)->toBe(['[2026-06-13] local.ERROR: shared'])
+        ->and($ssh->getExecutedCommands()[0])->toContain('/var/www/app.example.test/shared/storage/logs')
+        ->and($ssh->getExecutedCommands()[0])->toContain('/var/www/app.example.test/current/storage/logs');
+});
+
+it('tails the first existing log file from candidates', function (): void {
+    $ssh = (new FakeSSHConnection())
+        ->connect()
+        ->addResponse('for f in*', new SSHResult('tail', 0, "node error line\n", '', 0.01));
+
+    $lines = (new RemoteLogReader())->tailFirstExisting(
+        $ssh,
+        [
+            '/var/www/node.example.test/shared/logs/error.log',
+            '/var/www/node.example.test/current/logs/error.log',
+        ],
+        50,
+    );
+
+    expect($lines)->toBe(['node error line']);
+});
+
 it('rejects unsupported glob patterns', function (): void {
     $ssh = (new FakeSSHConnection())->connect();
 

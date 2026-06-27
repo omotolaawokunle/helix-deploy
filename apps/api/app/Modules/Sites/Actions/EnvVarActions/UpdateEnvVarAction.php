@@ -23,6 +23,10 @@ class UpdateEnvVarAction
     {
         $this->assertSiteEnvVar($site, $credential);
 
+        if ($credential->referenced_credential_id !== null) {
+            throw new AuthorizationException('Referenced environment variables cannot be updated directly.');
+        }
+
         $credential = $this->credentialVault->updateSecret((string) $credential->getKey(), $org, $value);
 
         AuditLog::record(

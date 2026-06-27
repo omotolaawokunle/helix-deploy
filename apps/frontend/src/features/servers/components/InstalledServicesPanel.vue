@@ -1,11 +1,30 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
-import { RefreshCwIcon, ServerCogIcon } from '@lucide/vue'
+import { LinkIcon, RefreshCwIcon, ServerCogIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -15,16 +34,23 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useRotatingStatusMessage } from '@/composables/useRotatingStatusMessage'
+import {
+  defaultEnvKeyForService,
+  isLinkableServiceKey,
+} from '@/features/servers/constants/serviceCredentialEnvKeys'
 import {
   fetchServerServices,
+  fetchServerServiceCredentials,
   restartServerService,
   startServerService,
   stopServerService,
   syncServerServiceStatuses,
 } from '@/features/servers/api'
-import type { InstalledServiceRecord } from '@/features/servers/types'
+import type { InstalledServiceRecord, ServerServiceCredentialRecord } from '@/features/servers/types'
+import { createEnvVar, fetchServerSites } from '@/features/sites/api'
 import { formatRelativeTime } from '@/lib/format'
-import { ManagementMode } from '@/types'
+import { ManagementMode, type Site } from '@/types'
 
 interface Props {
   serverId: string
@@ -50,6 +76,8 @@ const props = defineProps<Props>()
 const serverId = toRef(props, 'serverId')
 
 const services = ref<InstalledServiceRecord[]>([])
+const serviceCredentials = ref<ServerServiceCredentialRecord[]>([])
+const serverSites = ref<Site[]>([])
 const isLoading = ref(true)
 const isSyncing = ref(false)
 const loadError = ref<string | null>(null)
@@ -58,10 +86,19 @@ const recentlyUpdatedKeys = ref<string[]>([])
 const pendingAction = ref<'stop' | 'restart' | null>(null)
 const pendingService = ref<InstalledServiceRecord | null>(null)
 const isConfirmOpen = ref(false)
-const syncHintIndex = ref(0)
+const isAddToSiteOpen = ref(false)
+const addToSiteCredential = ref<ServerServiceCredentialRecord | null>(null)
+const addToSiteId = ref('')
+const addToSiteEnvKey = ref('')
+const isAddingToSite = ref(false)
+const isLoadingAddToSiteData = ref(false)
+const credentialsLoaded = ref(false)
+const sitesLoaded = ref(false)
 
-let syncHintTimer: ReturnType<typeof setInterval> | null = null
-const updateFlashTimers = new Map<string, ReturnType<typeof setTimeout>>()
+let updateFlashTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+const isSyncingRef = computed(() => isSyncing.value)
+const syncHint = useRotatingStatusMessage(SYNC_HINTS, isSyncingRef)
 
 const isObserveMode = computed((): boolean => props.managementMode === ManagementMode.Observe)
 
@@ -69,13 +106,18 @@ const isEmpty = computed((): boolean => !isLoading.value && loadError.value === 
 
 const showTable = computed((): boolean => isLoading.value || services.value.length > 0)
 
-const syncHint = computed((): string | null => {
-  if (!isSyncing.value) {
-    return null
-  }
+const refreshLabel = computed((): string => (isSyncing.value ? 'Refreshing…' : 'Refresh status'))
 
-  return SYNC_HINTS[syncHintIndex.value] ?? SYNC_HINTS[0]
-})
+const hasLinkableInstalledService = computed((): boolean =>
+  services.value.some(service => service.installed && isLinkableServiceKey(service.key)),
+)
+
+const canSubmitAddToSite = computed((): boolean =>
+  !isAddingToSite.value
+  && !isLoadingAddToSiteData.value
+  && addToSiteId.value !== ''
+  && addToSiteEnvKey.value.trim() !== '',
+)
 
 const emptyDescription = computed((): string => {
   if (isObserveMode.value) {
@@ -84,8 +126,6 @@ const emptyDescription = computed((): string => {
 
   return 'HelixDeploy scans the server after SSH connects. You can also provision a stack from the Provision action.'
 })
-
-const refreshLabel = computed((): string => (isSyncing.value ? 'Refreshing…' : 'Refresh status'))
 
 function isServicePending(serviceKey: string): boolean {
   return pendingServiceKeys.value.includes(serviceKey)
@@ -96,6 +136,10 @@ function isRecentlyUpdated(serviceKey: string): boolean {
 }
 
 function rowEntranceDelay(index: number): string {
+  if (isSyncing.value) {
+    return '0ms'
+  }
+
   return `${Math.min(index, 8) * 45}ms`
 }
 
@@ -164,6 +208,97 @@ const servicesWithActions = computed((): Array<InstalledServiceRecord & { action
   }))
 })
 
+const credentialByServiceKey = computed((): Record<string, ServerServiceCredentialRecord> => {
+  const map: Record<string, ServerServiceCredentialRecord> = {}
+
+  for (const credential of serviceCredentials.value) {
+    map[credential.serviceKey] = credential
+  }
+
+  return map
+})
+
+function canAddToSiteEnv(service: InstalledServiceRecord): boolean {
+  return props.canManage
+    && service.installed
+    && isLinkableServiceKey(service.key)
+}
+
+async function ensureCredentialsLoaded(): Promise<void> {
+  if (credentialsLoaded.value) {
+    return
+  }
+
+  try {
+    serviceCredentials.value = await fetchServerServiceCredentials(serverId.value)
+    credentialsLoaded.value = true
+  } catch {
+    serviceCredentials.value = []
+  }
+}
+
+async function ensureSitesLoaded(): Promise<void> {
+  if (sitesLoaded.value) {
+    return
+  }
+
+  try {
+    serverSites.value = await fetchServerSites(serverId.value)
+    sitesLoaded.value = true
+  } catch {
+    serverSites.value = []
+    toast.error('Unable to load sites for this server.')
+  }
+}
+
+async function openAddToSiteEnv(service: InstalledServiceRecord): Promise<void> {
+  isLoadingAddToSiteData.value = true
+  isAddToSiteOpen.value = true
+
+  try {
+    await Promise.all([ensureCredentialsLoaded(), ensureSitesLoaded()])
+
+    const credential = credentialByServiceKey.value[service.key]
+
+    if (credential === undefined) {
+      toast.error('No credential available for this service.')
+      isAddToSiteOpen.value = false
+
+      return
+    }
+
+    addToSiteCredential.value = credential
+    addToSiteEnvKey.value = defaultEnvKeyForService(service.key)
+    addToSiteId.value = serverSites.value[0]?.id ?? ''
+  } finally {
+    isLoadingAddToSiteData.value = false
+  }
+}
+
+async function confirmAddToSiteEnv(): Promise<void> {
+  if (addToSiteCredential.value === null || addToSiteId.value === '' || addToSiteEnvKey.value.trim() === '') {
+    return
+  }
+
+  isAddingToSite.value = true
+
+  try {
+    await createEnvVar(addToSiteId.value, {
+      key: addToSiteEnvKey.value.trim(),
+      referencedCredentialId: addToSiteCredential.value.id,
+    })
+    toast.success('Environment variable link created.')
+    isAddToSiteOpen.value = false
+    addToSiteCredential.value = null
+    addToSiteId.value = ''
+    addToSiteEnvKey.value = ''
+  } catch {
+    toast.error('Unable to add credential to site environment.')
+  } finally {
+    isAddingToSite.value = false
+  }
+}
+
 function formatLastChecked(checkedAt: string | null): string {
   if (checkedAt === null) {
     return 'Not checked yet'
@@ -209,6 +344,10 @@ async function loadServices(): Promise<void> {
 
   try {
     services.value = await fetchServerServices(serverId.value)
+
+    if (hasLinkableInstalledService.value) {
+      void ensureCredentialsLoaded()
+    }
   } catch {
     loadError.value = 'Unable to load installed services.'
   } finally {
@@ -288,26 +427,10 @@ function confirmDestructiveAction(): void {
   void executeAction(action, service)
 }
 
-function startSyncHints(): void {
-  syncHintIndex.value = 0
-
-  if (syncHintTimer !== null) {
-    clearInterval(syncHintTimer)
-  }
-
-  syncHintTimer = setInterval(() => {
-    syncHintIndex.value = (syncHintIndex.value + 1) % SYNC_HINTS.length
-  }, 2200)
-}
-
-function stopSyncHints(): void {
-  if (syncHintTimer !== null) {
-    clearInterval(syncHintTimer)
-    syncHintTimer = null
-  }
-
-  syncHintIndex.value = 0
-}
+onMounted(async () => {
+  await loadServices()
+  await refreshStatuses({ notifyOnError: false })
+})
 
 watch(isConfirmOpen, (isOpen) => {
   if (!isOpen) {
@@ -316,25 +439,7 @@ watch(isConfirmOpen, (isOpen) => {
   }
 })
 
-watch(isSyncing, (syncing) => {
-  if (syncing) {
-    startSyncHints()
-
-    return
-  }
-
-  stopSyncHints()
-})
-
-onMounted(async () => {
-  await loadServices()
-  await refreshStatuses({ notifyOnError: false })
-})
-
 onBeforeUnmount(() => {
-  stopSyncHints()
-
-  updateFlashTimers.forEach((timer) => {
     clearTimeout(timer)
   })
 
@@ -355,7 +460,7 @@ defineExpose({
         </h2>
         <Transition name="fade-up">
           <p
-            v-if="syncHint !== null"
+            v-if="isSyncing"
             class="text-xs text-muted-foreground motion-reduce:transition-none"
             aria-live="polite"
           >
@@ -442,7 +547,7 @@ defineExpose({
             v-for="(service, index) in servicesWithActions"
             v-else
             :key="service.key"
-            class="animate-service-row-in border-l-2 transition-[background-color,border-color] duration-300 motion-reduce:animate-none motion-reduce:transition-none"
+            class="service-row animate-service-row-in border-l-2 transition-[background-color,border-color] duration-300 motion-reduce:animate-none motion-reduce:transition-none"
             :class="[
               isServicePending(service.key) ? 'bg-muted/30' : undefined,
               isRecentlyUpdated(service.key) ? 'border-l-primary bg-primary/5' : 'border-l-transparent',
@@ -453,6 +558,13 @@ defineExpose({
               <div class="space-y-1">
                 <div class="inline-flex items-center gap-2 font-medium">
                   {{ service.label }}
+                  <Badge
+                    v-if="service.version !== null"
+                    variant="outline"
+                    class="text-[10px] font-normal"
+                  >
+                    v{{ service.version }}
+                  </Badge>
                   <span
                     v-if="isServicePending(service.key)"
                     class="inline-flex size-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
@@ -490,10 +602,21 @@ defineExpose({
               <span v-else>{{ formatLastChecked(null) }}</span>
             </TableCell>
             <TableCell>
-              <div
-                v-if="service.actions.start || service.actions.stop || service.actions.restart"
-                class="flex flex-wrap justify-end gap-1"
-              >
+              <div class="flex flex-wrap justify-end gap-1">
+                <Button
+                  v-if="canAddToSiteEnv(service)"
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  class="min-h-9 transition-transform duration-100 active:scale-[0.98] motion-reduce:transform-none"
+                  :disabled="isLoadingAddToSiteData"
+                  :title="serverSites.length === 0 && sitesLoaded ? 'Create a site on this server first' : undefined"
+                  :aria-label="`Add ${service.label} credential to site env`"
+                  @click="openAddToSiteEnv(service)"
+                >
+                  <LinkIcon class="mr-1 size-4" aria-hidden="true" />
+                  Add to site env
+                </Button>
                 <Button
                   v-if="service.actions.start"
                   type="button"
@@ -532,12 +655,15 @@ defineExpose({
                 </Button>
               </div>
               <span
-                v-else-if="isObserveMode && service.controllable"
+                v-if="!canAddToSiteEnv(service) && (service.actions.start || service.actions.stop || service.actions.restart) === false && isObserveMode && service.controllable"
                 class="text-sm text-muted-foreground"
               >
                 Read-only in observe mode
               </span>
-              <span v-else class="text-sm text-muted-foreground">—</span>
+              <span
+                v-else-if="!canAddToSiteEnv(service) && !service.actions.start && !service.actions.stop && !service.actions.restart"
+                class="text-sm text-muted-foreground"
+              >—</span>
             </TableCell>
           </TableRow>
         </TableBody>
@@ -554,5 +680,77 @@ defineExpose({
       :confirm-button-label="pendingAction === 'stop' ? 'Stop service' : 'Restart service'"
       @confirm="confirmDestructiveAction"
     />
+
+    <Sheet v-model:open="isAddToSiteOpen">
+      <SheetContent side="right" class="flex w-full flex-col sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Add to site environment</SheetTitle>
+          <SheetDescription>
+            Link {{ addToSiteCredential?.label ?? 'server credential' }} as a site environment variable.
+            The value resolves from the server secret when syncing or deploying.
+          </SheetDescription>
+        </SheetHeader>
+        <SheetBody class="space-y-4">
+          <div
+            v-if="addToSiteCredential !== null"
+            class="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
+          >
+            <p class="font-medium">{{ addToSiteCredential.label }}</p>
+            <p class="text-xs text-muted-foreground">
+              Resolves from the server secret when deploying or pushing env vars.
+            </p>
+          </div>
+          <div class="space-y-2">
+            <Label for="add-to-site-target">Site</Label>
+            <Select v-model="addToSiteId" :disabled="isLoadingAddToSiteData || serverSites.length === 0">
+              <SelectTrigger id="add-to-site-target">
+                <SelectValue :placeholder="isLoadingAddToSiteData ? 'Loading sites…' : 'Select site'" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="site in serverSites"
+                  :key="site.id"
+                  :value="site.id"
+                >
+                  {{ site.domain }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="!isLoadingAddToSiteData && sitesLoaded && serverSites.length === 0" class="text-xs text-muted-foreground">
+              No sites on this server yet.
+            </p>
+          </div>
+          <div class="space-y-2">
+            <Label for="add-to-site-key">Environment key</Label>
+            <Input
+              id="add-to-site-key"
+              v-model="addToSiteEnvKey"
+              class="font-mono"
+              :disabled="isLoadingAddToSiteData"
+              placeholder="DB_PASSWORD"
+            />
+          </div>
+        </SheetBody>
+        <SheetFooter>
+          <Button variant="outline" type="button" :disabled="isAddingToSite" @click="isAddToSiteOpen = false">
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            :disabled="!canSubmitAddToSite"
+            @click="confirmAddToSiteEnv"
+          >
+            {{ isAddingToSite ? 'Adding…' : 'Add link' }}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   </section>
 </template>
+
+<style scoped>
+.service-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 3.5rem;
+}
+</style>

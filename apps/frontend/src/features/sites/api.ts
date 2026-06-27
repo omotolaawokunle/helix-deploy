@@ -1,5 +1,7 @@
+import type { DatabaseBrowseResponse, DatabaseRowQueryParams } from '@/features/databases/types'
+import type { ServerServiceCredentialRecord } from '@/features/servers/types'
 import { api } from '@/lib/axios'
-import type { LogFetchResponse, SiteLogType } from '@/features/logs/types'
+import type { LogFetchResponse } from '@/features/logs/types'
 import type { EnvVarListItem, EnvVarPullPreview, EnvVarPullStrategy, GitProviderType, NginxConfig, Site } from '@/types'
 
 interface ResourceResponse<T> {
@@ -161,9 +163,17 @@ export async function fetchEnvVars(siteId: string): Promise<EnvVarListItem[]> {
   return response.data.data
 }
 
+export async function fetchLinkableCredentials(siteId: string): Promise<ServerServiceCredentialRecord[]> {
+  const response = await api.get<CollectionResponse<ServerServiceCredentialRecord>>(
+    `/api/v1/sites/${siteId}/linkable-credentials`,
+  )
+
+  return response.data.data
+}
+
 export async function createEnvVar(
   siteId: string,
-  payload: { key: string; value: string },
+  payload: { key: string; value?: string; referencedCredentialId?: string },
 ): Promise<EnvVarListItem> {
   const response = await api.post<ResourceResponse<EnvVarListItem>>(
     `/api/v1/sites/${siteId}/env-vars`,
@@ -228,6 +238,38 @@ export async function applyEnvVarsPull(
   await api.post(`/api/v1/sites/${siteId}/env-vars/pull`, payload)
 }
 
+export async function fetchSiteDatabaseTables(
+  siteId: string,
+  options?: { refresh?: boolean },
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/sites/${siteId}/database/tables`,
+    { params: { refresh: options?.refresh ?? false } },
+  )
+
+  return response.data.data
+}
+
+export async function fetchSiteDatabaseRows(
+  siteId: string,
+  table: string,
+  options?: { refresh?: boolean } & DatabaseRowQueryParams,
+): Promise<DatabaseBrowseResponse> {
+  const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
+    `/api/v1/sites/${siteId}/database/tables/${encodeURIComponent(table)}/rows`,
+    {
+      params: {
+        page: options?.page ?? 1,
+        limit: options?.limit ?? 50,
+        filter: options?.filter ?? [],
+        refresh: options?.refresh ?? false,
+      },
+    },
+  )
+
+  return response.data.data
+}
+
 export async function fetchNginxConfig(siteId: string): Promise<NginxConfig> {
   const response = await api.get<ResourceResponse<NginxConfig>>(
     `/api/v1/sites/${siteId}/nginx-config`,
@@ -248,14 +290,12 @@ export async function saveNginxConfig(siteId: string, config: string): Promise<N
 export async function fetchSiteLogs(
   siteId: string,
   options: {
-    type: SiteLogType
     lines?: number
     refresh?: boolean
   },
 ): Promise<LogFetchResponse> {
   const response = await api.get<ResourceResponse<LogFetchResponse>>(`/api/v1/sites/${siteId}/logs`, {
     params: {
-      type: options.type,
       lines: options.lines,
       refresh: options.refresh === true ? 1 : undefined,
     },

@@ -79,6 +79,133 @@ it('queues env var sync', function (): void {
     Queue::assertPushed(SyncEnvVarsJob::class);
 });
 
+it('creates env var referencing a server secret', function (): void {
+    [$site, $owner, , $organization] = envVarApiFixture();
+
+    $server = $site->server;
+    expect($server)->not->toBeNull();
+
+    $vault = app(CredentialVaultInterface::class);
+    $serverSecret = $vault->storeServerSecret(
+        $organization,
+        $server,
+        'env-vars.test-postgresql-deploy-password',
+        'postgres-deploy-secret',
+    );
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/sites/{$site->id}/env-vars", [
+            'key' => 'DB_PASSWORD',
+            'referencedCredentialId' => (string) $serverSecret->getKey(),
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.key', 'DB_PASSWORD')
+        ->assertJsonPath('data.isReference', true)
+        ->assertJsonPath('data.referencedCredentialId', (string) $serverSecret->getKey())
+        ->assertJsonPath('data.referencedCredentialLabel', 'PostgreSQL deploy password')
+        ->assertJsonMissingPath('data.value');
+
+    $envVar = Credential::query()->where('name', 'DB_PASSWORD')->first();
+    expect($envVar)->not->toBeNull();
+    expect($envVar->referenced_credential_id)->toBe((string) $serverSecret->getKey());
+});
+
+it('reveals referenced env var by resolving server secret', function (): void {
+    [$site, $owner, , $organization] = envVarApiFixture();
+
+    $server = $site->server;
+    expect($server)->not->toBeNull();
+
+    $vault = app(CredentialVaultInterface::class);
+    $serverSecret = $vault->storeServerSecret(
+        $organization,
+        $server,
+        'env-vars.test-redis-password',
+        'redis-linked-secret',
+    );
+
+    $envVar = $vault->storeEnvVarReference(
+        $organization,
+        $site,
+        'REDIS_PASSWORD',
+        (string) $serverSecret->getKey(),
+    );
+
+    $this->actingAs($owner)
+        ->getJson("/api/v1/sites/{$site->id}/env-vars/{$envVar->id}/reveal")
+        ->assertOk()
+        ->assertJsonPath('data.value', 'redis-linked-secret');
+});
+
+it('lists linkable server credentials for a site', function (): void {
+    [$site, $owner, , $organization] = envVarApiFixture();
+
+    $server = $site->server;
+    expect($server)->not->toBeNull();
+
+    $vault = app(CredentialVaultInterface::class);
+    $vault->storeServerSecret(
+        $organization,
+        $server,
+        'env-vars.test-mysql-deploy-password',
+        'mysql-secret',
+    );
+
+    $this->actingAs($owner)
+        ->getJson("/api/v1/sites/{$site->id}/linkable-credentials")
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.serviceKey', 'mysql')
+        ->assertJsonMissing(['value', 'encrypted_value']);
+});
+
+it('rejects creating env var with both value and reference', function (): void {
+    [$site, $owner, , $organization] = envVarApiFixture();
+
+    $server = $site->server;
+    $vault = app(CredentialVaultInterface::class);
+    $serverSecret = $vault->storeServerSecret(
+        $organization,
+        $server,
+        'env-vars.test-postgresql-deploy-password',
+        'secret',
+    );
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/sites/{$site->id}/env-vars", [
+            'key' => 'DB_PASSWORD',
+            'value' => 'literal',
+            'referencedCredentialId' => (string) $serverSecret->getKey(),
+        ])
+        ->assertUnprocessable();
+});
+
+it('forbids updating referenced env vars', function (): void {
+    [$site, $owner, , $organization] = envVarApiFixture();
+
+    $server = $site->server;
+    $vault = app(CredentialVaultInterface::class);
+    $serverSecret = $vault->storeServerSecret(
+        $organization,
+        $server,
+        'env-vars.test-postgresql-deploy-password',
+        'secret',
+    );
+
+    $envVar = $vault->storeEnvVarReference(
+        $organization,
+        $site,
+        'DB_PASSWORD',
+        (string) $serverSecret->getKey(),
+    );
+
+    $this->actingAs($owner)
+        ->patchJson("/api/v1/sites/{$site->id}/env-vars/{$envVar->id}", [
+            'value' => 'new-value',
+        ])
+        ->assertForbidden();
+});
+
 /**
  * @return array{0: Site, 1: User, 2: Credential, 3: Organization}
  */

@@ -27,6 +27,7 @@ import {
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import ProviderIcon from '@/features/servers/components/ProviderIcon.vue'
 import InstalledServicesPanel from '@/features/servers/components/InstalledServicesPanel.vue'
+import ServerCredentialsPanel from '@/features/servers/components/ServerCredentialsPanel.vue'
 import ServerObserveModeAlert from '@/features/servers/components/ServerObserveModeAlert.vue'
 
 import { deleteServer, testServerConnection } from '@/features/servers/api'
@@ -46,8 +47,14 @@ const DaemonsTab = defineAsyncComponent(
 const CommandRunnerTab = defineAsyncComponent(
   () => import('@/features/commands/components/CommandRunnerTab.vue'),
 )
+const ServerDatabasesTab = defineAsyncComponent(
+  () => import('@/features/servers/components/ServerDatabasesTab.vue'),
+)
 const ServerLogsTab = defineAsyncComponent(
   () => import('@/features/servers/components/ServerLogsTab.vue'),
+)
+const ServerSslTab = defineAsyncComponent(
+  () => import('@/features/servers/components/ServerSslTab.vue'),
 )
 const ProvisionServerDrawer = defineAsyncComponent(
   () => import('@/features/servers/components/ProvisionServerDrawer.vue'),
@@ -68,6 +75,18 @@ const isDeleteDialogOpen = ref(false)
 const isDeleting = ref(false)
 const isAwaitingDeletion = ref(false)
 const activeTab = ref('overview')
+
+const SERVER_TAB_IDS = ['overview', 'sites', 'ssl', 'cron', 'daemons', 'commands', 'databases', 'logs'] as const
+
+function applyTabFromQuery(): void {
+  const tab = route.query.tab
+
+  if (typeof tab !== 'string' || !SERVER_TAB_IDS.includes(tab as typeof SERVER_TAB_IDS[number])) {
+    return
+  }
+
+  activeTab.value = tab
+}
 
 const serverId = computed(() => String(route.params.id))
 
@@ -285,8 +304,18 @@ async function handleTestConnection(): Promise<void> {
 }
 
 onMounted(() => {
+  applyTabFromQuery()
   void loadServer()
 })
+
+watch(
+  () => server.value?.managementMode,
+  (mode) => {
+    if (mode === ManagementMode.Observe && activeTab.value === 'ssl') {
+      activeTab.value = 'overview'
+    }
+  },
+)
 </script>
 
 <template>
@@ -434,6 +463,9 @@ onMounted(() => {
           <TabsTrigger value="sites">
             Sites
           </TabsTrigger>
+          <TabsTrigger v-if="!isObserveMode" value="ssl">
+            SSL
+          </TabsTrigger>
           <TabsTrigger value="cron">
             Cron Jobs
           </TabsTrigger>
@@ -442,6 +474,9 @@ onMounted(() => {
           </TabsTrigger>
           <TabsTrigger value="commands">
             Commands
+          </TabsTrigger>
+          <TabsTrigger value="databases">
+            Databases
           </TabsTrigger>
           <TabsTrigger value="logs">
             Logs
@@ -481,6 +516,12 @@ onMounted(() => {
             :can-manage="canManageServices"
           />
 
+          <ServerCredentialsPanel
+            v-if="server !== null"
+            :server-id="server.id"
+            :can-reveal="canManageServices"
+          />
+
           <section>
             <h2 class="section-label">
               Connection fingerprint
@@ -504,6 +545,15 @@ onMounted(() => {
           />
         </TabsContent>
 
+        <TabsContent value="ssl" class="mt-6">
+          <ServerSslTab
+            v-if="activeTab === 'ssl' && !isObserveMode"
+            :server-id="server.id"
+            :is-production="isProduction"
+            :can-manage="canManageServices"
+          />
+        </TabsContent>
+
         <TabsContent value="cron" class="mt-6">
           <CronJobsTab v-if="activeTab === 'cron'" :server-id="server.id" />
         </TabsContent>
@@ -515,6 +565,14 @@ onMounted(() => {
         <TabsContent value="commands" class="mt-6">
           <CommandRunnerTab
             v-if="activeTab === 'commands'"
+            :server-id="server.id"
+            :is-production="isProduction"
+          />
+        </TabsContent>
+
+        <TabsContent value="databases" class="mt-6">
+          <ServerDatabasesTab
+            v-if="activeTab === 'databases'"
             :server-id="server.id"
             :is-production="isProduction"
           />

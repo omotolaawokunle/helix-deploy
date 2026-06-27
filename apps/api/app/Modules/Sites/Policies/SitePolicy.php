@@ -84,7 +84,17 @@ class SitePolicy
         return in_array($this->roleInOrganization($user, $site->organization), [TeamRole::OWNER, TeamRole::ADMIN, TeamRole::DEVELOPER], true);
     }
 
+    public function renewSsl(User $user, Site $site): bool
+    {
+        return in_array($this->roleInOrganization($user, $site->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
+    }
+
     public function viewLogs(User $user, Site $site): bool
+    {
+        return $this->view($user, $site);
+    }
+
+    public function browseDatabase(User $user, Site $site): bool
     {
         return $this->view($user, $site);
     }

@@ -10,6 +10,7 @@ use App\Modules\Servers\Events\ServerConnected;
 use App\Modules\Servers\Events\ServerConnectionFailed;
 use App\Modules\Servers\Events\ServerFingerprintMismatch;
 use App\Modules\Servers\Jobs\VerifyServerConnectionJob;
+use App\Modules\Sites\Jobs\AdoptServerSslCertificatesJob;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Teams\Enums\TeamRole;
 use App\Packages\SSH\Exceptions\SSHFingerprintMismatchException;
@@ -17,9 +18,11 @@ use App\Packages\SSH\SSHConnection;
 use App\Packages\SSH\SSHManager;
 use App\Packages\SSH\SSHResult;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 
 it('verify job success updates status versions and broadcasts server connected', function (): void {
     Event::fake([ServerConnected::class]);
+    Queue::fake();
 
     $server = createServerForVerifyJob();
     $job = new VerifyServerConnectionJob((string) $server->getKey());
@@ -67,6 +70,7 @@ it('verify job success updates status versions and broadcasts server connected',
 
     Event::assertDispatched(ServerConnected::class);
     expect(InfrastructureEvent::query()->where('event_type', 'server.connected')->exists())->toBeTrue();
+    Queue::assertPushed(AdoptServerSslCertificatesJob::class);
 });
 
 it('verify job fingerprint mismatch marks disconnected broadcasts mismatch and does not throw', function (): void {

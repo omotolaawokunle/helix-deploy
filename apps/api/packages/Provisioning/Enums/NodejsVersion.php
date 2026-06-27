@@ -9,6 +9,7 @@ enum NodejsVersion: int
     case V18 = 18;
     case V20 = 20;
     case V22 = 22;
+    case V24 = 24;
 
     /**
      * @return list<int>

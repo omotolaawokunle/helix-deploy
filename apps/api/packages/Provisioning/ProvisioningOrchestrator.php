@@ -24,15 +24,19 @@ class ProvisioningOrchestrator
     /**
      * @param array<int, ProvisioningScriptInterface> $scripts
      * @param callable(string): void $lineCallback
+     * @param array<string, mixed> $provisioningOptions
      */
     public function run(
         Server $server,
         array $scripts,
         callable $lineCallback,
         Organization $org,
+        array $provisioningOptions = [],
     ): void {
         $connection = $this->sshManager->connectAndVerify($server, $this->credentialVault);
         $installedServices = [];
+        $metadataBuilder = new ProvisioningInstalledServiceMetadata();
+        $scriptOptions = array_merge($provisioningOptions, ['lineCallback' => $lineCallback]);
 
         try {
             foreach ($scripts as $script) {
@@ -40,14 +44,13 @@ class ProvisioningOrchestrator
                 $lineCallback(sprintf('[%s] Starting...', $script->name()));
 
                 try {
-                    $script->handle($connection, $server, ['lineCallback' => $lineCallback]);
+                    $script->handle($connection, $server, $scriptOptions);
                     $elapsed = (int) round(microtime(true) - $startedAt);
                     $lineCallback(sprintf('✓ %s complete (%ds)', $script->name(), $elapsed));
-                    $installedServices[$script->name()] = [
-                        'installed' => true,
-                        'installed_at' => now()->toIso8601String(),
-                        'idempotent' => $script->isIdempotent(),
-                    ];
+                    $installedServices[$script->name()] = array_merge(
+                        $metadataBuilder->forScript($script->name(), $provisioningOptions),
+                        ['idempotent' => $script->isIdempotent()],
+                    );
                 } catch (ProvisioningStepFailedException $exception) {
                     $lineCallback(sprintf('[%s] ERROR: %s', $script->name(), $exception->getMessage()));
                     Log::warning('Provisioning script failed', [

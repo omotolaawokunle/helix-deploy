@@ -6,20 +6,20 @@ namespace App\Modules\Sites\Services;
 
 use App\Modules\Sites\DTOs\SiteLogReadTarget;
 use App\Modules\Sites\Enums\Runtime;
-use App\Modules\Sites\Enums\SiteLogType;
 use App\Modules\Sites\Models\Site;
 
 final class SiteLogPathResolver
 {
     private const string LARAVEL_LOG_GLOB = 'laravel*.log';
 
-    public function resolveTarget(Site $site, SiteLogType $type): ?SiteLogReadTarget
+    public function __construct(
+        private readonly SiteDeployPathResolver $deployPathResolver,
+    ) {
+    }
+
+    public function resolveTarget(Site $site): ?SiteLogReadTarget
     {
-        return match ($type) {
-            SiteLogType::NGINX_ACCESS => SiteLogReadTarget::file('/var/log/nginx/'.$site->domain.'-access.log'),
-            SiteLogType::NGINX_ERROR => SiteLogReadTarget::file('/var/log/nginx/'.$site->domain.'-error.log'),
-            SiteLogType::APPLICATION => $this->resolveApplicationTarget($site),
-        };
+        return $this->resolveApplicationTarget($site);
     }
 
     public function supportsApplicationLogs(Site $site): bool
@@ -37,14 +37,19 @@ final class SiteLogPathResolver
             return null;
         }
 
-        $webroot = rtrim((string) $site->webroot, '/');
+        $logDirectories = $this->deployPathResolver->logDirectoryCandidates($site);
+        $logFiles = $this->deployPathResolver->logFileCandidates($site, 'logs/error.log');
 
         return match ($runtime) {
             Runtime::PHP => SiteLogReadTarget::latestGlob(
-                $webroot.'/storage/logs',
+                $logDirectories[0],
                 self::LARAVEL_LOG_GLOB,
+                $logDirectories,
             ),
-            Runtime::NODEJS => SiteLogReadTarget::file($webroot.'/logs/error.log'),
+            Runtime::NODEJS => SiteLogReadTarget::file(
+                $logFiles[0],
+                $logFiles,
+            ),
             default => null,
         };
     }

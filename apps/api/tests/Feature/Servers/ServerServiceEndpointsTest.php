@@ -16,6 +16,7 @@ it('lists installed services with cached status', function (): void {
             'installed' => true,
             'status' => 'running',
             'statusCheckedAt' => '2026-06-13T10:00:00Z',
+            'version' => '1.24',
         ],
         'nodejs' => [
             'installed' => true,
@@ -29,6 +30,7 @@ it('lists installed services with cached status', function (): void {
         ->assertJsonPath('data.0.key', 'nginx')
         ->assertJsonPath('data.0.status', 'running')
         ->assertJsonPath('data.0.controllable', true)
+        ->assertJsonPath('data.0.version', '1.24')
         ->assertJsonPath('data.1.key', 'nodejs')
         ->assertJsonPath('data.1.controllable', false);
 });

@@ -19,6 +19,7 @@ use App\Modules\Servers\Resources\ServerRegistrationResource;
 use App\Modules\Servers\Resources\ServerResource;
 use App\Modules\Servers\Services\ServerTableFilterService;
 use App\Modules\Organizations\Models\Organization;
+use App\Modules\Sites\Enums\SslStatus;
 use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
@@ -41,7 +42,23 @@ class ServerController extends Controller
             ->withoutGlobalScope('owned_by_organization')
             ->where('organization_id', (string) $org->getKey())
             ->select('servers.*')
-            ->with(['project', 'environment']);
+            ->with(['project', 'environment'])
+            ->withCount([
+                'sites as active_ssl_count' => static fn ($siteQuery) => $siteQuery
+                    ->where('enable_ssl', true)
+                    ->where('ssl_status', SslStatus::ACTIVE->value),
+                'sites as expiring_ssl_count' => static fn ($siteQuery) => $siteQuery
+                    ->where('enable_ssl', true)
+                    ->where('ssl_status', SslStatus::ACTIVE->value)
+                    ->whereNotNull('ssl_expires_at')
+                    ->where('ssl_expires_at', '<=', now()->addDays(30)),
+            ])
+            ->withMin([
+                'sites as nearest_ssl_expiry' => static fn ($siteQuery) => $siteQuery
+                    ->where('enable_ssl', true)
+                    ->where('ssl_status', SslStatus::ACTIVE->value)
+                    ->whereNotNull('ssl_expires_at'),
+            ], 'ssl_expires_at');
 
         $visibleProjectIds = $visibilityService->visibleProjectIds($user, $org);
 

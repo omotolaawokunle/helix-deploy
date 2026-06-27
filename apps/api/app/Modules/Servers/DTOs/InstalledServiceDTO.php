@@ -15,6 +15,7 @@ readonly class InstalledServiceDTO
         public ServiceRuntimeStatus $status,
         public ?string $statusCheckedAt,
         public bool $controllable,
+        public ?string $version = null,
     ) {
     }
 
@@ -30,6 +31,7 @@ readonly class InstalledServiceDTO
             'status' => $this->status->value,
             'statusCheckedAt' => $this->statusCheckedAt,
             'controllable' => $this->controllable,
+            'version' => $this->version,
         ];
     }
 }

@@ -94,6 +94,8 @@ class Site extends Model
         'ssl_provider',
         'ssl_error',
         'ssl_challenge',
+        'ssl_expires_at',
+        'ssl_checked_at',
     ];
 
     /**
@@ -120,6 +122,8 @@ class Site extends Model
             'ssl_status' => SslStatus::class,
             'ssl_challenge' => SslChallenge::class,
             'ssl_provider' => SslProvider::class,
+            'ssl_expires_at' => 'datetime',
+            'ssl_checked_at' => 'datetime',
         ];
     }
 

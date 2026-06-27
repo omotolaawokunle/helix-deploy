@@ -7,6 +7,7 @@ namespace App\Modules\Servers\Jobs;
 use App\Modules\Credentials\CredentialVault;
 use App\Modules\Servers\Actions\SyncServerInventoryAction;
 use App\Modules\Servers\Models\Server;
+use App\Modules\Sites\Jobs\AdoptServerSslCertificatesJob;
 use App\Packages\SSH\SSHManager;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Builder;
@@ -39,6 +40,10 @@ class DiscoverServerInventoryJob implements ShouldQueue
         try {
             $connection = $sshManager->connectAndVerify($server, $vault);
             $syncServerInventory->execute($server, $connection);
+
+            if ($server->isManaged()) {
+                AdoptServerSslCertificatesJob::dispatch((string) $server->getKey());
+            }
         } finally {
             if (isset($connection)) {
                 $connection->disconnect();

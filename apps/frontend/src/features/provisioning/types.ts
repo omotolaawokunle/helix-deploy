@@ -1,3 +1,13 @@
+export interface ServiceVersionDefinition {
+  serviceKey: string
+  optionKey: string
+  label: string
+  values: Array<string | number>
+  default: string | number
+}
+
+export type ProvisioningServiceVersionCatalog = Record<string, ServiceVersionDefinition>
+
 export interface ProvisioningTemplateRecord {
   id: string
   organizationId: string | null
@@ -17,6 +27,10 @@ export interface CreateProvisioningTemplatePayload {
   options?: {
     phpVersion?: string
     nodeVersion?: number
+    postgresqlVersion?: string
+    mysqlVersion?: string
+    pythonVersion?: string
+    redisPassword?: string
   }
 }
 
@@ -27,6 +41,10 @@ export interface UpdateProvisioningTemplatePayload {
   options?: {
     phpVersion?: string
     nodeVersion?: number
+    postgresqlVersion?: string
+    mysqlVersion?: string
+    pythonVersion?: string
+    redisPassword?: string
   }
 }
 
@@ -36,4 +54,8 @@ export type ProvisioningTemplateFormState = {
   services: string[]
   phpVersion: string
   nodeVersion: number
+  postgresqlVersion: string
+  mysqlVersion: string
+  pythonVersion: string
+  redisPassword: string
 }

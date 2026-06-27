@@ -7,7 +7,6 @@ use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Enums\Runtime;
-use App\Modules\Sites\Enums\SiteLogType;
 use App\Modules\Sites\Jobs\FetchSiteLogsJob;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Teams\Enums\TeamRole;
@@ -57,10 +56,10 @@ it('returns loading and dispatches fetch site logs job on cache miss', function 
     ]);
 
     $this->actingAs($owner)
-        ->getJson("/api/v1/sites/{$site->id}/logs?type=nginx_access&lines=100")
+        ->getJson("/api/v1/sites/{$site->id}/logs?lines=100")
         ->assertOk()
         ->assertJsonPath('data.status', 'loading')
-        ->assertJsonPath('data.logType', 'nginx_access');
+        ->assertJsonPath('data.logType', 'application');
 
     Queue::assertPushed(FetchSiteLogsJob::class);
 
@@ -108,7 +107,7 @@ it('returns cached site logs when available', function (): void {
     ]);
 
     Cache::put(
-        FetchSiteLogsJob::cacheKey((string) $site->getKey(), SiteLogType::APPLICATION, 100),
+        FetchSiteLogsJob::cacheKey((string) $site->getKey(), 100),
         [
             'status' => 'ready',
             'lines' => ['[2026-06-13] local.ERROR: test'],
@@ -117,7 +116,7 @@ it('returns cached site logs when available', function (): void {
     );
 
     $this->actingAs($owner)
-        ->getJson("/api/v1/sites/{$site->id}/logs?type=application&lines=100")
+        ->getJson("/api/v1/sites/{$site->id}/logs?lines=100")
         ->assertOk()
         ->assertJsonPath('data.status', 'ready')
         ->assertJsonPath('data.lines.0', '[2026-06-13] local.ERROR: test');
@@ -164,7 +163,7 @@ it('rejects application logs for unsupported site runtime', function (): void {
     ]);
 
     $this->actingAs($owner)
-        ->getJson("/api/v1/sites/{$site->id}/logs?type=application")
+        ->getJson("/api/v1/sites/{$site->id}/logs")
         ->assertUnprocessable();
 });
 
@@ -219,22 +218,22 @@ it('forbids cross organization site log access', function (): void {
     ]);
 
     $this->actingAs($ownerB)
-        ->getJson("/api/v1/sites/{$site->id}/logs?type=nginx_error")
+        ->getJson("/api/v1/sites/{$site->id}/logs")
         ->assertForbidden();
 });
 
-it('site logs ready event broadcasts on server logs channel', function (): void {
+it('site logs ready event broadcasts notification without log lines', function (): void {
     $event = new \App\Modules\Sites\Events\SiteLogsReady(
         serverId: 'server-1',
         organizationId: 'org-1',
         siteId: 'site-1',
-        logType: 'nginx_error',
+        logType: 'application',
         linesRequested: 100,
         status: 'ready',
-        lines: ['error line'],
     );
 
     expect($event->broadcastAs())->toBe('site.logs.ready')
         ->and($event->broadcastOn()[0]->name)->toBe('private-server.server-1.logs')
-        ->and($event->broadcastWith()['siteId'])->toBe('site-1');
+        ->and($event->broadcastWith()['siteId'])->toBe('site-1')
+        ->and($event->broadcastWith())->not->toHaveKey('lines');
 });

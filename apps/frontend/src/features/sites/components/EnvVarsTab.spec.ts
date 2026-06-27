@@ -30,6 +30,9 @@ const envVar: EnvVarListItem = {
   id: 'cred-1',
   key: 'APP_KEY',
   maskedValue: '••••••••',
+  isReference: false,
+  referencedCredentialId: null,
+  referencedCredentialLabel: null,
   createdAt: null,
   updatedAt: null,
 }

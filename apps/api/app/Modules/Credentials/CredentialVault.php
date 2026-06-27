@@ -100,6 +100,60 @@ class CredentialVault implements CredentialVaultInterface
         return $credential;
     }
 
+    public function storeEnvVarReference(
+        Organization $organization,
+        Model $owner,
+        string $name,
+        string $referencedCredentialId,
+    ): Credential {
+        $credential = $this->storeEncrypted(
+            organization: $organization,
+            owner: $owner,
+            name: $name,
+            type: CredentialType::ENV_VAR,
+            plaintext: '',
+            publicKey: null,
+        );
+
+        $credential->forceFill([
+            'referenced_credential_id' => $referencedCredentialId,
+        ])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.created',
+            resourceId: (string) $credential->getKey(),
+            afterState: [
+                'name' => $credential->name,
+                'type' => $credential->type?->value,
+                'referenced_credential_id' => $referencedCredentialId,
+            ],
+        );
+
+        return $credential;
+    }
+
+    public function storeServerSecret(Organization $organization, Model $owner, string $name, string $value): Credential
+    {
+        $credential = $this->storeEncrypted(
+            organization: $organization,
+            owner: $owner,
+            name: $name,
+            type: CredentialType::SERVER_SECRET,
+            plaintext: $value,
+            publicKey: null,
+        );
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.created',
+            resourceId: (string) $credential->getKey(),
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $credential;
+    }
+
     public function storeGitProviderToken(Organization $organization, string $name, string $token): Credential
     {
         $existing = Credential::query()
@@ -504,6 +558,25 @@ class CredentialVault implements CredentialVaultInterface
     {
         $credential = $this->loadCredential($credentialId, $organization);
         $this->assertCredentialType($credential, CredentialType::ENV_VAR);
+
+        $plaintext = $this->decryptCredential($organization, $credential);
+
+        $credential->forceFill(['last_used_at' => now()])->save();
+
+        $this->writeAuditLog(
+            organization: $organization,
+            operation: 'credential.accessed',
+            resourceId: (string) $credential->getKey(),
+            afterState: ['name' => $credential->name, 'type' => $credential->type?->value],
+        );
+
+        return $plaintext;
+    }
+
+    public function getServerSecret(string $credentialId, Organization $organization): string
+    {
+        $credential = $this->loadCredential($credentialId, $organization);
+        $this->assertCredentialType($credential, CredentialType::SERVER_SECRET);
 
         $plaintext = $this->decryptCredential($organization, $credential);
 

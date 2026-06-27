@@ -32,6 +32,8 @@ use App\Modules\Monitoring\Contracts\RemoteLogReaderInterface;
 use App\Modules\Monitoring\Contracts\ServerMetricsCollectorInterface;
 use App\Modules\Monitoring\Services\RemoteLogReader;
 use App\Modules\Monitoring\Services\ServerMetricsCollector;
+use App\Packages\DatabaseBrowser\Contracts\ReadOnlyDatabaseClientInterface;
+use App\Packages\DatabaseBrowser\ReadOnlyDatabaseClient;
 use App\Modules\Integrations\Contracts\CloudflareClientInterface;
 use App\Modules\Integrations\Contracts\SiteDnsProvisionerInterface;
 use App\Modules\Integrations\Models\CloudflareIntegration;
@@ -44,7 +46,9 @@ use App\Modules\Integrations\Services\Cloudflare\CloudflareClient;
 use App\Modules\Integrations\Services\DigitalOcean\DigitalOceanDnsClient;
 use App\Modules\Integrations\Services\DnsProviderRegistry;
 use App\Modules\Integrations\Services\SiteDnsProvisioner;
+use App\Modules\Sites\Contracts\SiteSslCertificateInspectorInterface;
 use App\Modules\Sites\Contracts\SiteSslProvisionerInterface;
+use App\Modules\Sites\Services\SiteSslCertificateInspector;
 use App\Modules\Sites\Services\SiteSslProvisioner;
 use App\Modules\Servers\Models\CloudProviderIntegration;
 use App\Modules\Servers\Policies\CloudProviderPolicy;
@@ -76,11 +80,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(TeamProjectVisibilityServiceInterface::class, TeamProjectVisibilityService::class);
         $this->app->singleton(ServerMetricsCollectorInterface::class, ServerMetricsCollector::class);
         $this->app->singleton(RemoteLogReaderInterface::class, RemoteLogReader::class);
+        $this->app->singleton(ReadOnlyDatabaseClientInterface::class, ReadOnlyDatabaseClient::class);
         $this->app->singleton(RunnerSlotStoreInterface::class, RedisRunnerSlotStore::class);
         $this->app->singleton(CloudflareClientInterface::class, CloudflareClient::class);
         $this->app->singleton(DigitalOceanDnsClient::class);
         $this->app->singleton(DnsProviderRegistry::class);
         $this->app->singleton(SiteDnsProvisionerInterface::class, SiteDnsProvisioner::class);
+        $this->app->singleton(SiteSslCertificateInspectorInterface::class, SiteSslCertificateInspector::class);
         $this->app->singleton(SiteSslProvisionerInterface::class, SiteSslProvisioner::class);
         $this->app->singleton(PipelineStageHandlerRegistry::class, function (): PipelineStageHandlerRegistry {
             /** @var list<PipelineStageHandlerInterface> $handlers */

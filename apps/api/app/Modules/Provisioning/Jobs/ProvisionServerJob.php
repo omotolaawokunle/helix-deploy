@@ -10,8 +10,11 @@ use App\Modules\Provisioning\Events\DeploymentLogLine;
 use App\Modules\Provisioning\Events\ProvisioningCompleted;
 use App\Modules\Provisioning\Models\ProvisioningLog;
 use App\Modules\Servers\Models\Server;
+use App\Packages\Provisioning\Enums\MysqlVersion;
 use App\Packages\Provisioning\Enums\NodejsVersion;
 use App\Packages\Provisioning\Enums\PhpVersion;
+use App\Packages\Provisioning\Enums\PostgresqlVersion;
+use App\Packages\Provisioning\Enums\PythonVersion;
 use App\Packages\Provisioning\Contracts\ProvisioningScriptInterface;
 use App\Packages\Provisioning\ProvisioningOrchestrator;
 use App\Packages\Provisioning\Scripts\CreateDeployUser;
@@ -81,6 +84,7 @@ class ProvisionServerJob implements ShouldQueue
             scripts: $scriptInstances,
             lineCallback: $lineCallback,
             org: $organization,
+            provisioningOptions: $this->options,
         );
 
         $server->refresh();
@@ -115,11 +119,19 @@ class ProvisionServerJob implements ShouldQueue
                 'create-deploy-user' => new CreateDeployUser($credentialVault, $organization),
                 'nginx' => new InstallNginx(),
                 'php' => new InstallPHP(isset($this->options['phpVersion']) ? PhpVersion::from((string) $this->options['phpVersion']) : PhpVersion::V8_3),
-                'mysql' => new InstallMySQL($credentialVault, $organization),
-                'postgresql' => new InstallPostgreSQL($credentialVault, $organization),
+                'mysql' => new InstallMySQL(
+                    $credentialVault,
+                    $organization,
+                    isset($this->options['mysqlVersion']) ? MysqlVersion::from((string) $this->options['mysqlVersion']) : MysqlVersion::default(),
+                ),
+                'postgresql' => new InstallPostgreSQL(
+                    $credentialVault,
+                    $organization,
+                    isset($this->options['postgresqlVersion']) ? PostgresqlVersion::from((string) $this->options['postgresqlVersion']) : PostgresqlVersion::default(),
+                ),
                 'redis' => new InstallRedis($credentialVault, $organization, isset($this->options['redisPassword']) ? (string) $this->options['redisPassword'] : null),
                 'nodejs' => new InstallNodejs(isset($this->options['nodeVersion']) ? NodejsVersion::from((int) $this->options['nodeVersion']) : NodejsVersion::V20),
-                'python' => new InstallPython(),
+                'python' => new InstallPython(isset($this->options['pythonVersion']) ? PythonVersion::from((string) $this->options['pythonVersion']) : PythonVersion::default()),
                 'supervisor' => new InstallSupervisor(),
                 'docker' => new InstallDocker(),
                 'certbot' => new InstallCertbot(),

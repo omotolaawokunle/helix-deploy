@@ -14,16 +14,12 @@ class ServerLogsReady implements ShouldBroadcastNow
     use Dispatchable;
     use SerializesModels;
 
-    /**
-     * @param  list<string>  $lines
-     */
     public function __construct(
         public readonly string $serverId,
         public readonly string $organizationId,
         public readonly string $logType,
         public readonly int $linesRequested,
         public readonly string $status,
-        public readonly array $lines = [],
         public readonly ?string $message = null,
     ) {
     }
@@ -44,6 +40,8 @@ class ServerLogsReady implements ShouldBroadcastNow
     }
 
     /**
+     * Notification-only payload. Log lines are served from cache via the HTTP API.
+     *
      * @return array<string, mixed>
      */
     public function broadcastWith(): array
@@ -54,7 +52,6 @@ class ServerLogsReady implements ShouldBroadcastNow
             'logType' => $this->logType,
             'linesRequested' => $this->linesRequested,
             'status' => $this->status,
-            'lines' => $this->lines,
             'message' => $this->message,
         ];
     }

@@ -41,16 +41,64 @@ final class RemoteLogReader implements RemoteLogReaderInterface
         string $filenamePattern,
         int $lines,
     ): array {
+        return $this->tailLatestFromDirectories($ssh, [$directory], $filenamePattern, $lines);
+    }
+
+    /**
+     * @param list<string> $directories
+     * @return list<string>
+     */
+    public function tailLatestFromDirectories(
+        SSHConnectionInterface $ssh,
+        array $directories,
+        string $filenamePattern,
+        int $lines,
+    ): array {
         if ($filenamePattern !== self::LARAVEL_LOG_GLOB) {
             throw new InvalidArgumentException('Unsupported log filename pattern.');
         }
 
+        if ($directories === []) {
+            return [];
+        }
+
         $lineCount = max(self::MIN_LINES, min($lines, self::MAX_LINES));
-        $escapedDirectory = escapeshellarg(rtrim($directory, '/'));
+        $directoryList = implode(' ', array_map(
+            static fn (string $directory): string => escapeshellarg(rtrim($directory, '/')),
+            $directories,
+        ));
 
         $output = $ssh->run(sprintf(
-            'dir=%s; latest=$(ls -1t "$dir"/laravel*.log "$dir"/laravel.log 2>/dev/null | head -1); if [ -n "$latest" ] && [ -f "$latest" ]; then tail -n %d "$latest"; fi',
-            $escapedDirectory,
+            'for dir in %s; do latest=$(ls -1t "$dir"/laravel*.log "$dir"/laravel.log 2>/dev/null | head -1); if [ -n "$latest" ] && [ -f "$latest" ]; then tail -n %d "$latest"; break; fi; done',
+            $directoryList,
+            $lineCount,
+        ))->output();
+
+        return $this->parseLines($output);
+    }
+
+    /**
+     * @param list<string> $absolutePaths
+     * @return list<string>
+     */
+    public function tailFirstExisting(
+        SSHConnectionInterface $ssh,
+        array $absolutePaths,
+        int $lines,
+    ): array {
+        if ($absolutePaths === []) {
+            return [];
+        }
+
+        $lineCount = max(self::MIN_LINES, min($lines, self::MAX_LINES));
+        $fileList = implode(' ', array_map(
+            static fn (string $path): string => escapeshellarg($path),
+            $absolutePaths,
+        ));
+
+        $output = $ssh->run(sprintf(
+            'for f in %s; do if [ -f "$f" ]; then tail -n %d "$f"; break; fi; done',
+            $fileList,
             $lineCount,
         ))->output();
 

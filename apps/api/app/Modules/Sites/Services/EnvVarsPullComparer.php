@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Services;
 
-use App\Modules\Credentials\Contracts\CredentialVaultInterface;
 use App\Modules\Credentials\Enums\CredentialType;
 use App\Modules\Credentials\Models\Credential;
 use App\Modules\Organizations\Models\Organization;
@@ -15,7 +14,7 @@ final class EnvVarsPullComparer
 {
     public function __construct(
         private readonly EnvFileParser $envFileParser,
-        private readonly CredentialVaultInterface $credentialVault,
+        private readonly EnvVarValueResolver $envVarValueResolver,
     ) {
     }
 
@@ -48,7 +47,7 @@ final class EnvVarsPullComparer
                 continue;
             }
 
-            $helixValue = $this->credentialVault->getSecret((string) $credential->getKey(), $org);
+            $helixValue = $this->envVarValueResolver->resolve($credential, $org);
 
             if ($helixValue === $serverValue) {
                 $unchanged[] = $key;

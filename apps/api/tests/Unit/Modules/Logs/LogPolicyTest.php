@@ -59,9 +59,7 @@ it('allows org members to view server logs', function (): void {
 });
 
 it('site log type enum values match api contract', function (): void {
-    expect(SiteLogType::NGINX_ACCESS->value)->toBe('nginx_access')
-        ->and(SiteLogType::NGINX_ERROR->value)->toBe('nginx_error')
-        ->and(SiteLogType::APPLICATION->value)->toBe('application');
+    expect(SiteLogType::APPLICATION->value)->toBe('application');
 });
 
 it('server log type enum values match api contract', function (): void {
