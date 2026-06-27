@@ -222,7 +222,7 @@ it('forbids cross organization site log access', function (): void {
         ->assertForbidden();
 });
 
-it('site logs ready event broadcasts on server logs channel', function (): void {
+it('site logs ready event broadcasts notification without log lines', function (): void {
     $event = new \App\Modules\Sites\Events\SiteLogsReady(
         serverId: 'server-1',
         organizationId: 'org-1',
@@ -230,10 +230,10 @@ it('site logs ready event broadcasts on server logs channel', function (): void 
         logType: 'application',
         linesRequested: 100,
         status: 'ready',
-        lines: ['error line'],
     );
 
     expect($event->broadcastAs())->toBe('site.logs.ready')
         ->and($event->broadcastOn()[0]->name)->toBe('private-server.server-1.logs')
-        ->and($event->broadcastWith()['siteId'])->toBe('site-1');
+        ->and($event->broadcastWith()['siteId'])->toBe('site-1')
+        ->and($event->broadcastWith())->not->toHaveKey('lines');
 });

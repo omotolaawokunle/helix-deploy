@@ -71,4 +71,43 @@ describe('useSnapshotLogViewer', () => {
 
     vi.useRealTimers()
   })
+
+  it('fetches cached logs from the api when a broadcast notification arrives', async () => {
+    const logType = ref('application')
+    const lineCount = ref(100)
+
+    const fetchLogs = vi.fn()
+      .mockResolvedValueOnce({
+        status: 'loading' as const,
+        lines: [],
+      })
+      .mockResolvedValueOnce({
+        status: 'ready' as const,
+        lines: ['cached line'],
+      })
+
+    const { logLines, isLoading, loadLogs, handleLogsReady } = useSnapshotLogViewer({
+      logType,
+      lineCount,
+      buildRequestKey: (type, lines) => `${type}:${lines}`,
+      fetchLogs,
+      defaultErrorMessage: 'Unable to load logs.',
+    })
+
+    await loadLogs(false)
+    expect(isLoading.value).toBe(true)
+
+    handleLogsReady({
+      logType: 'application',
+      linesRequested: 100,
+      status: 'ready',
+    })
+
+    await vi.waitFor(() => {
+      expect(fetchLogs).toHaveBeenCalledTimes(2)
+    })
+
+    expect(logLines.value).toEqual(['cached line'])
+    expect(isLoading.value).toBe(false)
+  })
 })

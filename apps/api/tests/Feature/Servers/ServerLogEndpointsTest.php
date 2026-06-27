@@ -182,17 +182,16 @@ it('forbids cross organization server log access', function (): void {
         ->assertForbidden();
 });
 
-it('server logs ready event broadcasts on server logs channel', function (): void {
+it('server logs ready event broadcasts notification without log lines', function (): void {
     $event = new \App\Modules\Servers\Events\ServerLogsReady(
         serverId: 'server-1',
         organizationId: 'org-1',
         logType: 'nginx_access',
         linesRequested: 100,
         status: 'ready',
-        lines: ['line one'],
     );
 
     expect($event->broadcastAs())->toBe('server.logs.ready')
         ->and($event->broadcastOn()[0]->name)->toBe('private-server.server-1.logs')
-        ->and($event->broadcastWith()['lines'])->toBe(['line one']);
+        ->and($event->broadcastWith())->not->toHaveKey('lines');
 });

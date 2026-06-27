@@ -93,7 +93,7 @@ final class FetchSiteLogsJob implements ShouldQueue
                     'status' => 'ready',
                     'lines' => $lines,
                 ], now()->addMinutes(5));
-                \Illuminate\Support\Facades\Log::info('Fetch site logs job lines', ['lines' => $lines]);
+
                 event(new SiteLogsReady(
                     serverId: (string) $server->getKey(),
                     organizationId: (string) $site->organization_id,
@@ -101,13 +101,11 @@ final class FetchSiteLogsJob implements ShouldQueue
                     logType: SiteLogType::APPLICATION->value,
                     linesRequested: $this->lines,
                     status: 'ready',
-                    lines: $lines,
                 ));
             } finally {
                 $connection->disconnect();
             }
-        } catch (\Throwable $th) {
-            \Illuminate\Support\Facades\Log::info('Fetch site logs job error', ['error' => $th->getMessage(), 'trace' => $th->getTraceAsString()]);
+        } catch (\Throwable) {
             Cache::put($cacheKey, [
                 'status' => 'failed',
                 'lines' => [],
@@ -128,6 +126,6 @@ final class FetchSiteLogsJob implements ShouldQueue
 
     public static function cacheKey(string $siteId, int $lines): string
     {
-        return 'site_logs:' . $siteId . ':' . SiteLogType::APPLICATION->value . ':' . $lines;
+        return 'site_logs:'.$siteId.':'.SiteLogType::APPLICATION->value.':'.$lines;
     }
 }

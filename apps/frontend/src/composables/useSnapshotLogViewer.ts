@@ -15,7 +15,6 @@ export interface SnapshotLogsReadyPayload<TType extends string> {
   logType: TType
   linesRequested: number
   status: 'ready' | 'failed'
-  lines: string[]
   message?: string | null
 }
 
@@ -121,8 +120,8 @@ export function useSnapshotLogViewer<TType extends string>(
     errorMessage.value = null
   }
 
-  async function loadLogs(refresh: boolean, silent = false): Promise<void> {
-    if (inFlight) {
+  async function loadLogs(refresh: boolean, silent = false, force = false): Promise<void> {
+    if (inFlight && !force) {
       return
     }
 
@@ -180,7 +179,8 @@ export function useSnapshotLogViewer<TType extends string>(
       return
     }
 
-    applyResponse(payload.status, payload.lines, payload.message)
+    stopPolling()
+    void loadLogs(false, true, true)
   }
 
   onUnmounted(stopPolling)
