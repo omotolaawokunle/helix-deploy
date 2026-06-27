@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useDatabaseBrowser } from '@/composables/useDatabaseBrowser'
+import { useDatabaseRowQuery } from '@/composables/useDatabaseRowQuery'
 import { useServerDatabasesChannel } from '@/composables/useServerDatabasesChannel'
 import DatabaseBrowserPanel from '@/features/databases/components/DatabaseBrowserPanel.vue'
 import type {
@@ -18,7 +19,6 @@ import type {
   DatabaseRowFilter,
   ServerDatabaseBrowseReadyPayload,
 } from '@/features/databases/types'
-import { filtersMatch, serializeRowFilters } from '@/features/databases/types'
 import {
   fetchServerDatabaseRows,
   fetchServerDatabases,
@@ -44,8 +44,8 @@ const selectedEngine = ref<DatabaseEngine>('postgresql')
 const selectedDatabase = ref<string | null>(null)
 const selectedTable = ref<string | null>(null)
 const availableEngines = ref<DatabaseEngine[]>([])
-const rowPage = ref(1)
-const rowFilters = ref<DatabaseRowFilter[]>([])
+
+const { rowPage, rowFilters, resetRowQuery, rowQueryKey, matchesRowPayload } = useDatabaseRowQuery()
 
 const currentKind = computed((): DatabaseBrowseKind => step.value)
 
@@ -58,13 +58,13 @@ function matchesReadyPayload(payload: ServerDatabaseBrowseReadyPayload): boolean
     return true
   }
 
-  return (payload.page ?? 1) === rowPage.value
-    && filtersMatch(payload.filters, rowFilters.value)
+  return matchesRowPayload(payload.page, payload.filters)
 }
 
 const {
   data,
   isLoading,
+  isFetching,
   errorMessage,
   showReadyFlash,
   load,
@@ -78,8 +78,7 @@ const {
     step.value,
     selectedDatabase.value ?? '',
     selectedTable.value ?? '',
-    rowPage.value,
-    serializeRowFilters(rowFilters.value),
+    rowQueryKey(),
   ].join(':'),
   fetchBrowse: async (refresh) => {
     if (step.value === 'databases') {
@@ -132,9 +131,8 @@ async function loadEngines(): Promise<void> {
   }
 }
 
-function resetRowQuery(): void {
-  rowPage.value = 1
-  rowFilters.value = []
+function silentRowLoad(): void {
+  void load(false, data.value?.status === 'ready' && step.value === 'rows')
 }
 
 function navigateDatabases(): void {
@@ -173,14 +171,14 @@ function selectTable(name: string): void {
 function handleChangePage(page: number): void {
   rowPage.value = page
   stopPolling()
-  void load(false)
+  silentRowLoad()
 }
 
 function handleApplyFilters(filters: DatabaseRowFilter[]): void {
   rowFilters.value = filters
   rowPage.value = 1
   stopPolling()
-  void load(false)
+  silentRowLoad()
 }
 
 watch(selectedEngine, () => {
@@ -230,6 +228,7 @@ onMounted(async () => {
       <DatabaseBrowserPanel
         :data="data"
         :is-loading="isLoading"
+        :is-fetching="isFetching"
         :error-message="errorMessage"
         :show-ready-flash="showReadyFlash"
         :kind="currentKind"

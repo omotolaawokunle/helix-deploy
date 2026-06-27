@@ -107,6 +107,30 @@ const detectedServiceLabels = computed((): string[] =>
   props.detectedServices.map((service) => scriptLabels[service as ProvisioningScript] ?? service),
 )
 
+const canSubmit = computed((): boolean => {
+  if (isSubmitting.value || selectedScripts.value.size === 0) {
+    return false
+  }
+
+  if (showRedisPassword.value && redisPassword.value.trim() !== '') {
+    return redisPassword.value.trim().length >= 8
+  }
+
+  return true
+})
+
+const redisPasswordError = computed((): string | null => {
+  if (!showRedisPassword.value || redisPassword.value.trim() === '') {
+    return null
+  }
+
+  if (redisPassword.value.trim().length < 8) {
+    return 'Redis password must be at least 8 characters.'
+  }
+
+  return null
+})
+
 const skippedSelectedCount = computed((): number =>
   [...selectedScripts.value].filter((script) => props.detectedServices.includes(script)).length,
 )
@@ -154,8 +178,7 @@ watch(
       return
     }
 
-    void ensureTemplatesLoaded()
-    void ensureVersionsLoaded()
+    void Promise.all([ensureTemplatesLoaded(), ensureVersionsLoaded()])
   },
 )
 
@@ -375,7 +398,7 @@ async function handleSubmit(): Promise<void> {
             <label
               v-for="script in PROVISIONING_SCRIPTS"
               :key="script"
-              class="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-3 text-sm text-foreground transition-colors duration-200 hover:bg-muted/50"
+              class="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-3 text-sm text-foreground transition-colors duration-200 hover:bg-muted/50 motion-reduce:transition-none"
               :class="selectedScripts.has(script) ? 'border-primary bg-primary/5' : ''"
             >
               <input
@@ -398,11 +421,16 @@ async function handleSubmit(): Promise<void> {
           </div>
         </div>
 
-        <div
-          v-for="definition in activeVersionDefinitions"
-          :key="definition.optionKey"
-          class="space-y-2"
-        >
+        <div v-if="activeVersionDefinitions.length > 0" class="space-y-3">
+          <div v-if="isLoadingVersions" class="space-y-2">
+            <Skeleton v-for="index in 2" :key="index" class="h-10 w-full motion-reduce:animate-none" />
+          </div>
+          <div
+            v-for="definition in activeVersionDefinitions"
+            v-else
+            :key="definition.optionKey"
+            class="space-y-2"
+          >
           <Label>{{ definition.label }} version</Label>
           <Select
             :model-value="versionSelections[definition.optionKey] ?? String(definition.default)"
@@ -422,6 +450,7 @@ async function handleSubmit(): Promise<void> {
               </SelectItem>
             </SelectContent>
           </Select>
+          </div>
         </div>
 
         <div v-if="showRedisPassword" class="space-y-2">
@@ -435,6 +464,9 @@ async function handleSubmit(): Promise<void> {
           />
           <p class="text-xs text-muted-foreground">
             Minimum 8 characters when provided. Stored as a server credential.
+          </p>
+          <p v-if="redisPasswordError !== null" class="text-xs text-destructive" role="alert">
+            {{ redisPasswordError }}
           </p>
         </div>
 
@@ -464,7 +496,7 @@ async function handleSubmit(): Promise<void> {
         </Button>
         <Button
           type="button"
-          :disabled="isSubmitting || selectedScripts.size === 0"
+          :disabled="!canSubmit"
           @click="handleSubmit"
         >
           {{ isSubmitting ? 'Starting…' : 'Start provisioning' }}

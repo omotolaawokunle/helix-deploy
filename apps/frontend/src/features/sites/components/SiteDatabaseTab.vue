@@ -5,6 +5,7 @@ import { SettingsIcon } from '@lucide/vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
 import { Button } from '@/components/ui/button'
 import { useDatabaseBrowser } from '@/composables/useDatabaseBrowser'
+import { useDatabaseRowQuery } from '@/composables/useDatabaseRowQuery'
 import { useServerDatabasesChannel } from '@/composables/useServerDatabasesChannel'
 import DatabaseBrowserPanel from '@/features/databases/components/DatabaseBrowserPanel.vue'
 import type {
@@ -12,7 +13,6 @@ import type {
   DatabaseRowFilter,
   SiteDatabaseBrowseReadyPayload,
 } from '@/features/databases/types'
-import { filtersMatch, serializeRowFilters } from '@/features/databases/types'
 import { fetchSiteDatabaseRows, fetchSiteDatabaseTables } from '@/features/sites/api'
 
 interface Props {
@@ -32,8 +32,8 @@ type BrowseStep = 'tables' | 'rows'
 
 const step = ref<BrowseStep>('tables')
 const selectedTable = ref<string | null>(null)
-const rowPage = ref(1)
-const rowFilters = ref<DatabaseRowFilter[]>([])
+
+const { rowPage, rowFilters, resetRowQuery, rowQueryKey, matchesRowPayload } = useDatabaseRowQuery()
 
 const showConfigHelper = computed((): boolean => {
   const message = errorMessage.value
@@ -55,13 +55,13 @@ function matchesReadyPayload(payload: SiteDatabaseBrowseReadyPayload): boolean {
     return true
   }
 
-  return (payload.page ?? 1) === rowPage.value
-    && filtersMatch(payload.filters, rowFilters.value)
+  return matchesRowPayload(payload.page, payload.filters)
 }
 
 const {
   data,
   isLoading,
+  isFetching,
   errorMessage,
   showReadyFlash,
   load,
@@ -73,8 +73,7 @@ const {
     siteId.value,
     step.value,
     selectedTable.value ?? '',
-    rowPage.value,
-    serializeRowFilters(rowFilters.value),
+    rowQueryKey(),
   ].join(':'),
   fetchBrowse: async (refresh) => {
     if (step.value === 'tables') {
@@ -100,9 +99,8 @@ useServerDatabasesChannel(serverId, {
   onSiteDatabaseReady: handleBrowseReady,
 })
 
-function resetRowQuery(): void {
-  rowPage.value = 1
-  rowFilters.value = []
+function silentRowLoad(): void {
+  void load(false, data.value?.status === 'ready' && step.value === 'rows')
 }
 
 function navigateTables(): void {
@@ -124,21 +122,17 @@ function selectTable(name: string): void {
 function handleChangePage(page: number): void {
   rowPage.value = page
   stopPolling()
-  void load(false)
+  silentRowLoad()
 }
 
 function handleApplyFilters(filters: DatabaseRowFilter[]): void {
   rowFilters.value = filters
   rowPage.value = 1
   stopPolling()
-  void load(false)
+  silentRowLoad()
 }
 
-async function initialLoad(): Promise<void> {
-  await load(false)
-}
-
-void initialLoad()
+void load(false)
 </script>
 
 <template>
@@ -175,6 +169,7 @@ void initialLoad()
       v-else
       :data="data"
       :is-loading="isLoading"
+      :is-fetching="isFetching"
       :error-message="errorMessage"
       :show-ready-flash="showReadyFlash"
       :kind="currentKind"

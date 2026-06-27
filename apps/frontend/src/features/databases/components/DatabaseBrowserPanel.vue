@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  ChevronRightIcon as BreadcrumbChevronIcon,
   DatabaseIcon,
   FilterIcon,
   LockIcon,
@@ -41,12 +40,15 @@ import type {
 } from '@/features/databases/types'
 import {
   DATABASE_LOADING_MESSAGES,
+  DATABASE_ROW_FILTER_OPERATOR_LABELS,
   DATABASE_ROW_FILTER_OPERATORS,
+  MAX_DATABASE_ROW_FILTERS,
 } from '@/features/databases/types'
 
 interface Props {
   data: DatabaseBrowseResponse | null
   isLoading: boolean
+  isFetching?: boolean
   errorMessage: string | null
   showReadyFlash: boolean
   kind: DatabaseBrowseKind
@@ -59,6 +61,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   databaseLabel: null,
   tableLabel: null,
+  isFetching: false,
   rowPage: 1,
   rowFilters: () => [],
 })
@@ -73,10 +76,11 @@ const emit = defineEmits<{
   applyFilters: [filters: DatabaseRowFilter[]]
 }>()
 
+const kindRef = toRef(props, 'kind')
 const isLoadingRef = computed(() => props.isLoading)
 
 const loadingMessage = useRotatingStatusMessage(
-  DATABASE_LOADING_MESSAGES[props.kind],
+  DATABASE_LOADING_MESSAGES[kindRef.value],
   isLoadingRef,
 )
 
@@ -92,6 +96,40 @@ const operatorRequiresValue = computed((): boolean => {
 
 const availableColumns = computed((): string[] => props.data?.columns ?? [])
 
+const canAddFilter = computed((): boolean => {
+  if (props.rowFilters.length >= MAX_DATABASE_ROW_FILTERS) {
+    return false
+  }
+
+  if (draftColumn.value === '') {
+    return false
+  }
+
+  if (operatorRequiresValue.value && draftValue.value.trim() === '') {
+    return false
+  }
+
+  return true
+})
+
+const rowsEmptyDescription = computed((): string => {
+  if (props.rowFilters.length > 0) {
+    return 'No rows match the current filters. Adjust or clear filters and try again.'
+  }
+
+  return 'This table is empty or the query returned no results.'
+})
+
+const paginationSummary = computed((): string => {
+  const limit = props.data?.limit ?? 50
+  const offset = props.data?.offset ?? 0
+  const rowCount = props.data?.rowCount ?? 0
+  const start = rowCount === 0 ? 0 : offset + 1
+  const end = offset + rowCount
+
+  return `Rows ${start}–${end} · page ${props.rowPage}`
+})
+
 watch(availableColumns, (columns) => {
   if (columns.length > 0 && ! columns.includes(draftColumn.value)) {
     draftColumn.value = columns[0]
@@ -99,22 +137,26 @@ watch(availableColumns, (columns) => {
 })
 
 function rowEntranceDelay(index: number): string {
+  if (props.isFetching) {
+    return '0ms'
+  }
+
   return `${Math.min(index, 12) * 40}ms`
 }
 
 function operatorLabel(operator: DatabaseRowFilterOperator): string {
-  return DATABASE_ROW_FILTER_OPERATORS.find(item => item.value === operator)?.label ?? operator
+  return DATABASE_ROW_FILTER_OPERATOR_LABELS[operator]
 }
 
 function addDraftFilter(): void {
-  if (draftColumn.value === '') {
+  if (! canAddFilter.value) {
     return
   }
 
   const next: DatabaseRowFilter = {
     column: draftColumn.value,
     operator: draftOperator.value,
-    value: operatorRequiresValue.value ? draftValue.value : null,
+    value: operatorRequiresValue.value ? draftValue.value.trim() : null,
   }
 
   emit('applyFilters', [...props.rowFilters, next])
@@ -157,6 +199,8 @@ const breadcrumbItems = computed((): Array<{ label: string; action?: () => void 
 
 const canGoPrevious = computed((): boolean => props.rowPage > 1)
 const canGoNext = computed((): boolean => props.data?.hasMore === true)
+const showRowsTable = computed((): boolean => props.kind === 'rows' && (props.data?.rows.length ?? 0) > 0)
+const showFullLoading = computed((): boolean => props.isLoading && ! showRowsTable.value)
 </script>
 
 <template>
@@ -172,8 +216,12 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
           class="flex flex-wrap items-center gap-1 text-muted-foreground"
           aria-label="Database breadcrumb"
         >
-          <template v-for="(item, index) in breadcrumbItems" :key="`${item.label}-${index}`">
-            <BreadcrumbChevronIcon v-if="index > 0" class="size-3.5 shrink-0" aria-hidden="true" />
+          <span
+            v-for="(item, index) in breadcrumbItems"
+            :key="`${item.label}-${index}`"
+            class="inline-flex items-center gap-1"
+          >
+            <ChevronRightIcon v-if="index > 0" class="size-3.5 shrink-0" aria-hidden="true" />
             <button
               v-if="item.action !== undefined"
               type="button"
@@ -183,7 +231,7 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
               {{ item.label }}
             </button>
             <span v-else class="font-mono text-foreground">{{ item.label }}</span>
-          </template>
+          </span>
         </nav>
       </div>
       <Button
@@ -191,12 +239,12 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
         size="sm"
         variant="outline"
         class="transition-transform duration-100 active:scale-[0.98] motion-reduce:transform-none"
-        :disabled="isLoading"
+        :disabled="isLoading || isFetching"
         @click="emit('refresh')"
       >
         <RefreshCwIcon
           class="mr-2 size-4 motion-reduce:animate-none"
-          :class="{ 'animate-spin': isLoading }"
+          :class="{ 'animate-spin': isLoading || isFetching }"
           aria-hidden="true"
         />
         Refresh
@@ -207,15 +255,20 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
       v-if="kind === 'rows' && availableColumns.length > 0"
       class="panel space-y-3 p-4"
     >
-      <div class="flex items-center gap-2 text-sm font-medium">
-        <FilterIcon class="size-4 text-muted-foreground" aria-hidden="true" />
-        Filter rows
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 text-sm font-medium">
+          <FilterIcon class="size-4 text-muted-foreground" aria-hidden="true" />
+          Filter rows
+        </div>
+        <p class="text-xs text-muted-foreground">
+          {{ rowFilters.length }}/{{ MAX_DATABASE_ROW_FILTERS }} filters
+        </p>
       </div>
 
       <div v-if="rowFilters.length > 0" class="flex flex-wrap gap-2">
         <Badge
           v-for="(filter, index) in rowFilters"
-          :key="`${filter.column}-${filter.operator}-${index}`"
+          :key="`${filter.column}-${filter.operator}-${filter.value ?? ''}-${index}`"
           variant="secondary"
           class="gap-1 font-mono text-xs"
         >
@@ -225,14 +278,14 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
           </template>
           <button
             type="button"
-            class="ml-1 rounded-sm hover:text-destructive"
+            class="ml-1 rounded-sm hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :aria-label="`Remove filter on ${filter.column}`"
             @click="removeFilter(index)"
           >
             <XIcon class="size-3" aria-hidden="true" />
           </button>
         </Badge>
-        <Button type="button" size="sm" variant="ghost" @click="clearFilters">
+        <Button type="button" size="sm" variant="ghost" :disabled="isFetching" @click="clearFilters">
           Clear all
         </Button>
       </div>
@@ -240,7 +293,7 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div class="space-y-1.5">
           <Label for="filter-column">Column</Label>
-          <Select v-model="draftColumn">
+          <Select v-model="draftColumn" :disabled="isFetching">
             <SelectTrigger id="filter-column">
               <SelectValue placeholder="Column" />
             </SelectTrigger>
@@ -253,7 +306,7 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
         </div>
         <div class="space-y-1.5">
           <Label for="filter-operator">Operator</Label>
-          <Select v-model="draftOperator">
+          <Select v-model="draftOperator" :disabled="isFetching">
             <SelectTrigger id="filter-operator">
               <SelectValue placeholder="Operator" />
             </SelectTrigger>
@@ -275,19 +328,33 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
             v-model="draftValue"
             placeholder="Filter value"
             class="font-mono text-sm"
+            :disabled="isFetching"
             @keydown.enter.prevent="addDraftFilter"
           />
         </div>
       </div>
 
-      <Button type="button" size="sm" :disabled="isLoading" @click="addDraftFilter">
-        Apply filter
-      </Button>
+      <div class="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          :disabled="!canAddFilter || isFetching"
+          @click="addDraftFilter"
+        >
+          Add filter
+        </Button>
+        <p
+          v-if="rowFilters.length >= MAX_DATABASE_ROW_FILTERS"
+          class="text-xs text-muted-foreground"
+        >
+          Maximum of {{ MAX_DATABASE_ROW_FILTERS }} filters per query.
+        </p>
+      </div>
     </div>
 
     <Transition name="status-crossfade" mode="out-in">
       <div
-        v-if="isLoading"
+        v-if="showFullLoading"
         key="loading"
         class="panel space-y-3 p-4"
         role="status"
@@ -330,7 +397,7 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
         <EmptyState
           v-else-if="kind === 'rows' && data.rows.length === 0"
           title="No rows returned"
-          description="This table is empty or the query returned no results."
+          :description="rowsEmptyDescription"
           :icon="TableIcon"
         />
 
@@ -376,18 +443,22 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
           </TableBody>
         </Table>
 
-        <div v-else-if="kind === 'rows'" class="overflow-x-auto">
-          <div class="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2">
+        <div v-else-if="kind === 'rows'" class="relative overflow-x-auto">
+          <div
+            class="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2"
+            aria-live="polite"
+          >
             <p class="text-xs text-muted-foreground">
-              Page {{ data.page }} · {{ data.rowCount }} row{{ data.rowCount === 1 ? '' : 's' }}
-              (limit {{ data.limit ?? 50 }})
+              {{ paginationSummary }}
+              <span class="text-muted-foreground/80">· limit {{ data.limit ?? 50 }}</span>
             </p>
             <div class="flex items-center gap-2">
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                :disabled="!canGoPrevious || isLoading"
+                :disabled="!canGoPrevious || isLoading || isFetching"
+                :aria-label="`Go to page ${rowPage - 1}`"
                 @click="emit('changePage', rowPage - 1)"
               >
                 <ChevronLeftIcon class="mr-1 size-4" aria-hidden="true" />
@@ -397,7 +468,8 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
                 type="button"
                 size="sm"
                 variant="outline"
-                :disabled="!canGoNext || isLoading"
+                :disabled="!canGoNext || isLoading || isFetching"
+                :aria-label="`Go to page ${rowPage + 1}`"
                 @click="emit('changePage', rowPage + 1)"
               >
                 Next
@@ -405,34 +477,49 @@ const canGoNext = computed((): boolean => props.data?.hasMore === true)
               </Button>
             </div>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead v-for="column in data.columns" :key="column" class="font-mono text-xs">
-                  {{ column }}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow
-                v-for="(row, rowIndex) in data.rows"
-                :key="rowIndex"
-                class="animate-env-row-in motion-reduce:animate-none"
-                :style="{ animationDelay: rowEntranceDelay(rowIndex) }"
-              >
-                <TableCell
-                  v-for="(cell, cellIndex) in row"
-                  :key="cellIndex"
-                  class="max-w-xs truncate font-mono text-xs"
-                  :title="cell"
+
+          <div
+            class="relative transition-opacity duration-150 motion-reduce:transition-none"
+            :class="{ 'pointer-events-none opacity-60': isFetching }"
+            aria-busy="isFetching"
+          >
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead v-for="column in data.columns" :key="column" class="font-mono text-xs">
+                    {{ column }}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow
+                  v-for="(row, rowIndex) in data.rows"
+                  :key="`${rowPage}-${rowIndex}`"
+                  class="db-row motion-reduce:animate-none"
+                  :class="{ 'animate-env-row-in': !isFetching }"
+                  :style="{ animationDelay: rowEntranceDelay(rowIndex) }"
                 >
-                  {{ cell === '' ? '—' : cell }}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+                  <TableCell
+                    v-for="(cell, cellIndex) in row"
+                    :key="cellIndex"
+                    class="max-w-xs truncate font-mono text-xs"
+                    :title="cell"
+                  >
+                    {{ cell === '' ? '—' : cell }}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.db-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 2.25rem;
+}
+</style>

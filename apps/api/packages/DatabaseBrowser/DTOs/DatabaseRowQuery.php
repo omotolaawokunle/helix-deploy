@@ -28,12 +28,19 @@ final class DatabaseRowQuery
 
     public function fingerprint(): string
     {
+        if ($this->filters === []) {
+            return hash('xxh128', implode('|', [
+                (string) $this->page,
+                (string) $this->limit,
+            ]));
+        }
+
         $normalized = array_map(
             static fn (DatabaseRowFilter $filter): array => $filter->toArray(),
             $this->filters,
         );
 
-        return hash('sha256', json_encode([
+        return hash('xxh128', json_encode([
             'page' => $this->page,
             'limit' => $this->limit,
             'filters' => $normalized,

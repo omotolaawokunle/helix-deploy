@@ -24,15 +24,17 @@ export function useDatabaseBrowser(
 ): {
   data: Ref<DatabaseBrowseResponse | null>
   isLoading: Ref<boolean>
+  isFetching: Ref<boolean>
   errorMessage: Ref<string | null>
   showReadyFlash: Ref<boolean>
-  load: (refresh: boolean) => Promise<void>
+  load: (refresh?: boolean, silent?: boolean) => Promise<void>
   handleRefresh: () => void
   handleBrowseReady: (payload: DatabaseBrowseReadyPayload) => void
   stopPolling: () => void
 } {
   const data = ref<DatabaseBrowseResponse | null>(null)
   const isLoading = ref(false)
+  const isFetching = ref(false)
   const errorMessage = ref<string | null>(null)
   const showReadyFlash = ref(false)
   const awaitingKey = ref<string | null>(null)
@@ -63,11 +65,14 @@ export function useDatabaseBrowser(
     }
 
     pollAttempts = 0
+    inFlight = false
+    isFetching.value = false
   }
 
   function failPollingTimeout(): void {
     stopPolling()
     isLoading.value = false
+    isFetching.value = false
     awaitingKey.value = null
     inFlight = false
     errorMessage.value = pollTimeoutMessage
@@ -97,7 +102,7 @@ export function useDatabaseBrowser(
     }, POLL_INTERVAL_MS)
   }
 
-  function applyResponse(response: DatabaseBrowseResponse): void {
+  function applyResponse(response: DatabaseBrowseResponse, silent: boolean): void {
     const status: DatabaseBrowseStatus = response.status
 
     if (status === 'loading') {
@@ -106,6 +111,7 @@ export function useDatabaseBrowser(
 
     stopPolling()
     isLoading.value = false
+    isFetching.value = false
     awaitingKey.value = null
     inFlight = false
     data.value = response
@@ -118,22 +124,28 @@ export function useDatabaseBrowser(
     }
 
     errorMessage.value = null
-    triggerReadyFlash()
+
+    if (! silent) {
+      triggerReadyFlash()
+    }
   }
 
-  async function load(refresh = false, fromPoll = false): Promise<void> {
+  async function load(refresh = false, silent = false): Promise<void> {
     const requestKey = options.buildRequestKey()
 
-    if (! fromPoll && inFlight) {
+    if (inFlight && ! silent) {
       return
     }
 
-    if (! fromPoll) {
+    if (! silent) {
       isLoading.value = true
       errorMessage.value = null
-      inFlight = true
-      awaitingKey.value = requestKey
+    } else {
+      isFetching.value = true
     }
+
+    inFlight = true
+    awaitingKey.value = requestKey
 
     try {
       const response = await options.fetchBrowse(refresh)
@@ -142,10 +154,11 @@ export function useDatabaseBrowser(
         return
       }
 
-      applyResponse(response)
+      applyResponse(response, silent)
 
       if (response.status === 'loading') {
-        startPolling(fromPoll)
+        startPolling(! silent)
+        inFlight = false
       }
     } catch {
       if (awaitingKey.value !== null && awaitingKey.value !== requestKey) {
@@ -154,6 +167,7 @@ export function useDatabaseBrowser(
 
       stopPolling()
       isLoading.value = false
+      isFetching.value = false
       awaitingKey.value = null
       inFlight = false
       errorMessage.value = options.defaultErrorMessage
@@ -174,6 +188,7 @@ export function useDatabaseBrowser(
     if (payload.status === 'failed') {
       stopPolling()
       isLoading.value = false
+      isFetching.value = false
       errorMessage.value = payload.message ?? options.defaultErrorMessage
 
       return
@@ -193,6 +208,7 @@ export function useDatabaseBrowser(
   return {
     data,
     isLoading,
+    isFetching,
     errorMessage,
     showReadyFlash,
     load,

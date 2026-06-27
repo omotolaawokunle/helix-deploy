@@ -47,6 +47,7 @@ import {
 import { useEnvVarsPullPreview } from '@/features/sites/composables/useEnvVarsPullPreview'
 import { useEnvVarsSiteChannel } from '@/features/sites/composables/useEnvVarsSiteChannel'
 import { parseEnvContent } from '@/lib/parseEnv'
+import { defaultEnvKeyForService } from '@/features/servers/constants/serviceCredentialEnvKeys'
 import type { ServerServiceCredentialRecord } from '@/features/servers/types'
 import type { EnvVarListItem, EnvVarPullStrategy } from '@/types'
 
@@ -73,6 +74,7 @@ const newKey = ref('')
 const newValue = ref('')
 const selectedCredentialId = ref('')
 const linkableCredentials = ref<ServerServiceCredentialRecord[]>([])
+const linkableCredentialsLoaded = ref(false)
 const isLoadingLinkable = ref(false)
 const isAdding = ref(false)
 
@@ -123,10 +125,15 @@ const pullLoadingMessage = useRotatingStatusMessage(
 
 const canLinkCredentials = computed((): boolean => serverId.value !== undefined && serverId.value !== '')
 
-async function loadLinkableCredentials(): Promise<void> {
+async function loadLinkableCredentials(force = false): Promise<void> {
   if (!canLinkCredentials.value) {
     linkableCredentials.value = []
+    linkableCredentialsLoaded.value = false
 
+    return
+  }
+
+  if (linkableCredentialsLoaded.value && !force) {
     return
   }
 
@@ -134,12 +141,39 @@ async function loadLinkableCredentials(): Promise<void> {
 
   try {
     linkableCredentials.value = await fetchLinkableCredentials(siteId.value)
+    linkableCredentialsLoaded.value = true
   } catch {
+    linkableCredentials.value = []
+    linkableCredentialsLoaded.value = false
     toast.error('Unable to load server credentials.')
   } finally {
     isLoadingLinkable.value = false
   }
 }
+
+watch(selectedCredentialId, (credentialId) => {
+  if (credentialId === '' || newKey.value.trim() !== '') {
+    return
+  }
+
+  const credential = linkableCredentials.value.find(item => item.id === credentialId)
+
+  if (credential !== undefined) {
+    newKey.value = defaultEnvKeyForService(credential.serviceKey)
+  }
+})
+
+const canAddEnvVar = computed((): boolean => {
+  if (isAdding.value || newKey.value.trim() === '') {
+    return false
+  }
+
+  if (addMode.value === 'literal') {
+    return newValue.value.trim() !== ''
+  }
+
+  return selectedCredentialId.value !== '' && !isLoadingLinkable.value
+})
 
 watch(addMode, (mode) => {
   if (mode === 'reference') {
@@ -724,6 +758,12 @@ onUnmounted(() => {
                 class="font-mono"
                 data-testid="env-var-edit-input"
               />
+              <p
+                v-else-if="envVar.isReference"
+                class="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 font-sans text-xs text-muted-foreground"
+              >
+                Resolves from server credential at deploy and push time.
+              </p>
               <Input
                 v-else
                 :model-value="maskValue(envVar.id)"
@@ -835,7 +875,7 @@ onUnmounted(() => {
                 :key="credential.id"
                 :value="credential.id"
               >
-                {{ credential.label }}
+                {{ credential.label }} · {{ credential.serviceKey }}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -847,8 +887,8 @@ onUnmounted(() => {
           </p>
         </div>
       </div>
-      <Button type="button" :disabled="isAdding" @click="handleAdd">
-        Add
+      <Button type="button" :disabled="!canAddEnvVar" @click="handleAdd">
+        {{ isAdding ? 'Adding…' : 'Add' }}
       </Button>
     </div>
 

@@ -84,22 +84,38 @@ export interface SiteDatabaseBrowseReadyPayload {
   message?: string | null
 }
 
+export const MAX_DATABASE_ROW_FILTERS = 5
+
+export const DATABASE_ROW_FILTER_OPERATOR_LABELS: Record<DatabaseRowFilterOperator, string> = {
+  eq: 'equals',
+  neq: 'not equals',
+  contains: 'contains',
+  starts_with: 'starts with',
+  ends_with: 'ends with',
+  gt: 'greater than',
+  gte: 'greater or equal',
+  lt: 'less than',
+  lte: 'less or equal',
+  is_null: 'is null',
+  is_not_null: 'is not null',
+}
+
 export const DATABASE_ROW_FILTER_OPERATORS: Array<{
   value: DatabaseRowFilterOperator
   label: string
   requiresValue: boolean
 }> = [
-  { value: 'eq', label: 'equals', requiresValue: true },
-  { value: 'neq', label: 'not equals', requiresValue: true },
-  { value: 'contains', label: 'contains', requiresValue: true },
-  { value: 'starts_with', label: 'starts with', requiresValue: true },
-  { value: 'ends_with', label: 'ends with', requiresValue: true },
-  { value: 'gt', label: 'greater than', requiresValue: true },
-  { value: 'gte', label: 'greater or equal', requiresValue: true },
-  { value: 'lt', label: 'less than', requiresValue: true },
-  { value: 'lte', label: 'less or equal', requiresValue: true },
-  { value: 'is_null', label: 'is null', requiresValue: false },
-  { value: 'is_not_null', label: 'is not null', requiresValue: false },
+  { value: 'eq', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.eq, requiresValue: true },
+  { value: 'neq', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.neq, requiresValue: true },
+  { value: 'contains', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.contains, requiresValue: true },
+  { value: 'starts_with', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.starts_with, requiresValue: true },
+  { value: 'ends_with', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.ends_with, requiresValue: true },
+  { value: 'gt', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.gt, requiresValue: true },
+  { value: 'gte', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.gte, requiresValue: true },
+  { value: 'lt', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.lt, requiresValue: true },
+  { value: 'lte', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.lte, requiresValue: true },
+  { value: 'is_null', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.is_null, requiresValue: false },
+  { value: 'is_not_null', label: DATABASE_ROW_FILTER_OPERATOR_LABELS.is_not_null, requiresValue: false },
 ]
 
 export function serializeRowFilters(filters: DatabaseRowFilter[]): string {

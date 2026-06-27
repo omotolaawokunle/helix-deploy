@@ -34,6 +34,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useRotatingStatusMessage } from '@/composables/useRotatingStatusMessage'
+import {
+  defaultEnvKeyForService,
+  isLinkableServiceKey,
+} from '@/features/servers/constants/serviceCredentialEnvKeys'
 import {
   fetchServerServices,
   fetchServerServiceCredentials,
@@ -66,14 +71,6 @@ const SYNC_HINTS = [
   'Updating cached status…',
 ] as const
 
-const LINKABLE_SERVICE_KEYS = ['postgresql', 'mysql', 'redis'] as const
-
-const DEFAULT_ENV_KEYS: Record<string, string> = {
-  postgresql: 'DB_PASSWORD',
-  mysql: 'DB_PASSWORD',
-  redis: 'REDIS_PASSWORD',
-}
-
 const props = defineProps<Props>()
 
 const serverId = toRef(props, 'serverId')
@@ -94,10 +91,14 @@ const addToSiteCredential = ref<ServerServiceCredentialRecord | null>(null)
 const addToSiteId = ref('')
 const addToSiteEnvKey = ref('')
 const isAddingToSite = ref(false)
-const syncHintIndex = ref(0)
+const isLoadingAddToSiteData = ref(false)
+const credentialsLoaded = ref(false)
+const sitesLoaded = ref(false)
 
-let syncHintTimer: ReturnType<typeof setInterval> | null = null
-const updateFlashTimers = new Map<string, ReturnType<typeof setTimeout>>()
+let updateFlashTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+const isSyncingRef = computed(() => isSyncing.value)
+const syncHint = useRotatingStatusMessage(SYNC_HINTS, isSyncingRef)
 
 const isObserveMode = computed((): boolean => props.managementMode === ManagementMode.Observe)
 
@@ -105,13 +106,18 @@ const isEmpty = computed((): boolean => !isLoading.value && loadError.value === 
 
 const showTable = computed((): boolean => isLoading.value || services.value.length > 0)
 
-const syncHint = computed((): string | null => {
-  if (!isSyncing.value) {
-    return null
-  }
+const refreshLabel = computed((): string => (isSyncing.value ? 'Refreshing…' : 'Refresh status'))
 
-  return SYNC_HINTS[syncHintIndex.value] ?? SYNC_HINTS[0]
-})
+const hasLinkableInstalledService = computed((): boolean =>
+  services.value.some(service => service.installed && isLinkableServiceKey(service.key)),
+)
+
+const canSubmitAddToSite = computed((): boolean =>
+  !isAddingToSite.value
+  && !isLoadingAddToSiteData.value
+  && addToSiteId.value !== ''
+  && addToSiteEnvKey.value.trim() !== '',
+)
 
 const emptyDescription = computed((): string => {
   if (isObserveMode.value) {
@@ -120,8 +126,6 @@ const emptyDescription = computed((): string => {
 
   return 'HelixDeploy scans the server after SSH connects. You can also provision a stack from the Provision action.'
 })
-
-const refreshLabel = computed((): string => (isSyncing.value ? 'Refreshing…' : 'Refresh status'))
 
 function isServicePending(serviceKey: string): boolean {
   return pendingServiceKeys.value.includes(serviceKey)
@@ -132,6 +136,10 @@ function isRecentlyUpdated(serviceKey: string): boolean {
 }
 
 function rowEntranceDelay(index: number): string {
+  if (isSyncing.value) {
+    return '0ms'
+  }
+
   return `${Math.min(index, 8) * 45}ms`
 }
 
@@ -210,23 +218,61 @@ const credentialByServiceKey = computed((): Record<string, ServerServiceCredenti
   return map
 })
 
-function canAddToSiteEnv(serviceKey: string): boolean {
+function canAddToSiteEnv(service: InstalledServiceRecord): boolean {
   return props.canManage
-    && LINKABLE_SERVICE_KEYS.includes(serviceKey as typeof LINKABLE_SERVICE_KEYS[number])
-    && credentialByServiceKey.value[serviceKey] !== undefined
+    && service.installed
+    && isLinkableServiceKey(service.key)
 }
 
-function openAddToSiteEnv(service: InstalledServiceRecord): void {
-  const credential = credentialByServiceKey.value[service.key]
-
-  if (credential === undefined) {
+async function ensureCredentialsLoaded(): Promise<void> {
+  if (credentialsLoaded.value) {
     return
   }
 
-  addToSiteCredential.value = credential
-  addToSiteId.value = serverSites.value[0]?.id ?? ''
-  addToSiteEnvKey.value = DEFAULT_ENV_KEYS[service.key] ?? ''
+  try {
+    serviceCredentials.value = await fetchServerServiceCredentials(serverId.value)
+    credentialsLoaded.value = true
+  } catch {
+    serviceCredentials.value = []
+  }
+}
+
+async function ensureSitesLoaded(): Promise<void> {
+  if (sitesLoaded.value) {
+    return
+  }
+
+  try {
+    serverSites.value = await fetchServerSites(serverId.value)
+    sitesLoaded.value = true
+  } catch {
+    serverSites.value = []
+    toast.error('Unable to load sites for this server.')
+  }
+}
+
+async function openAddToSiteEnv(service: InstalledServiceRecord): Promise<void> {
+  isLoadingAddToSiteData.value = true
   isAddToSiteOpen.value = true
+
+  try {
+    await Promise.all([ensureCredentialsLoaded(), ensureSitesLoaded()])
+
+    const credential = credentialByServiceKey.value[service.key]
+
+    if (credential === undefined) {
+      toast.error('No credential available for this service.')
+      isAddToSiteOpen.value = false
+
+      return
+    }
+
+    addToSiteCredential.value = credential
+    addToSiteEnvKey.value = defaultEnvKeyForService(service.key)
+    addToSiteId.value = serverSites.value[0]?.id ?? ''
+  } finally {
+    isLoadingAddToSiteData.value = false
+  }
 }
 
 async function confirmAddToSiteEnv(): Promise<void> {
@@ -297,14 +343,11 @@ async function loadServices(): Promise<void> {
   loadError.value = null
 
   try {
-    const [servicesResult, credentialsResult, sitesResult] = await Promise.all([
-      fetchServerServices(serverId.value),
-      fetchServerServiceCredentials(serverId.value),
-      fetchServerSites(serverId.value),
-    ])
-    services.value = servicesResult
-    serviceCredentials.value = credentialsResult
-    serverSites.value = sitesResult
+    services.value = await fetchServerServices(serverId.value)
+
+    if (hasLinkableInstalledService.value) {
+      void ensureCredentialsLoaded()
+    }
   } catch {
     loadError.value = 'Unable to load installed services.'
   } finally {
@@ -384,26 +427,10 @@ function confirmDestructiveAction(): void {
   void executeAction(action, service)
 }
 
-function startSyncHints(): void {
-  syncHintIndex.value = 0
-
-  if (syncHintTimer !== null) {
-    clearInterval(syncHintTimer)
-  }
-
-  syncHintTimer = setInterval(() => {
-    syncHintIndex.value = (syncHintIndex.value + 1) % SYNC_HINTS.length
-  }, 2200)
-}
-
-function stopSyncHints(): void {
-  if (syncHintTimer !== null) {
-    clearInterval(syncHintTimer)
-    syncHintTimer = null
-  }
-
-  syncHintIndex.value = 0
-}
+onMounted(async () => {
+  await loadServices()
+  await refreshStatuses({ notifyOnError: false })
+})
 
 watch(isConfirmOpen, (isOpen) => {
   if (!isOpen) {
@@ -412,25 +439,7 @@ watch(isConfirmOpen, (isOpen) => {
   }
 })
 
-watch(isSyncing, (syncing) => {
-  if (syncing) {
-    startSyncHints()
-
-    return
-  }
-
-  stopSyncHints()
-})
-
-onMounted(async () => {
-  await loadServices()
-  await refreshStatuses({ notifyOnError: false })
-})
-
 onBeforeUnmount(() => {
-  stopSyncHints()
-
-  updateFlashTimers.forEach((timer) => {
     clearTimeout(timer)
   })
 
@@ -451,7 +460,7 @@ defineExpose({
         </h2>
         <Transition name="fade-up">
           <p
-            v-if="syncHint !== null"
+            v-if="isSyncing"
             class="text-xs text-muted-foreground motion-reduce:transition-none"
             aria-live="polite"
           >
@@ -538,7 +547,7 @@ defineExpose({
             v-for="(service, index) in servicesWithActions"
             v-else
             :key="service.key"
-            class="animate-service-row-in border-l-2 transition-[background-color,border-color] duration-300 motion-reduce:animate-none motion-reduce:transition-none"
+            class="service-row animate-service-row-in border-l-2 transition-[background-color,border-color] duration-300 motion-reduce:animate-none motion-reduce:transition-none"
             :class="[
               isServicePending(service.key) ? 'bg-muted/30' : undefined,
               isRecentlyUpdated(service.key) ? 'border-l-primary bg-primary/5' : 'border-l-transparent',
@@ -595,12 +604,13 @@ defineExpose({
             <TableCell>
               <div class="flex flex-wrap justify-end gap-1">
                 <Button
-                  v-if="canAddToSiteEnv(service.key)"
+                  v-if="canAddToSiteEnv(service)"
                   type="button"
                   size="sm"
                   variant="ghost"
                   class="min-h-9 transition-transform duration-100 active:scale-[0.98] motion-reduce:transform-none"
-                  :disabled="serverSites.length === 0"
+                  :disabled="isLoadingAddToSiteData"
+                  :title="serverSites.length === 0 && sitesLoaded ? 'Create a site on this server first' : undefined"
                   :aria-label="`Add ${service.label} credential to site env`"
                   @click="openAddToSiteEnv(service)"
                 >
@@ -645,13 +655,13 @@ defineExpose({
                 </Button>
               </div>
               <span
-                v-if="!canAddToSiteEnv(service.key) && (service.actions.start || service.actions.stop || service.actions.restart) === false && isObserveMode && service.controllable"
+                v-if="!canAddToSiteEnv(service) && (service.actions.start || service.actions.stop || service.actions.restart) === false && isObserveMode && service.controllable"
                 class="text-sm text-muted-foreground"
               >
                 Read-only in observe mode
               </span>
               <span
-                v-else-if="!canAddToSiteEnv(service.key) && !service.actions.start && !service.actions.stop && !service.actions.restart"
+                v-else-if="!canAddToSiteEnv(service) && !service.actions.start && !service.actions.stop && !service.actions.restart"
                 class="text-sm text-muted-foreground"
               >—</span>
             </TableCell>
@@ -681,11 +691,20 @@ defineExpose({
           </SheetDescription>
         </SheetHeader>
         <SheetBody class="space-y-4">
+          <div
+            v-if="addToSiteCredential !== null"
+            class="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
+          >
+            <p class="font-medium">{{ addToSiteCredential.label }}</p>
+            <p class="text-xs text-muted-foreground">
+              Resolves from the server secret when deploying or pushing env vars.
+            </p>
+          </div>
           <div class="space-y-2">
             <Label for="add-to-site-target">Site</Label>
-            <Select v-model="addToSiteId" :disabled="serverSites.length === 0">
+            <Select v-model="addToSiteId" :disabled="isLoadingAddToSiteData || serverSites.length === 0">
               <SelectTrigger id="add-to-site-target">
-                <SelectValue placeholder="Select site" />
+                <SelectValue :placeholder="isLoadingAddToSiteData ? 'Loading sites…' : 'Select site'" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem
@@ -697,22 +716,28 @@ defineExpose({
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="serverSites.length === 0" class="text-xs text-muted-foreground">
+            <p v-if="!isLoadingAddToSiteData && sitesLoaded && serverSites.length === 0" class="text-xs text-muted-foreground">
               No sites on this server yet.
             </p>
           </div>
           <div class="space-y-2">
             <Label for="add-to-site-key">Environment key</Label>
-            <Input id="add-to-site-key" v-model="addToSiteEnvKey" class="font-mono" />
+            <Input
+              id="add-to-site-key"
+              v-model="addToSiteEnvKey"
+              class="font-mono"
+              :disabled="isLoadingAddToSiteData"
+              placeholder="DB_PASSWORD"
+            />
           </div>
         </SheetBody>
         <SheetFooter>
-          <Button variant="outline" type="button" @click="isAddToSiteOpen = false">
+          <Button variant="outline" type="button" :disabled="isAddingToSite" @click="isAddToSiteOpen = false">
             Cancel
           </Button>
           <Button
             type="button"
-            :disabled="isAddingToSite || addToSiteId === '' || addToSiteEnvKey.trim() === ''"
+            :disabled="!canSubmitAddToSite"
             @click="confirmAddToSiteEnv"
           >
             {{ isAddingToSite ? 'Adding…' : 'Add link' }}
@@ -722,3 +747,10 @@ defineExpose({
     </Sheet>
   </section>
 </template>
+
+<style scoped>
+.service-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 3.5rem;
+}
+</style>
