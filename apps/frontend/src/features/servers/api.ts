@@ -1,4 +1,5 @@
 import type { DatabaseBrowseResponse, DatabaseRowQueryParams } from '@/features/databases/types'
+import { refreshQueryParam } from '@/lib/apiQueryParams'
 import type { LogFetchResponse, ServerLogType } from '@/features/logs/types'
 import { api } from '@/lib/axios'
 import type { Server, ServerGroup } from '@/types'
@@ -278,7 +279,7 @@ export async function fetchServerDatabases(
 ): Promise<DatabaseBrowseResponse> {
   const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
     `/api/v1/servers/${serverId}/databases`,
-    { params: { engine: params.engine, refresh: params.refresh ?? false } },
+    { params: { engine: params.engine, refresh: refreshQueryParam(params.refresh) } },
   )
 
   return response.data.data
@@ -291,7 +292,7 @@ export async function fetchServerDatabaseTables(
 ): Promise<DatabaseBrowseResponse> {
   const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
     `/api/v1/servers/${serverId}/databases/${encodeURIComponent(database)}/tables`,
-    { params: { engine: params.engine, refresh: params.refresh ?? false } },
+    { params: { engine: params.engine, refresh: refreshQueryParam(params.refresh) } },
   )
 
   return response.data.data
@@ -311,7 +312,7 @@ export async function fetchServerDatabaseRows(
         page: params.page ?? 1,
         limit: params.limit ?? 50,
         filter: params.filter ?? [],
-        refresh: params.refresh ?? false,
+        refresh: refreshQueryParam(params.refresh),
       },
     },
   )

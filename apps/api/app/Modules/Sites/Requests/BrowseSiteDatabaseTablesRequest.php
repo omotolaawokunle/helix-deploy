@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Requests;
 
+use App\Http\Requests\Concerns\NormalizesRefreshQueryParameter;
 use Illuminate\Foundation\Http\FormRequest;
 
 class BrowseSiteDatabaseTablesRequest extends FormRequest
 {
+    use NormalizesRefreshQueryParameter;
+
     public function authorize(): bool
     {
         return true;

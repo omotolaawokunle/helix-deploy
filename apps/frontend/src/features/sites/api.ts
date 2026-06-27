@@ -1,4 +1,5 @@
 import type { DatabaseBrowseResponse, DatabaseRowQueryParams } from '@/features/databases/types'
+import { refreshQueryParam } from '@/lib/apiQueryParams'
 import type { ServerServiceCredentialRecord } from '@/features/servers/types'
 import { api } from '@/lib/axios'
 import type { LogFetchResponse } from '@/features/logs/types'
@@ -244,7 +245,7 @@ export async function fetchSiteDatabaseTables(
 ): Promise<DatabaseBrowseResponse> {
   const response = await api.get<ResourceResponse<DatabaseBrowseResponse>>(
     `/api/v1/sites/${siteId}/database/tables`,
-    { params: { refresh: options?.refresh ?? false } },
+    { params: { refresh: refreshQueryParam(options?.refresh) } },
   )
 
   return response.data.data
@@ -262,7 +263,7 @@ export async function fetchSiteDatabaseRows(
         page: options?.page ?? 1,
         limit: options?.limit ?? 50,
         filter: options?.filter ?? [],
-        refresh: options?.refresh ?? false,
+        refresh: refreshQueryParam(options?.refresh),
       },
     },
   )

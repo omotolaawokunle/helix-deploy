@@ -73,7 +73,7 @@ final class BrowseServerDatabaseJob implements ShouldQueue
         );
 
         try {
-            $config = $connectionResolver->resolve($server, $org);
+            $config = $connectionResolver->resolve($server, $org, $this->engine);
             $connection = $sshManager->connect($server, $credentialVault)->connect();
 
             try {
@@ -117,7 +117,9 @@ final class BrowseServerDatabaseJob implements ShouldQueue
             } finally {
                 $connection->disconnect();
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $th) {
+            report($th);
+
             Cache::put($cacheKey, [
                 'status' => 'failed',
                 'message' => 'Unable to browse database.',

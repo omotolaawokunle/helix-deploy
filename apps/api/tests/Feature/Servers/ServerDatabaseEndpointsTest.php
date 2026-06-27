@@ -20,6 +20,16 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 
+it('accepts refresh=true as a query string for database browse', function (): void {
+    Queue::fake();
+
+    [$server, $owner] = serverDatabaseApiFixture();
+
+    $this->actingAs($owner)
+        ->getJson("/api/v1/servers/{$server->id}/databases?engine=postgresql&refresh=true")
+        ->assertOk();
+});
+
 it('queues server database browse and returns loading status', function (): void {
     Queue::fake();
 
@@ -212,6 +222,31 @@ it('read only database client applies filters in postgresql query', function ():
     expect($ssh->getExecutedCommands())->not->toBeEmpty();
     expect($ssh->getExecutedCommands()[0])->toContain('WHERE');
     expect($ssh->getExecutedCommands()[0])->toContain('LIKE');
+});
+
+it('read only database client strips mysql cli password warnings from table listings', function (): void {
+    $ssh = new FakeSSHConnection();
+    $ssh->addResponse(
+        'MYSQL_PWD=*',
+        new SSHResult(
+            'mysql',
+            0,
+            "mysql: [Warning] Using a password on the command line interface can be insecure.\nusers\nposts\n",
+            '',
+            0.0,
+        ),
+    );
+
+    $client = app(ReadOnlyDatabaseClient::class);
+    $config = new \App\Packages\DatabaseBrowser\DTOs\DatabaseConnectionConfig(
+        engine: \App\Packages\DatabaseBrowser\Enums\DatabaseEngine::MYSQL,
+        host: '127.0.0.1',
+        port: 3306,
+        username: 'deploy',
+        password: 'secret',
+    );
+
+    expect($client->listTables($ssh, $config, 'app'))->toBe(['users', 'posts']);
 });
 
 it('read only database client lists postgresql databases via ssh', function (): void {
