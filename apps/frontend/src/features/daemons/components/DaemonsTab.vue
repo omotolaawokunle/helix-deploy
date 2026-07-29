@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, toRef } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import { ActivityIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -41,8 +41,13 @@ import {
   startDaemon,
   stopDaemon,
 } from '@/features/daemons/api'
+import {
+  buildDaemonPreset,
+  type LaravelDaemonPresetType,
+} from '@/features/laravel-presets/presets'
+import { fetchServerSites } from '@/features/sites/api'
 import type { DaemonChangedPayload, DaemonLogsReadyPayload } from '@/features/daemons/types'
-import type { DaemonRecord } from '@/types'
+import type { DaemonRecord, Site } from '@/types'
 
 interface Props {
   serverId: string
@@ -61,6 +66,10 @@ const createCommand = ref('')
 const createDirectory = ref('/var/www')
 const createUser = ref('www-data')
 const createProcesses = ref(1)
+const createPreset = ref<LaravelDaemonPresetType>('custom')
+const selectedSiteId = ref<string | null>(null)
+const serverSites = ref<Site[]>([])
+const isLoadingSites = ref(false)
 
 const logsDaemon = ref<DaemonRecord | null>(null)
 const logLines = ref<string[]>([])
@@ -171,6 +180,74 @@ async function loadDaemons(): Promise<void> {
 }
 
 const isEmpty = computed(() => !isLoading.value && daemons.value.length === 0)
+
+const phpSites = computed(() => serverSites.value.filter(site => (site.runtime as string) === 'php'))
+
+const selectedSite = computed(() => {
+  if (selectedSiteId.value === null) {
+    return null
+  }
+
+  return serverSites.value.find(site => site.id === selectedSiteId.value) ?? null
+})
+
+async function loadServerSites(): Promise<void> {
+  isLoadingSites.value = true
+
+  try {
+    serverSites.value = await fetchServerSites(props.serverId)
+  } catch {
+    toast.error('Unable to load sites for presets.')
+  } finally {
+    isLoadingSites.value = false
+  }
+}
+
+function applyDaemonPreset(): void {
+  if (createPreset.value === 'custom') {
+    return
+  }
+
+  const site = selectedSite.value
+
+  if (site === null) {
+    return
+  }
+
+  const preset = buildDaemonPreset(createPreset.value, site.webroot, site.domain, site.id)
+
+  if (preset === null) {
+    return
+  }
+
+  createName.value = preset.name
+  createCommand.value = preset.command
+  createDirectory.value = preset.directory
+  createProcesses.value = preset.processes
+}
+
+function resetCreateForm(): void {
+  createPreset.value = 'custom'
+  selectedSiteId.value = null
+  createName.value = ''
+  createCommand.value = ''
+  createDirectory.value = '/var/www'
+  createUser.value = 'www-data'
+  createProcesses.value = 1
+}
+
+watch(isCreateOpen, (open) => {
+  if (open) {
+    void loadServerSites()
+    return
+  }
+
+  resetCreateForm()
+})
+
+watch([createPreset, selectedSiteId], () => {
+  applyDaemonPreset()
+})
 
 async function handleCreate(): Promise<void> {
   try {
@@ -371,6 +448,51 @@ void loadDaemons()
           </SheetDescription>
         </SheetHeader>
         <SheetBody class="space-y-4">
+          <div class="space-y-2">
+            <Label>Preset</Label>
+            <Select v-model="createPreset">
+              <SelectTrigger data-testid="daemon-preset-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">
+                  Custom
+                </SelectItem>
+                <SelectItem value="horizon">
+                  Laravel Horizon
+                </SelectItem>
+                <SelectItem value="queue">
+                  Laravel queue worker
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div v-if="createPreset !== 'custom'" class="space-y-2">
+            <Label>Site</Label>
+            <Select
+              :model-value="selectedSiteId ?? undefined"
+              @update:model-value="(value) => { selectedSiteId = value ? String(value) : null }"
+            >
+              <SelectTrigger data-testid="daemon-site-select">
+                <SelectValue placeholder="Select a PHP site" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="site in phpSites"
+                  :key="site.id"
+                  :value="site.id"
+                >
+                  {{ site.domain }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="isLoadingSites" class="text-sm text-muted-foreground">
+              Loading sites…
+            </p>
+            <p v-else-if="phpSites.length === 0" class="text-sm text-muted-foreground">
+              No PHP sites on this server.
+            </p>
+          </div>
           <div class="space-y-2">
             <Label for="daemon-name">Name</Label>
             <Input id="daemon-name" v-model="createName" />

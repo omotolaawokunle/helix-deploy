@@ -38,7 +38,12 @@ import {
   toggleCronJob,
   updateCronJob,
 } from '@/features/cron-jobs/api'
-import type { CronJobRecord } from '@/types'
+import {
+  buildCronPreset,
+  type LaravelCronPresetType,
+} from '@/features/laravel-presets/presets'
+import { fetchServerSites } from '@/features/sites/api'
+import type { CronJobRecord, Site } from '@/types'
 
 interface Props {
   serverId: string
@@ -54,6 +59,10 @@ const createExpression = ref('* * * * *')
 const createDescription = ref('')
 const createCommand = ref('')
 const createUser = ref('www-data')
+const createPreset = ref<LaravelCronPresetType>('custom')
+const selectedSiteId = ref<string | null>(null)
+const serverSites = ref<Site[]>([])
+const isLoadingSites = ref(false)
 
 const editingRows = ref<Record<string, { expression: string; command: string }>>({})
 
@@ -145,6 +154,70 @@ async function saveInline(jobId: string): Promise<void> {
 
 const isEmpty = computed(() => !isLoading.value && cronJobs.value.length === 0)
 
+const phpSites = computed(() => serverSites.value.filter(site => (site.runtime as string) === 'php'))
+
+const selectedSite = computed(() => {
+  if (selectedSiteId.value === null) {
+    return null
+  }
+
+  return serverSites.value.find(site => site.id === selectedSiteId.value) ?? null
+})
+
+async function loadServerSites(): Promise<void> {
+  isLoadingSites.value = true
+
+  try {
+    serverSites.value = await fetchServerSites(props.serverId)
+  } catch {
+    toast.error('Unable to load sites for presets.')
+  } finally {
+    isLoadingSites.value = false
+  }
+}
+
+function applyCronPreset(): void {
+  if (createPreset.value === 'custom') {
+    return
+  }
+
+  const site = selectedSite.value
+
+  if (site === null) {
+    return
+  }
+
+  const preset = buildCronPreset(createPreset.value, site.webroot)
+
+  if (preset === null) {
+    return
+  }
+
+  createExpression.value = preset.expression
+  createCommand.value = preset.command
+}
+
+function resetCreateForm(): void {
+  createPreset.value = 'custom'
+  selectedSiteId.value = null
+  createExpression.value = '* * * * *'
+  createCommand.value = ''
+  createUser.value = 'www-data'
+}
+
+watch(isCreateOpen, (open) => {
+  if (open) {
+    void loadServerSites()
+    return
+  }
+
+  resetCreateForm()
+})
+
+watch([createPreset, selectedSiteId], () => {
+  applyCronPreset()
+})
+
 void loadCronJobs()
 </script>
 
@@ -230,6 +303,48 @@ void loadCronJobs()
           </SheetDescription>
         </SheetHeader>
         <SheetBody class="space-y-4">
+          <div class="space-y-2">
+            <Label>Preset</Label>
+            <Select v-model="createPreset">
+              <SelectTrigger data-testid="cron-preset-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">
+                  Custom
+                </SelectItem>
+                <SelectItem value="scheduler">
+                  Laravel scheduler
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div v-if="createPreset !== 'custom'" class="space-y-2">
+            <Label>Site</Label>
+            <Select
+              :model-value="selectedSiteId ?? undefined"
+              @update:model-value="(value) => { selectedSiteId = value ? String(value) : null }"
+            >
+              <SelectTrigger data-testid="cron-site-select">
+                <SelectValue placeholder="Select a PHP site" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="site in phpSites"
+                  :key="site.id"
+                  :value="site.id"
+                >
+                  {{ site.domain }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-if="isLoadingSites" class="text-sm text-muted-foreground">
+              Loading sites…
+            </p>
+            <p v-else-if="phpSites.length === 0" class="text-sm text-muted-foreground">
+              No PHP sites on this server.
+            </p>
+          </div>
           <div class="space-y-2">
             <Label for="cron-expression">Expression</Label>
             <Input

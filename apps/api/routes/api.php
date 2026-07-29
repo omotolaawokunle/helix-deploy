@@ -41,7 +41,7 @@ use App\Modules\Servers\Controllers\CloudProviderController;
 use App\Modules\Sites\Controllers\EnvVarController;
 use App\Modules\Sites\Controllers\NginxConfigController;
 use App\Modules\Sites\Controllers\SiteController;
-use App\Modules\Sites\Controllers\SiteDnsController;
+use App\Modules\Sites\Controllers\SiteLaravelWorkersController;
 use App\Modules\Sites\Controllers\SiteDatabaseController;
 use App\Modules\Sites\Controllers\SiteLogController;
 use App\Modules\Sites\Controllers\SiteSslController;
@@ -180,6 +180,7 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::post('/sites/{site}/webhook-secret/rotate', [SiteController::class, 'rotateWebhookSecret']);
     Route::post('/sites/{site}/claim', [SiteController::class, 'claim']);
     Route::delete('/sites/{site}', [SiteController::class, 'destroy']);
+    Route::post('/sites/{site}/laravel-workers', [SiteLaravelWorkersController::class, 'store']);
     Route::post('/sites/{site}/dns/retry', [SiteDnsController::class, 'retry']);
     Route::post('/sites/{site}/ssl/retry', [SiteSslController::class, 'retry']);
     Route::get('/sites/{site}/nginx-config', [NginxConfigController::class, 'show']);

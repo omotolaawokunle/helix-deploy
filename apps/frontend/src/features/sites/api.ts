@@ -190,6 +190,20 @@ export async function deleteSite(siteId: string): Promise<void> {
   await api.delete(`/api/v1/sites/${siteId}`)
 }
 
+export type LaravelWorkerType = 'horizon' | 'queue'
+
+export async function setupLaravelWorkers(
+  siteId: string,
+  workerType: LaravelWorkerType,
+): Promise<{ message: string }> {
+  const response = await api.post<{ message: string }>(
+    `/api/v1/sites/${siteId}/laravel-workers`,
+    { workerType },
+  )
+
+  return response.data
+}
+
 export async function fetchServerSites(serverId: string): Promise<Site[]> {
   const response = await api.get<CollectionResponse<Site>>(`/api/v1/servers/${serverId}/sites`, {
     params: { per_page: 100 },

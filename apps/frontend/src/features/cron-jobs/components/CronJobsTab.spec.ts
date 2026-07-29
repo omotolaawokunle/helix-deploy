@@ -16,6 +16,19 @@ vi.mock('@/features/cron-jobs/api', () => ({
   toggleCronJob: vi.fn(),
 }))
 
+const fetchServerSitesMock = vi.fn().mockResolvedValue([
+  {
+    id: 'site-1',
+    domain: 'app.example.test',
+    webroot: '/var/www/app.example.test/current/public',
+    runtime: 'php',
+  },
+])
+
+vi.mock('@/features/sites/api', () => ({
+  fetchServerSites: (...args: unknown[]) => fetchServerSitesMock(...args),
+}))
+
 describe('CronJobsTab expression description', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -52,5 +65,22 @@ describe('CronJobsTab expression description', () => {
 
     const description = document.body.querySelector('[data-testid="cron-expression-description"]')
     expect(description?.textContent).toContain('Every 5 minutes')
+  })
+
+  it('shows scheduler preset controls in create sheet', async () => {
+    mount(CronJobsTab, {
+      props: { serverId: 'server-1' },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    const addButton = Array.from(document.body.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Add cron job'))
+
+    addButton?.click()
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="cron-preset-select"]')).not.toBeNull()
   })
 })

@@ -18,6 +18,10 @@ use App\Modules\Sites\Actions\ImportDiscoveredSitesAction;
 use App\Modules\Sites\Services\NginxConfigGenerator;
 use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
 use App\Packages\Execution\DeploymentRunner;
+use App\Modules\Daemons\Contracts\DaemonCreatorInterface;
+use App\Modules\Daemons\Services\DaemonCreator;
+use App\Modules\CronJobs\Contracts\CronJobCreatorInterface;
+use App\Modules\CronJobs\Services\CronJobCreator;
 use App\Modules\Daemons\Models\SupervisorProcess;
 use App\Modules\Daemons\Policies\DaemonPolicy;
 use App\Modules\Pipelines\Contracts\PipelineStageHandlerInterface;
@@ -99,6 +103,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(SiteDnsProvisionerInterface::class, SiteDnsProvisioner::class);
         $this->app->singleton(SiteSslCertificateInspectorInterface::class, SiteSslCertificateInspector::class);
         $this->app->singleton(SiteSslProvisionerInterface::class, SiteSslProvisioner::class);
+        $this->app->singleton(DaemonCreatorInterface::class, DaemonCreator::class);
+        $this->app->singleton(CronJobCreatorInterface::class, CronJobCreator::class);
         $this->app->singleton(PipelineStageHandlerRegistry::class, function (): PipelineStageHandlerRegistry {
             /** @var list<PipelineStageHandlerInterface> $handlers */
             $handlers = [

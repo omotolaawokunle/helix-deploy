@@ -218,6 +218,7 @@ export interface Site {
   environmentId: string | null
   name?: string
   domain: string
+  webroot: string
   repositoryUrl: string | null
   repositoryProvider: GitProviderType | null
   gitCredentialConfigured: boolean

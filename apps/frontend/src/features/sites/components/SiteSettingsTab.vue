@@ -16,6 +16,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchBuildRunners } from '@/features/build-runners/api'
@@ -32,8 +41,10 @@ import {
   fetchGitRepositories,
   storeGitProviderToken,
   rotateSiteWebhookSecret,
+  setupLaravelWorkers,
   updateSite,
 } from '@/features/sites/api'
+import type { LaravelWorkerType } from '@/features/sites/api'
 import {
   EXTERNAL_BUILD_STRATEGY_LABEL,
   EXTERNAL_BUILD_STRATEGY_V2_MESSAGE,
@@ -97,6 +108,9 @@ const revealedWebhookSecret = ref<string | null>(null)
 const productionAutoDeployConfirmed = ref(false)
 const isRotatingWebhookSecret = ref(false)
 const isRotateSecretDialogOpen = ref(false)
+const isWorkersSetupOpen = ref(false)
+const isSettingUpWorkers = ref(false)
+const workerType = ref<LaravelWorkerType>('horizon')
 
 const providerOptions: Array<{ value: GitProviderType; label: string }> = [
   { value: 'github', label: 'GitHub' },
@@ -122,7 +136,7 @@ const isAutoDeployEligible = computed((): boolean => {
 })
 
 const isDockerRuntimeSite = computed(() => props.site.runtime === 'docker')
-const isPhpRuntimeSite = computed(() => props.site.runtime === 'php')
+const isPhpRuntimeSite = computed(() => (props.site.runtime as string) === 'php')
 
 const canEnableAutoDeploy = computed(() => {
   if (!autoDeployEnabled.value) {
@@ -400,6 +414,22 @@ function handleRepositoryChange(fullName: string): void {
   }
 
   void loadBranchesForCurrentRepository()
+}
+
+async function handleSetupLaravelWorkers(): Promise<void> {
+  isSettingUpWorkers.value = true
+
+  try {
+    const response = await setupLaravelWorkers(props.site.id, workerType.value)
+    isWorkersSetupOpen.value = false
+    toast.success(response.message, {
+      description: 'Check the server Daemons and Cron tabs for status.',
+    })
+  } catch {
+    toast.error('Unable to set up Laravel workers.')
+  } finally {
+    isSettingUpWorkers.value = false
+  }
 }
 
 async function handleSave(): Promise<void> {
@@ -916,6 +946,39 @@ async function handleDelete(): Promise<void> {
             Must match PHP-FPM on the server (e.g. php8.4-fpm). Re-apply the nginx config after changing so the PHP socket updates.
           </p>
         </div>
+
+        <div class="space-y-3 rounded-lg border border-border p-4" data-testid="laravel-workers-section">
+          <div class="space-y-1">
+            <h3 class="text-sm font-medium">
+              Laravel workers
+            </h3>
+            <p class="text-sm text-muted-foreground">
+              Create a supervised queue process and the scheduler cron for this site on its server.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="laravel-workers-setup-button"
+              @click="isWorkersSetupOpen = true"
+            >
+              Set up Laravel workers
+            </Button>
+            <RouterLink
+              :to="{ path: `/servers/${props.site.serverId}`, query: { tab: 'daemons' } }"
+              class="text-sm text-primary hover:underline"
+            >
+              View daemons
+            </RouterLink>
+            <RouterLink
+              :to="{ path: `/servers/${props.site.serverId}`, query: { tab: 'cron' } }"
+              class="text-sm text-primary hover:underline"
+            >
+              View cron jobs
+            </RouterLink>
+          </div>
+        </div>
       </template>
 
       <h2 class="section-label pt-4">
@@ -1039,5 +1102,51 @@ async function handleDelete(): Promise<void> {
       confirm-button-label="Regenerate secret"
       @confirm="handleRotateWebhookSecret"
     />
+
+    <Sheet v-model:open="isWorkersSetupOpen">
+      <SheetContent side="right" class="flex w-full flex-col sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Set up Laravel workers</SheetTitle>
+          <SheetDescription>
+            Creates a supervised queue process and the Laravel scheduler cron on this site's server.
+          </SheetDescription>
+        </SheetHeader>
+        <SheetBody class="space-y-4">
+          <div class="space-y-2">
+            <Label>Queue process</Label>
+            <Select v-model="workerType">
+              <SelectTrigger data-testid="laravel-worker-type-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="horizon">
+                  Horizon
+                </SelectItem>
+                <SelectItem value="queue">
+                  Queue worker
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <p class="text-sm text-muted-foreground">
+            Horizon and queue workers should not run together for the same app. The scheduler cron runs every minute via
+            <code class="text-xs">schedule:run</code>.
+          </p>
+        </SheetBody>
+        <SheetFooter>
+          <Button type="button" variant="outline" @click="isWorkersSetupOpen = false">
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            data-testid="laravel-workers-confirm-button"
+            :disabled="isSettingUpWorkers"
+            @click="handleSetupLaravelWorkers"
+          >
+            Set up workers
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   </div>
 </template>

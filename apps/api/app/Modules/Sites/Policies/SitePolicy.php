@@ -89,6 +89,11 @@ class SitePolicy
         return in_array($this->roleInOrganization($user, $site->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
     }
 
+    public function setupLaravelWorkers(User $user, Site $site): bool
+    {
+        return in_array($this->roleInOrganization($user, $site->organization), [TeamRole::OWNER, TeamRole::ADMIN], true);
+    }
+
     public function viewLogs(User $user, Site $site): bool
     {
         return $this->view($user, $site);

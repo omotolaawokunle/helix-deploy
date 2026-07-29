@@ -4,6 +4,7 @@ import SiteSettingsTab from '@/features/sites/components/SiteSettingsTab.vue'
 import { Runtime, type Site } from '@/types'
 
 const updateSiteMock = vi.fn()
+const setupLaravelWorkersMock = vi.fn()
 
 vi.mock('vue-sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
@@ -24,6 +25,7 @@ vi.mock('@/features/auth/stores/useAuthStore', () => ({
 
 vi.mock('@/features/sites/api', () => ({
   updateSite: (...args: unknown[]) => updateSiteMock(...args),
+  setupLaravelWorkers: (...args: unknown[]) => setupLaravelWorkersMock(...args),
   rotateSiteWebhookSecret: vi.fn(),
   fetchGitProviders: vi.fn().mockResolvedValue([]),
   fetchGitRepositories: vi.fn().mockResolvedValue([]),
@@ -50,6 +52,7 @@ function createSite(overrides: Partial<Site> = {}): Site {
     serverId: 'server-1',
     environmentId: null,
     domain: 'app.example.test',
+    webroot: '/var/www/app.example.test/current/public',
     repositoryUrl: 'git@github.com:helix/example.git',
     repositoryProvider: 'github',
     gitCredentialConfigured: true,
@@ -230,5 +233,65 @@ describe('SiteSettingsTab auto deploy', () => {
     expect(document.body.querySelector('[data-testid="production-auto-deploy-confirm"]')).toBeNull()
 
     wrapper.unmount()
+  })
+})
+
+describe('SiteSettingsTab Laravel workers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setupLaravelWorkersMock.mockResolvedValue({ message: 'Laravel worker setup has been queued.' })
+  })
+
+  it('shows laravel workers section for php runtime sites only', async () => {
+    const phpWrapper = mount(SiteSettingsTab, {
+      props: {
+        site: createSite({ runtime: 'php' as Site['runtime'], phpVersion: '8.3' }),
+        isProduction: false,
+      },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="laravel-workers-section"]')).not.toBeNull()
+
+    phpWrapper.unmount()
+    document.body.innerHTML = ''
+
+    const dockerWrapper = mount(SiteSettingsTab, {
+      props: {
+        site: createSite({ runtime: 'docker' as Site['runtime'] }),
+        isProduction: false,
+      },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="laravel-workers-section"]')).toBeNull()
+
+    dockerWrapper.unmount()
+  })
+
+  it('submits worker setup with default horizon worker type', async () => {
+    mount(SiteSettingsTab, {
+      props: {
+        site: createSite({ runtime: 'php' as Site['runtime'], phpVersion: '8.3' }),
+        isProduction: false,
+      },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    const setupButton = document.body.querySelector('[data-testid="laravel-workers-setup-button"]') as HTMLButtonElement
+    setupButton.click()
+    await flushPromises()
+
+    const confirmButton = document.body.querySelector('[data-testid="laravel-workers-confirm-button"]') as HTMLButtonElement
+    confirmButton.click()
+    await flushPromises()
+
+    expect(setupLaravelWorkersMock).toHaveBeenCalledWith('site-1', 'horizon')
   })
 })
