@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AuthLayout from '@/components/layout/AuthLayout.vue'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,18 +13,24 @@ import {
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 
 const authStore = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 const isResending = ref(false)
 const resendMessage = ref<string | null>(null)
 const resendIsError = ref(false)
+const verificationSucceeded = ref(route.query.verified === '1')
 
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
     await authStore.init()
+  } else if (verificationSucceeded.value) {
+    await authStore.refreshUser()
   }
 
   if (!authStore.isAuthenticated) {
-    await router.replace('/login')
+    await router.replace(
+      verificationSucceeded.value ? '/login?verified=1' : '/login',
+    )
     return
   }
 
@@ -61,28 +67,37 @@ async function handleResend(): Promise<void> {
       </CardHeader>
 
       <CardContent class="space-y-4">
-        <p class="text-sm text-muted-foreground">
-          We sent a verification link to
-          <span class="font-medium text-foreground">{{ authStore.user?.email ?? 'your email' }}</span>.
-        </p>
-
-        <Button
-          type="button"
-          variant="outline"
-          data-testid="resend-verification"
-          :disabled="isResending"
-          @click="handleResend"
-        >
-          {{ isResending ? 'Sending…' : 'Resend verification' }}
-        </Button>
-
         <p
-          v-if="resendMessage"
-          class="text-sm"
-          :class="resendIsError ? 'text-destructive' : 'text-muted-foreground'"
+          v-if="verificationSucceeded"
+          class="text-sm text-muted-foreground"
         >
-          {{ resendMessage }}
+          Your email has been verified. Redirecting…
         </p>
+
+        <template v-else>
+          <p class="text-sm text-muted-foreground">
+            We sent a verification link to
+            <span class="font-medium text-foreground">{{ authStore.user?.email ?? 'your email' }}</span>.
+          </p>
+
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="resend-verification"
+            :disabled="isResending"
+            @click="handleResend"
+          >
+            {{ isResending ? 'Sending…' : 'Resend verification' }}
+          </Button>
+
+          <p
+            v-if="resendMessage"
+            class="text-sm"
+            :class="resendIsError ? 'text-destructive' : 'text-muted-foreground'"
+          >
+            {{ resendMessage }}
+          </p>
+        </template>
       </CardContent>
     </Card>
   </AuthLayout>

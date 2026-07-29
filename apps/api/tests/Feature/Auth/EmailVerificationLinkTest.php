@@ -24,6 +24,6 @@ it('verifies email via signed verification link', function (): void {
 it('rejects verification link with invalid signature', function (): void {
     $user = User::factory()->unverified()->create();
 
-    $this->get("/email/verify/{$user->getKey()}/".sha1((string) $user->email))
+    $this->get("/api/email/verify/{$user->getKey()}/".sha1((string) $user->email))
         ->assertForbidden();
 });

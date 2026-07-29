@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Audit\Controllers\AuditLogController;
 use App\Modules\Auth\Controllers\ApiTokenController;
 use App\Modules\Auth\Controllers\AuthController;
+use App\Modules\Auth\Controllers\EmailVerificationLinkController;
 use App\Modules\Commands\Controllers\CommandController;
 use App\Modules\Commands\Controllers\CommandStreamController;
 use App\Modules\Integrations\Controllers\CloudflareController;
@@ -68,6 +69,10 @@ Route::prefix('v1/auth')->middleware('web')->group(function (): void {
         Route::delete('/tokens/{token}', [ApiTokenController::class, 'destroy']);
     });
 });
+
+Route::get('/email/verify/{id}/{hash}', EmailVerificationLinkController::class)
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('verification.verify');
 
 Route::get('/v1/organizations/invitations/accept', InvitationAcceptRedirectController::class)
     ->middleware(['signed', 'throttle:6,1'])
