@@ -16,6 +16,17 @@ final class DockerBuildStep extends BaseDeploymentStep
 
     public function run(DeploymentContext $ctx): void
     {
+        $composePath = DockerComposePath::resolve($ctx);
+
+        if ($composePath !== null) {
+            $this->runCommand(
+                $ctx,
+                'docker compose -f '.$this->shellQuote($composePath).' build',
+            );
+
+            return;
+        }
+
         $tag = $ctx->site->docker_image ?? $ctx->site->domain.':latest';
 
         $this->runCommand(

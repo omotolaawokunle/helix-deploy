@@ -143,10 +143,12 @@ it('docker login runs when registry is configured', function (): void {
     $ssh->assertCommandExecuted('docker login *ghcr.io*');
 });
 
-it('docker build runs docker build in release path', function (): void {
+it('docker build falls back to docker build in release path without compose file', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
         'deploy_mode' => DeployMode::DOCKER,
+        'docker_build_mode' => DockerBuildMode::BUILD,
         'docker_image' => 'helix/app:latest',
+        'docker_compose_path' => '',
     ]);
     $ssh = fakeSsh();
     queueSshResponses($ssh, ['docker build *' => sshSuccess()]);
@@ -155,6 +157,25 @@ it('docker build runs docker build in release path', function (): void {
     (new DockerBuildStep())->run($ctx);
 
     $ssh->assertCommandExecuted('docker build -t *helix/app:latest*');
+});
+
+it('docker build uses compose build when compose path is relative to release', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
+        'deploy_mode' => DeployMode::DOCKER,
+        'docker_build_mode' => DockerBuildMode::BUILD,
+        'docker_compose_path' => 'infrastructure/docker-compose.yml',
+    ]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*docker compose*build*' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new DockerBuildStep())->run($ctx);
+
+    $commands = $ssh->getExecutedCommands();
+    expect($commands)->toHaveCount(1)
+        ->and($commands[0])->toContain('docker compose -f')
+        ->and($commands[0])->toContain($ctx->releasePath.'/infrastructure/docker-compose.yml')
+        ->and($commands[0])->toContain('build');
 });
 
 it('docker login is skippable without registry', function (): void {
@@ -181,7 +202,7 @@ it('docker pull runs docker pull with image', function (): void {
     $ssh->assertCommandExecuted('docker pull *ghcr.io/helix/app:latest*');
 });
 
-it('docker compose up runs compose in shared directory', function (): void {
+it('docker compose up resolves absolute compose path', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
         'deploy_mode' => DeployMode::DOCKER,
         'docker_compose_path' => '/var/www/app.example.test/shared/docker-compose.yml',
@@ -192,7 +213,28 @@ it('docker compose up runs compose in shared directory', function (): void {
 
     (new DockerComposeUpStep())->run($ctx);
 
-    $ssh->assertCommandExecuted('*docker compose*up -d*');
+    $commands = $ssh->getExecutedCommands();
+    expect($commands)->toHaveCount(1)
+        ->and($commands[0])->toContain('docker compose -f')
+        ->and($commands[0])->toContain('/var/www/app.example.test/shared/docker-compose.yml')
+        ->and($commands[0])->toContain('up -d');
+});
+
+it('docker compose up resolves relative compose path against release', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
+        'deploy_mode' => DeployMode::DOCKER,
+        'docker_compose_path' => 'infrastructure/docker-compose.yml',
+    ]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*docker compose*' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new DockerComposeUpStep())->run($ctx);
+
+    $commands = $ssh->getExecutedCommands();
+    expect($commands)->toHaveCount(1)
+        ->and($commands[0])->toContain($ctx->releasePath.'/infrastructure/docker-compose.yml')
+        ->and($commands[0])->toContain('up -d');
 });
 
 it('docker cleanup prunes images and containers', function (): void {

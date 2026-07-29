@@ -16,12 +16,11 @@ final class DockerComposeUpStep extends BaseDeploymentStep
 
     public function run(DeploymentContext $ctx): void
     {
-        $composePath = $ctx->site->docker_compose_path ?? $ctx->sharedPath.'/docker-compose.yml';
-        $directory = dirname($composePath);
+        $composePath = DockerComposePath::resolveOrDefault($ctx);
 
         $this->runCommand(
             $ctx,
-            'cd '.$this->shellQuote($directory).' && docker compose -f '.$this->shellQuote($composePath).' up -d',
+            'docker compose -f '.$this->shellQuote($composePath).' up -d',
         );
     }
 }
