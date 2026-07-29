@@ -29,7 +29,8 @@ it('creates webroot directories with sudo ownership', function (): void {
     $provisioner = new SiteNginxProvisioner($manager, app(CredentialVault::class));
     $provisioner->createWebroot($server, 'nolbzdesign.com');
 
-    $fake->assertCommandExecuted("sudo mkdir -p '/var/www/nolbzdesign.com'/releases*");
+    $fake->assertCommandExecuted("sudo mkdir -p *'/var/www/nolbzdesign.com'/releases*");
+    $fake->assertCommandExecuted('*ln -sfn*');
     $fake->assertCommandExecuted("sudo chown -R 'deploy:www-data' '/var/www/nolbzdesign.com'*");
 });
 
@@ -46,6 +47,23 @@ it('owns webroot as the server ssh user when not deploy', function (): void {
     $provisioner->createWebroot($server, 'nolbzdesign.com');
 
     $fake->assertCommandExecuted("sudo chown -R 'cursor:www-data' '/var/www/nolbzdesign.com'*");
+});
+
+it('bootstraps current as a symlink for pre-deploy ssl webroot', function (): void {
+    [$server, $fake] = siteNginxProvisionerFixture();
+
+    $fake->addResponse('sudo mkdir -p *', new SSHResult('sudo mkdir -p', 0, '', '', 0.01));
+
+    $manager = \Mockery::mock(SSHManager::class);
+    $manager->shouldReceive('connect')->never();
+
+    $provisioner = new SiteNginxProvisioner($manager, app(CredentialVault::class));
+    $provisioner->ensureBootstrapCurrent($fake, '/var/www/nolbzdesign.com');
+
+    $commands = $fake->getExecutedCommands();
+    expect($commands[0])->toContain("'/var/www/nolbzdesign.com/releases/.helix-bootstrap'")
+        ->and($commands[0])->toContain("ln -sfn '/var/www/nolbzdesign.com/releases/.helix-bootstrap' '/var/www/nolbzdesign.com/current'")
+        ->and($commands[0])->toContain('.well-known/acme-challenge');
 });
 
 it('uploads nginx config via temp file then installs with sudo', function (): void {

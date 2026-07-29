@@ -146,6 +146,24 @@ const autoDeployProviderHint = computed((): string => {
   return 'In GitHub, add a webhook with push events and paste the secret below.'
 })
 
+const providerTokenHint = computed((): string => {
+  const provider = repositoryProvider.value
+
+  if (provider === 'gitlab') {
+    return 'GitLab PAT needs read_api and read_repository so private projects appear in the list.'
+  }
+
+  if (provider === 'bitbucket') {
+    return 'Bitbucket app password needs Repositories: Read so private repos appear in the list.'
+  }
+
+  if (provider === 'github') {
+    return 'GitHub classic PAT needs the repo scope (or a fine-grained token with access to your private repos).'
+  }
+
+  return 'Paste a personal access token with read access to private repositories.'
+})
+
 const deleteSiteDescription = computed(() => {
   const parts = [`This will permanently delete ${props.site.domain}. This cannot be undone.`]
 
@@ -529,6 +547,9 @@ async function handleDelete(): Promise<void> {
             autocomplete="off"
             placeholder="Paste PAT (never shown again)"
           />
+          <p class="text-xs text-muted-foreground">
+            {{ providerTokenHint }}
+          </p>
         </div>
         <div class="flex flex-wrap gap-2">
           <Button

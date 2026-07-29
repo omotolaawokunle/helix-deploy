@@ -14,6 +14,8 @@ class BitbucketGitProviderClient implements GitProviderClientInterface
 {
     private const API_BASE = 'https://api.bitbucket.org/2.0';
 
+    private const MAX_PAGES = 10;
+
     public function __construct(
         private readonly GitCloneUrlBuilder $cloneUrlBuilder,
     ) {
@@ -24,17 +26,29 @@ class BitbucketGitProviderClient implements GitProviderClientInterface
      */
     public function listRepositories(string $token): array
     {
-        $response = Http::withToken($token)
-            ->get(self::API_BASE.'/repositories', [
-                'role' => 'member',
-                'pagelen' => 100,
-            ])
-            ->throw();
-
-        /** @var array{values?: list<array<string, mixed>>} $payload */
-        $payload = $response->json();
         /** @var list<array<string, mixed>> $items */
-        $items = $payload['values'] ?? [];
+        $items = [];
+        $url = self::API_BASE.'/repositories?role=member&pagelen=100';
+
+        for ($page = 1; $page <= self::MAX_PAGES; $page++) {
+            $response = Http::withToken($token)
+                ->get($url)
+                ->throw();
+
+            /** @var array{values?: list<array<string, mixed>>, next?: string|null} $payload */
+            $payload = $response->json();
+            /** @var list<array<string, mixed>> $pageItems */
+            $pageItems = $payload['values'] ?? [];
+            $items = array_merge($items, $pageItems);
+
+            $next = $payload['next'] ?? null;
+
+            if (! is_string($next) || $next === '' || $pageItems === []) {
+                break;
+            }
+
+            $url = $next;
+        }
 
         return array_map(function (array $item): GitRepositoryDTO {
             $fullName = (string) ($item['full_name'] ?? '');

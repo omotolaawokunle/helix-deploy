@@ -31,6 +31,7 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
         private readonly SiteNginxProvisioner $siteNginxProvisioner,
         private readonly DnsProviderRegistry $dnsProviderRegistry,
         private readonly SiteSslCertificateInspectorInterface $certificateInspector,
+        private readonly SiteDeployPathResolver $pathResolver,
     ) {
     }
 
@@ -150,6 +151,16 @@ final class SiteSslProvisioner implements SiteSslProvisionerInterface
 
     private function issueViaWebroot(SSHConnectionInterface $connection, Site $site): void
     {
+        $this->siteNginxProvisioner->ensureBootstrapCurrent(
+            $connection,
+            $this->pathResolver->deployBase($site),
+        );
+
+        $connection->run(sprintf(
+            'sudo mkdir -p %s/.well-known/acme-challenge',
+            escapeshellarg($this->pathResolver->webrootPath($site)),
+        ))->throw();
+
         $connection->run($this->buildCertbotWebrootCommand($site))->throw();
     }
 

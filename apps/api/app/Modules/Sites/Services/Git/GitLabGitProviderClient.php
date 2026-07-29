@@ -8,11 +8,14 @@ use App\Modules\Sites\Contracts\GitProviderClientInterface;
 use App\Modules\Sites\DTOs\GitBranchDTO;
 use App\Modules\Sites\DTOs\GitRepositoryDTO;
 use App\Modules\Sites\Enums\GitProvider;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 class GitLabGitProviderClient implements GitProviderClientInterface
 {
     private const API_BASE = 'https://gitlab.com/api/v4';
+
+    private const MAX_PAGES = 10;
 
     public function __construct(
         private readonly GitCloneUrlBuilder $cloneUrlBuilder,
@@ -24,19 +27,32 @@ class GitLabGitProviderClient implements GitProviderClientInterface
      */
     public function listRepositories(string $token): array
     {
-        $response = Http::withToken($token)
-            ->get(self::API_BASE.'/projects', [
-                'membership' => true,
-                'per_page' => 100,
-                'order_by' => 'updated_at',
-            ])
-            ->throw();
-
         /** @var list<array<string, mixed>> $items */
-        $items = $response->json();
+        $items = [];
+
+        for ($page = 1; $page <= self::MAX_PAGES; $page++) {
+            $response = Http::withToken($token)
+                ->get(self::API_BASE.'/projects', [
+                    'membership' => true,
+                    'per_page' => 100,
+                    'page' => $page,
+                    'order_by' => 'updated_at',
+                    'simple' => false,
+                ])
+                ->throw();
+
+            /** @var list<array<string, mixed>> $pageItems */
+            $pageItems = $response->json() ?? [];
+            $items = array_merge($items, $pageItems);
+
+            if (! $this->hasNextPage($response) || $pageItems === []) {
+                break;
+            }
+        }
 
         return array_map(function (array $item): GitRepositoryDTO {
             $fullName = (string) ($item['path_with_namespace'] ?? '');
+            $visibility = (string) ($item['visibility'] ?? 'private');
 
             return new GitRepositoryDTO(
                 id: (string) ($item['id'] ?? $fullName),
@@ -44,7 +60,7 @@ class GitLabGitProviderClient implements GitProviderClientInterface
                 fullName: $fullName,
                 cloneUrl: (string) ($item['http_url_to_repo'] ?? ''),
                 defaultBranch: (string) ($item['default_branch'] ?? 'main'),
-                isPrivate: (bool) ($item['visibility'] ?? 'private') !== 'public',
+                isPrivate: $visibility !== 'public',
             );
         }, $items);
     }
@@ -77,5 +93,12 @@ class GitLabGitProviderClient implements GitProviderClientInterface
     public function buildAuthenticatedCloneUrl(string $token, string $repositoryUrl): string
     {
         return $this->cloneUrlBuilder->build(GitProvider::GITLAB, $token, $repositoryUrl);
+    }
+
+    private function hasNextPage(Response $response): bool
+    {
+        $nextPage = $response->header('X-Next-Page');
+
+        return is_string($nextPage) && $nextPage !== '';
     }
 }

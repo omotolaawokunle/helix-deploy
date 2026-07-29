@@ -24,12 +24,14 @@ it('issues a lets encrypt certificate via webroot and updates nginx', function (
     [$site, $fake] = siteSslProvisionerFixture();
 
     $fake->addResponse('*command -v certbot*', sshSuccess('yes'));
+    $fake->addResponse('sudo mkdir -p *', sshSuccess());
     $fake->addResponse('*certbot certonly*', sshSuccess());
     queueSslExpiryInspectionResponses($fake, domain: $site->domain);
 
     mockSiteSslSshManager($fake);
 
     $nginxProvisioner = \Mockery::mock(SiteNginxProvisioner::class);
+    $nginxProvisioner->shouldReceive('ensureBootstrapCurrent')->once();
     $nginxProvisioner->shouldReceive('apply')->once();
 
     $provisioner = siteSslProvisionerInstance($nginxProvisioner);
@@ -51,11 +53,13 @@ it('marks ssl as failed when certbot fails', function (): void {
     [$site, $fake] = siteSslProvisionerFixture();
 
     $fake->addResponse('*command -v certbot*', sshSuccess('yes'));
+    $fake->addResponse('sudo mkdir -p *', sshSuccess());
     $fake->addResponse('*certbot certonly*', sshFailure('challenge failed'));
 
     mockSiteSslSshManager($fake);
 
     $nginxProvisioner = \Mockery::mock(SiteNginxProvisioner::class);
+    $nginxProvisioner->shouldReceive('ensureBootstrapCurrent')->once();
     $nginxProvisioner->shouldNotReceive('apply');
 
     $provisioner = siteSslProvisionerInstance($nginxProvisioner);
@@ -169,6 +173,7 @@ function siteSslProvisionerInstance(
         $nginxProvisioner,
         $registry ?? app(DnsProviderRegistry::class),
         new SiteSslCertificateInspector(),
+        new \App\Modules\Sites\Services\SiteDeployPathResolver(),
     );
 }
 

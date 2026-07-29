@@ -62,12 +62,7 @@ class SiteNginxProvisioner
         $owner = $this->webrootOwner($server);
 
         $this->withConnection($server, function (SSHConnectionInterface $connection) use ($basePath, $owner): void {
-            $connection->run(sprintf(
-                'sudo mkdir -p %s/releases %s/shared %s/shared/storage',
-                escapeshellarg($basePath),
-                escapeshellarg($basePath),
-                escapeshellarg($basePath),
-            ))->throw();
+            $this->ensureBootstrapCurrent($connection, $basePath);
 
             $connection->run(sprintf(
                 'sudo chown -R %s %s && sudo chmod 755 %s',
@@ -76,6 +71,27 @@ class SiteNginxProvisioner
                 escapeshellarg($basePath),
             ))->throw();
         });
+    }
+
+    /**
+     * Capistrano webroot is {base}/current/public. Create a bootstrap release and
+     * symlink current → it so HTTP-01 SSL can run before the first deploy.
+     * current must be a symlink (never a real directory) so activate-release's ln -sfn works.
+     */
+    public function ensureBootstrapCurrent(SSHConnectionInterface $connection, string $basePath): void
+    {
+        $base = rtrim($basePath, '/');
+        $bootstrap = $base.'/releases/.helix-bootstrap';
+        $current = $base.'/current';
+
+        $connection->run(sprintf(
+            'sudo mkdir -p %1$s/releases %1$s/shared %1$s/shared/storage %2$s/public/.well-known/acme-challenge'
+            .' && if [ ! -e %3$s ]; then sudo ln -sfn %2$s %3$s;'
+            .' elif [ -d %3$s ] && [ ! -L %3$s ]; then sudo rm -rf %3$s && sudo ln -sfn %2$s %3$s; fi',
+            escapeshellarg($base),
+            escapeshellarg($bootstrap),
+            escapeshellarg($current),
+        ))->throw();
     }
 
     public function removeWebroot(Server $server, string $domain): void
