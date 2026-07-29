@@ -17,13 +17,16 @@ it('generates valid supervisor ini with expected fields', function (): void {
     $config = app(SupervisorConfigGenerator::class)->generate($daemon);
 
     expect($config)->toContain('[program:laravel-worker]');
+    expect($config)->toContain('process_name=%(program_name)s_%(process_num)02d');
     expect($config)->toContain('command=php /var/www/example/current/artisan queue:work');
     expect($config)->toContain('directory=/var/www/example/current');
     expect($config)->toContain('user=deploy');
     expect($config)->toContain('numprocs=2');
     expect($config)->toContain('autostart=true');
     expect($config)->toContain('autorestart=true');
+    expect($config)->toContain('startsecs=1');
     expect($config)->toContain('startretries=3');
+    expect($config)->toContain('stopwaitsecs=3600');
     expect($config)->toContain('redirect_stderr=true');
     expect($config)->toContain('stdout_logfile=/var/log/supervisor/laravel-worker.log');
     expect($config)->toContain('stdout_logfile_maxbytes=5MB');

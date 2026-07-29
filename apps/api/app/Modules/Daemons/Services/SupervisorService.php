@@ -42,10 +42,9 @@ class SupervisorService
         try {
             $this->installConfig($ssh, $config, $configPath, $dto->name);
             $ssh->run('sudo supervisorctl reread && sudo supervisorctl update')->throw();
-            $statusResult = $ssh->run('sudo supervisorctl start '.escapeshellarg($dto->name.':*'));
-            $daemon->forceFill([
-                'status' => $this->parseStatus($statusResult),
-            ])->save();
+            // autostart may already have started it; ignore start output and read real status
+            $ssh->run('sudo supervisorctl start '.$this->programTarget($dto->name));
+            $this->syncStatus($daemon, $ssh);
         } catch (\Throwable $e) {
             $daemon->delete();
 
@@ -66,8 +65,8 @@ class SupervisorService
 
     public function restart(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $result = $ssh->run('sudo supervisorctl restart '.escapeshellarg($daemon->name.':*'));
-        $daemon->forceFill(['status' => $this->parseStatus($result)])->save();
+        $ssh->run('sudo supervisorctl restart '.$this->programTarget($daemon->name));
+        $this->syncStatus($daemon, $ssh);
 
         AuditLog::record(
             operation: 'daemon.restarted',
@@ -80,8 +79,8 @@ class SupervisorService
 
     public function start(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $result = $ssh->run('sudo supervisorctl start '.escapeshellarg($daemon->name.':*'));
-        $daemon->forceFill(['status' => $this->parseStatus($result)])->save();
+        $ssh->run('sudo supervisorctl start '.$this->programTarget($daemon->name));
+        $this->syncStatus($daemon, $ssh);
 
         AuditLog::record(
             operation: 'daemon.started',
@@ -94,8 +93,8 @@ class SupervisorService
 
     public function stop(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $result = $ssh->run('sudo supervisorctl stop '.escapeshellarg($daemon->name.':*'));
-        $daemon->forceFill(['status' => $this->parseStatus($result)])->save();
+        $ssh->run('sudo supervisorctl stop '.$this->programTarget($daemon->name));
+        $this->syncStatus($daemon, $ssh);
 
         AuditLog::record(
             operation: 'daemon.stopped',
@@ -109,7 +108,7 @@ class SupervisorService
     public function getLogs(SupervisorProcess $daemon, SSHConnectionInterface $ssh, int $lines = 50): string
     {
         return $ssh->run(sprintf(
-            'tail -n %d %s',
+            'sudo tail -n %d %s',
             $lines,
             escapeshellarg('/var/log/supervisor/'.$daemon->name.'.log'),
         ))->output();
@@ -117,7 +116,7 @@ class SupervisorService
 
     public function delete(SupervisorProcess $daemon, SSHConnectionInterface $ssh): void
     {
-        $ssh->run('sudo supervisorctl stop '.escapeshellarg($daemon->name.':*'));
+        $ssh->run('sudo supervisorctl stop '.$this->programTarget($daemon->name));
         $configPath = $daemon->config_path ?? '/etc/supervisor/conf.d/'.$daemon->name.'.conf';
         $ssh->run('sudo rm -f '.escapeshellarg($configPath));
         $ssh->run('sudo supervisorctl reread && sudo supervisorctl update')->throw();
@@ -132,6 +131,14 @@ class SupervisorService
             resource: $server,
             beforeState: $beforeState,
         );
+    }
+
+    public function syncStatus(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
+    {
+        $result = $ssh->run('sudo supervisorctl status '.$this->programTarget($daemon->name));
+        $daemon->forceFill(['status' => $this->parseStatus($result)])->save();
+
+        return $daemon->refresh();
     }
 
     private function installConfig(
@@ -154,15 +161,25 @@ class SupervisorService
         ))->throw();
     }
 
+    private function programTarget(string $name): string
+    {
+        return escapeshellarg($name.':*');
+    }
+
     private function parseStatus(SSHResult $result): DaemonStatus
     {
-        $output = $result->stdout.$result->stderr;
+        $output = $result->stdout."\n".$result->stderr;
 
-        if (str_contains($output, 'RUNNING')) {
+        if (str_contains($output, 'RUNNING') || str_contains($output, 'already started')) {
             return DaemonStatus::RUNNING;
         }
 
-        if (str_contains($output, 'FATAL') || str_contains($output, 'BACKOFF') || str_contains($output, 'ERROR')) {
+        if (
+            str_contains($output, 'FATAL')
+            || str_contains($output, 'BACKOFF')
+            || str_contains($output, 'EXITED')
+            || preg_match('/\bERROR\b/', $output) === 1
+        ) {
             return DaemonStatus::ERROR;
         }
 

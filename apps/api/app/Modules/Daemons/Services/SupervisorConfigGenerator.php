@@ -16,13 +16,16 @@ class SupervisorConfigGenerator
 
         return implode("\n", [
             '[program:'.$daemon->name.']',
+            'process_name=%(program_name)s_%(process_num)02d',
             'command='.$daemon->command,
             'directory='.$directory,
             'user='.$daemon->user,
             'numprocs='.$daemon->processes,
             'autostart=true',
             'autorestart=true',
+            'startsecs=1',
             'startretries=3',
+            'stopwaitsecs=3600',
             'redirect_stderr=true',
             'stdout_logfile=/var/log/supervisor/'.$daemon->name.'.log',
             'stdout_logfile_maxbytes=5MB',
