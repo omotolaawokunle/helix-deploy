@@ -81,13 +81,15 @@ it('create release directory creates release record and mkdir', function (): voi
     [, $server, $site, $deployment] = executionFixture();
     $ssh = fakeSsh();
     queueSshResponses($ssh, [
-        'mkdir -p *' => [sshSuccess(), sshSuccess()],
+        'sudo mkdir -p *' => [sshSuccess(), sshSuccess()],
+        'sudo chown -R *' => sshSuccess(),
     ]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     (new CreateReleaseDirectoryStep())->run($ctx);
 
-    $ssh->assertCommandExecuted('mkdir -p */releases/*');
+    $ssh->assertCommandExecuted('sudo mkdir -p */releases/*');
+    $ssh->assertCommandExecuted('sudo chown -R *');
     expect(Release::query()->where('deployment_id', $deployment->getKey())->exists())->toBeTrue();
 });
 

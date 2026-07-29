@@ -17,8 +17,16 @@ final class CreateReleaseDirectoryStep extends BaseDeploymentStep
 
     public function run(DeploymentContext $ctx): void
     {
-        $this->runCommand($ctx, 'mkdir -p '.$this->shellQuote($ctx->releasePath));
-        $this->runCommand($ctx, 'mkdir -p '.$this->shellQuote($ctx->sharedPath));
+        $owner = $this->webrootOwner($ctx);
+
+        $this->runCommand($ctx, 'sudo mkdir -p '.$this->shellQuote($ctx->releasePath));
+        $this->runCommand($ctx, 'sudo mkdir -p '.$this->shellQuote($ctx->sharedPath));
+        $this->runCommand($ctx, sprintf(
+            'sudo chown -R %s %s %s',
+            $this->shellQuote($owner.':www-data'),
+            $this->shellQuote($ctx->releasePath),
+            $this->shellQuote($ctx->sharedPath),
+        ));
 
         Release::query()->create([
             'site_id' => (string) $ctx->site->getKey(),
@@ -35,10 +43,17 @@ final class CreateReleaseDirectoryStep extends BaseDeploymentStep
 
     public function rollback(DeploymentContext $ctx): void
     {
-        $this->runCommand($ctx, 'rm -rf '.$this->shellQuote($ctx->releasePath));
+        $this->runCommand($ctx, 'sudo rm -rf '.$this->shellQuote($ctx->releasePath));
         Release::query()
             ->where('deployment_id', (string) $ctx->deployment->getKey())
             ->where('path', $ctx->releasePath)
             ->delete();
+    }
+
+    private function webrootOwner(DeploymentContext $ctx): string
+    {
+        $sshUser = trim((string) $ctx->server->ssh_user);
+
+        return $sshUser !== '' ? $sshUser : 'deploy';
     }
 }

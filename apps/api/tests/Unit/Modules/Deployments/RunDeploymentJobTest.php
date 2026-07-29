@@ -148,11 +148,13 @@ it('leaves later steps pending and skips symlink when a step fails', function ()
     $fake = (new FakeSSHConnection())->connect();
     $fake->addSequence('echo "_ok_"', sshSuccess('_ok_'));
     $fake->addSequence('df -h / | awk *', sshSuccess('10G'));
-    $fake->addSequence('mkdir -p *', sshSuccess(), sshSuccess());
+    $fake->addSequence('sudo mkdir -p *', sshSuccess(), sshSuccess());
+    $fake->addSequence('sudo chown -R *', sshSuccess());
     $fake->addSequence('git clone *', sshSuccess());
     $fake->addSequence('git -C * rev-parse HEAD', sshSuccess('deadbeef'));
     $fake->addSequence('git -C * log -1 *', sshSuccess('Deploy commit'));
     $fake->addSequence('*composer install*', sshFailure('composer failed'));
+    $fake->addSequence('sudo rm -rf *', sshSuccess());
     $fake->addSequence('rm -rf *', sshSuccess(), sshSuccess(), sshSuccess());
 
     $this->mock(SSHManager::class, function ($mock) use ($fake): void {
@@ -257,7 +259,8 @@ function stubDeploymentSsh(string $domain, string $deploymentId): FakeSSHConnect
     $responses = [
         'echo "_ok_"' => sshSuccess('_ok_'),
         'df -h / | awk *' => sshSuccess('10G'),
-        'mkdir -p *' => [$success(), $success()],
+        'sudo mkdir -p *' => [$success(), $success()],
+        'sudo chown -R *' => $success(),
         'git clone *' => $success(),
         'git -C * rev-parse HEAD' => sshSuccess('deadbeef'),
         'git -C * log -1 *' => sshSuccess('Deploy commit'),
@@ -266,6 +269,7 @@ function stubDeploymentSsh(string $domain, string $deploymentId): FakeSSHConnect
         'chmod 640 *' => $success(),
         'chown deploy:www-data *' => $success(),
         'ln -sfn *' => [$success(), $success(), $success()],
+        'sudo rm -rf *' => [$success(), $success(), $success()],
         'rm -rf *' => [$success(), $success(), $success()],
         '*php artisan config:cache*' => $success(),
         '*php artisan route:cache*' => $success(),
