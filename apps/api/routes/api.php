@@ -45,7 +45,12 @@ use App\Modules\Sites\Controllers\SiteDatabaseController;
 use App\Modules\Sites\Controllers\SiteLogController;
 use App\Modules\Sites\Controllers\SiteSslController;
 use App\Modules\BuildRunners\Controllers\BuildRunnerController;
+use App\Modules\Deployments\Controllers\DeployWebhookController;
 use Illuminate\Support\Facades\Route;
+
+Route::post('/v1/hooks/sites/{webhookToken}', [DeployWebhookController::class, 'store'])
+    ->middleware('throttle:120,1')
+    ->name('hooks.sites.deploy');
 
 Route::prefix('v1/auth')->middleware('web')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register']);
@@ -167,6 +172,7 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::post('/servers/{server}/sites', [SiteController::class, 'store']);
     Route::get('/sites/{site}', [SiteController::class, 'show']);
     Route::patch('/sites/{site}', [SiteController::class, 'update']);
+    Route::post('/sites/{site}/webhook-secret/rotate', [SiteController::class, 'rotateWebhookSecret']);
     Route::delete('/sites/{site}', [SiteController::class, 'destroy']);
     Route::post('/sites/{site}/dns/retry', [SiteDnsController::class, 'retry']);
     Route::post('/sites/{site}/ssl/retry', [SiteSslController::class, 'retry']);

@@ -42,7 +42,7 @@ class RunBuildJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
     public function __construct(
         public readonly string $deploymentId,
-        public readonly string $actorId,
+        public readonly ?string $actorId,
     ) {
         $this->onQueue('builds');
         $this->timeout = (int) config('helixdeploy.build_timeout_minutes', 30) * 60;
@@ -98,7 +98,9 @@ class RunBuildJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
             return;
         }
 
-        Auth::loginUsingId($this->actorId);
+        if ($this->actorId !== null) {
+            Auth::loginUsingId($this->actorId);
+        }
 
         $beforeState = $this->deploymentAuditState($deployment);
 

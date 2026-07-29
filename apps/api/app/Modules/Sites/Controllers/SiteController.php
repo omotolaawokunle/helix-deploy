@@ -9,6 +9,8 @@ use App\Modules\Organizations\Models\Organization;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Actions\CreateSiteAction;
 use App\Modules\Sites\Actions\DeleteSiteAction;
+use App\Modules\Sites\Actions\RotateSiteWebhookSecretAction;
+use App\Modules\Sites\Actions\UpdateSiteAutoDeployAction;
 use App\Modules\Sites\Events\SiteProvisioningStarted;
 use App\Modules\Sites\Jobs\CreateSiteJob;
 use App\Modules\Sites\Models\Site;
@@ -104,12 +106,31 @@ class SiteController extends Controller
         return SiteResource::make($siteModel);
     }
 
-    public function update(string $site, UpdateSiteRequest $request): SiteResource
-    {
+    public function update(
+        string $site,
+        UpdateSiteRequest $request,
+        UpdateSiteAutoDeployAction $updateSiteAutoDeployAction,
+    ): SiteResource {
         $siteModel = $this->resolveSite($site);
         $this->authorize('update', $siteModel);
 
         $validated = $request->validated();
+        $revealedWebhookSecret = null;
+
+        if (array_key_exists('autoDeployEnabled', $validated)) {
+            try {
+                $result = $updateSiteAutoDeployAction->execute(
+                    site: $siteModel,
+                    actor: $request->user() ?? abort(401),
+                    enabled: (bool) $validated['autoDeployEnabled'],
+                );
+            } catch (\InvalidArgumentException $exception) {
+                abort(422, $exception->getMessage());
+            }
+
+            $siteModel = $result->site;
+            $revealedWebhookSecret = $result->revealedWebhookSecret;
+        }
 
         if (array_key_exists('deployBranch', $validated)) {
             $siteModel->deploy_branch = (string) $validated['deployBranch'];
@@ -167,7 +188,38 @@ class SiteController extends Controller
 
         $siteModel->save();
 
-        return SiteResource::make($siteModel->refresh());
+        $resource = SiteResource::make($siteModel->refresh());
+
+        if ($revealedWebhookSecret !== null) {
+            return $resource->additional(['webhookSecret' => $revealedWebhookSecret]);
+        }
+
+        return $resource;
+    }
+
+    public function rotateWebhookSecret(
+        string $site,
+        Request $request,
+        RotateSiteWebhookSecretAction $rotateSiteWebhookSecretAction,
+    ): JsonResponse {
+        $siteModel = $this->resolveSite($site);
+        $this->authorize('update', $siteModel);
+
+        $actor = $request->user();
+        abort_unless($actor !== null, 401);
+
+        try {
+            $secret = $rotateSiteWebhookSecretAction->execute($siteModel, $actor);
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => [
+                'webhookSecret' => $secret,
+                'webhookUrl' => SiteResource::make($siteModel->refresh())->toArray($request)['webhookUrl'] ?? null,
+            ],
+        ]);
     }
 
     public function destroy(string $site, Request $request, DeleteSiteAction $deleteSiteAction): JsonResponse

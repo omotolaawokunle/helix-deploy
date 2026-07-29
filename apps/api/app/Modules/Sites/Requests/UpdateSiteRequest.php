@@ -45,6 +45,7 @@ final class UpdateSiteRequest extends FormRequest
             'pipelineId' => ['sometimes', 'nullable', 'uuid'],
             'repositoryUrl' => ['sometimes', 'nullable', 'string', 'max:2048', 'url'],
             'repositoryProvider' => ['sometimes', 'nullable', 'string', Rule::enum(GitProvider::class)],
+            'autoDeployEnabled' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -27,7 +27,7 @@ class PipelineStageOrchestrator
     ) {
     }
 
-    public function run(PipelineRun $run, string $actorId, int $startStepIndex = 0): void
+    public function run(PipelineRun $run, ?string $actorId, int $startStepIndex = 0): void
     {
         $run = PipelineRun::query()
             ->withoutGlobalScope('owned_by_organization')

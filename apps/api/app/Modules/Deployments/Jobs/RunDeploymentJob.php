@@ -38,7 +38,7 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
     public function __construct(
         public readonly string $deploymentId,
-        public readonly string $actorId,
+        public readonly ?string $actorId,
     ) {
         $this->onQueue('deployments');
         $this->timeout = (int) config('helixdeploy.deployment_timeout_minutes', 30) * 60;
@@ -85,7 +85,9 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
         abort_if($server === null, 404, 'Deployment server not found.');
         abort_if($server->credential_id === null, 422, 'Server SSH credential is required for deployment.');
 
-        Auth::loginUsingId($this->actorId);
+        if ($this->actorId !== null) {
+            Auth::loginUsingId($this->actorId);
+        }
 
         $beforeState = $this->deploymentAuditState($deployment);
 

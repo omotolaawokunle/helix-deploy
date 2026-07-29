@@ -16,7 +16,8 @@
         "laravel/tinker": "^2.10.1",
         "phpseclib/phpseclib": "^3.0",
         "predis/predis": "^3.5",
-        "spatie/laravel-permission": "^7.4"
+        "spatie/laravel-permission": "^7.4",
+        "lectern/observability": "dev-main"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
@@ -94,6 +95,12 @@
             "php-http/discovery": true
         }
     },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/omotolaawokunle/observability"
+        }
+    ],
     "minimum-stability": "stable",
     "prefer-stable": true
 }

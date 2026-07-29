@@ -56,6 +56,10 @@ use App\Modules\Sites\Models\GitProviderIntegration;
 use App\Modules\Sites\Policies\GitProviderPolicy;
 use App\Modules\Teams\Contracts\TeamProjectVisibilityServiceInterface;
 use App\Modules\Teams\Services\TeamProjectVisibilityService;
+use App\Modules\Deployments\Services\Webhook\BitbucketWebhookParser;
+use App\Modules\Deployments\Services\Webhook\GitHubWebhookParser;
+use App\Modules\Deployments\Services\Webhook\GitLabWebhookParser;
+use App\Modules\Deployments\Services\Webhook\WebhookSignatureVerifier;
 use App\Modules\BuildRunners\Contracts\RunnerSlotStoreInterface;
 use App\Modules\BuildRunners\Services\RedisRunnerSlotStore;
 use App\Packages\Realtime\DeploymentStreamPublisher;
@@ -81,6 +85,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ServerMetricsCollectorInterface::class, ServerMetricsCollector::class);
         $this->app->singleton(RemoteLogReaderInterface::class, RemoteLogReader::class);
         $this->app->singleton(ReadOnlyDatabaseClientInterface::class, ReadOnlyDatabaseClient::class);
+        $this->app->singleton(WebhookSignatureVerifier::class, function (): WebhookSignatureVerifier {
+            return new WebhookSignatureVerifier([
+                new GitHubWebhookParser(),
+                new GitLabWebhookParser(),
+                new BitbucketWebhookParser(),
+            ]);
+        });
         $this->app->singleton(RunnerSlotStoreInterface::class, RedisRunnerSlotStore::class);
         $this->app->singleton(CloudflareClientInterface::class, CloudflareClient::class);
         $this->app->singleton(DigitalOceanDnsClient::class);

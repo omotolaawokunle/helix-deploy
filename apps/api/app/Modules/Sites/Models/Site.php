@@ -63,6 +63,10 @@ class Site extends Model
         'repository_url',
         'repository_provider',
         'deploy_branch',
+        'auto_deploy_enabled',
+        'webhook_token',
+        'webhook_secret_encrypted',
+        'webhook_secret_nonce',
         'build_strategy',
         'build_runner_id',
         'pre_build_script',
@@ -98,6 +102,11 @@ class Site extends Model
         'ssl_checked_at',
     ];
 
+    protected $hidden = [
+        'webhook_secret_encrypted',
+        'webhook_secret_nonce',
+    ];
+
     /**
      * @return array<string, string>
      */
@@ -114,6 +123,7 @@ class Site extends Model
             'aliases' => 'array',
             'dns_record_ids' => 'array',
             'run_migrations' => 'boolean',
+            'auto_deploy_enabled' => 'boolean',
             'auto_create_dns' => 'boolean',
             'is_apex' => 'boolean',
             'enable_ssl' => 'boolean',
@@ -175,5 +185,17 @@ class Site extends Model
     public function projectDnsZone(): BelongsTo
     {
         return $this->belongsTo(ProjectDnsZone::class, 'project_dns_zone_id');
+    }
+
+    public function canAutoDeploy(): bool
+    {
+        return $this->deploy_mode === DeployMode::GIT;
+    }
+
+    public function hasWebhookCredentials(): bool
+    {
+        return $this->webhook_token !== null
+            && $this->webhook_secret_encrypted !== null
+            && $this->webhook_secret_nonce !== null;
     }
 }

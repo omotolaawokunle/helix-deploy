@@ -9,6 +9,7 @@ use App\Modules\Deployments\Actions\CancelDeploymentAction;
 use App\Modules\Deployments\Actions\RollbackDeploymentAction;
 use App\Modules\Deployments\Actions\TriggerDeploymentAction;
 use App\Modules\Deployments\DTOs\TriggerDeploymentDTO;
+use App\Modules\Deployments\Enums\TriggerType;
 use App\Modules\Deployments\Exceptions\ConcurrentDeploymentException;
 use App\Modules\Deployments\Exceptions\NoBuildRunnerAvailableException;
 use App\Modules\Deployments\Exceptions\ObserveModeServerException;
@@ -44,7 +45,10 @@ class DeploymentController extends Controller
             $deployment = $triggerDeploymentAction->execute(
                 site: $siteModel,
                 actor: $actor,
-                dto: new TriggerDeploymentDTO(branch: $request->branch()),
+                dto: new TriggerDeploymentDTO(
+                    branch: $request->branch(),
+                    triggerType: TriggerType::MANUAL,
+                ),
             );
         } catch (ConcurrentDeploymentException $exception) {
             return response()->json(['message' => $exception->getMessage()], 409);

@@ -52,9 +52,9 @@ export enum DeploymentType {
 
 export enum TriggerType {
   Manual = 'manual',
-  Push = 'push',
-  Schedule = 'schedule',
   Webhook = 'webhook',
+  Api = 'api',
+  Pipeline = 'pipeline',
 }
 
 export enum CredentialType {
@@ -218,6 +218,9 @@ export interface Site {
   repositoryProvider: GitProviderType | null
   gitCredentialConfigured: boolean
   deployBranch: string
+  autoDeployEnabled: boolean
+  webhookUrl: string | null
+  hasWebhookSecret: boolean
   preDeployScript: string | null
   postDeployScript: string | null
   preBuildScript: string | null

@@ -54,7 +54,7 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => array_merge(explode(',', (string) env('LOG_STACK', 'single')), ['lectern-loki']),
             'ignore_exceptions' => false,
         ],
 
@@ -125,6 +125,11 @@ return [
 
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
+        ],
+
+        'lectern-loki' => [
+            'driver' => 'lectern-loki',
+            'level' => env('LOG_LEVEL', 'debug'),
         ],
 
     ],

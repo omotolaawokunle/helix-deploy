@@ -13,6 +13,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Lectern\Observability\Http\Middleware\RecordRequestMetrics;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -35,6 +36,14 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->api(prepend: [
             AttachRequestId::class,
+        ]);
+
+        $middleware->web(append: [
+            RecordRequestMetrics::class,
+        ]);
+
+        $middleware->api(append: [
+            RecordRequestMetrics::class,
         ]);
 
         $middleware->alias([
