@@ -65,7 +65,49 @@ it('queues queue worker daemon and scheduler cron for a php site', function (): 
     });
 });
 
-it('returns 409 when daemon already exists', function (): void {
+it('returns 409 when daemon and scheduler cron already exist', function (): void {
+    Queue::fake();
+
+    [$site, $owner] = laravelWorkersEndpointFixture();
+
+    SupervisorProcess::query()->withoutGlobalScope('owned_by_organization')->create([
+        'server_id' => (string) $site->server_id,
+        'organization_id' => (string) $site->organization_id,
+        'name' => 'example-test-horizon',
+        'command' => 'php artisan horizon',
+        'directory' => '/var/www/example.test/current',
+        'user' => 'www-data',
+        'processes' => 1,
+        'status' => 'running',
+        'config_path' => '/etc/supervisor/conf.d/example-test-horizon.conf',
+        'created_by' => (string) $owner->getKey(),
+    ]);
+
+    CronJob::query()->create([
+        'server_id' => (string) $site->server_id,
+        'organization_id' => (string) $site->organization_id,
+        'expression' => '* * * * *',
+        'command' => 'cd /var/www/example.test/current && php artisan schedule:run >> /dev/null 2>&1',
+        'user' => 'www-data',
+        'active' => true,
+        'created_by' => (string) $owner->getKey(),
+    ]);
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/sites/{$site->id}/laravel-workers", [
+            'workerType' => 'horizon',
+        ])
+        ->assertStatus(409)
+        ->assertJsonPath(
+            'message',
+            'Laravel workers are already configured (daemon [example-test-horizon] and scheduler cron). Check the server Daemons and Cron tabs.',
+        );
+
+    Queue::assertPushed(SyncCronJobsJob::class);
+    Queue::assertNotPushed(RunDaemonOperationJob::class);
+});
+
+it('creates missing scheduler cron when daemon already exists', function (): void {
     Queue::fake();
 
     [$site, $owner] = laravelWorkersEndpointFixture();
@@ -87,13 +129,16 @@ it('returns 409 when daemon already exists', function (): void {
         ->postJson("/api/v1/sites/{$site->id}/laravel-workers", [
             'workerType' => 'horizon',
         ])
-        ->assertStatus(409)
-        ->assertJsonPath('message', 'A daemon named [example-test-horizon] already exists on this server.');
+        ->assertAccepted();
 
-    Queue::assertNothingPushed();
+    Queue::assertNotPushed(RunDaemonOperationJob::class);
+    Queue::assertPushed(SyncCronJobsJob::class);
+
+    expect(CronJob::query()->where('command', 'cd /var/www/example.test/current && php artisan schedule:run >> /dev/null 2>&1')->exists())
+        ->toBeTrue();
 });
 
-it('returns 409 when scheduler cron already exists', function (): void {
+it('creates missing daemon when scheduler cron already exists', function (): void {
     Queue::fake();
 
     [$site, $owner] = laravelWorkersEndpointFixture();
@@ -112,10 +157,15 @@ it('returns 409 when scheduler cron already exists', function (): void {
         ->postJson("/api/v1/sites/{$site->id}/laravel-workers", [
             'workerType' => 'horizon',
         ])
-        ->assertStatus(409)
-        ->assertJsonPath('message', 'A scheduler cron job for this site path already exists on this server.');
+        ->assertAccepted();
 
-    Queue::assertNothingPushed();
+    Queue::assertPushed(RunDaemonOperationJob::class, function (RunDaemonOperationJob $job): bool {
+        return $job->operation === 'create'
+            && $job->dto !== null
+            && $job->dto->name === 'example-test-horizon';
+    });
+
+    Queue::assertPushed(SyncCronJobsJob::class);
 });
 
 it('returns 422 for non php sites', function (): void {

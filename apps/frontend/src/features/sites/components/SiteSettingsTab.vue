@@ -45,6 +45,7 @@ import {
   updateSite,
 } from '@/features/sites/api'
 import type { LaravelWorkerType } from '@/features/sites/api'
+import { extractApiErrorMessage } from '@/lib/api-error'
 import {
   EXTERNAL_BUILD_STRATEGY_LABEL,
   EXTERNAL_BUILD_STRATEGY_V2_MESSAGE,
@@ -423,10 +424,12 @@ async function handleSetupLaravelWorkers(): Promise<void> {
     const response = await setupLaravelWorkers(props.site.id, workerType.value)
     isWorkersSetupOpen.value = false
     toast.success(response.message, {
-      description: 'Check the server Daemons and Cron tabs for status.',
+      description: 'Daemon → server Daemons tab. Scheduler → server Cron tab.',
     })
-  } catch {
-    toast.error('Unable to set up Laravel workers.')
+  } catch (error) {
+    toast.error(extractApiErrorMessage(error, 'Unable to set up Laravel workers.'), {
+      description: 'Daemons and cron jobs are listed on the server page, not together.',
+    })
   } finally {
     isSettingUpWorkers.value = false
   }

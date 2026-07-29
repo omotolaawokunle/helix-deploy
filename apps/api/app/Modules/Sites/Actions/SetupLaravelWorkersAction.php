@@ -7,14 +7,15 @@ namespace App\Modules\Sites\Actions;
 use App\Models\User;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\CronJobs\Contracts\CronJobCreatorInterface;
+use App\Modules\CronJobs\Jobs\SyncCronJobsJob;
 use App\Modules\Daemons\Contracts\DaemonCreatorInterface;
 use App\Modules\Daemons\DTOs\CreateDaemonDTO;
+use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Enums\LaravelWorkerType;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Exceptions\LaravelWorkersAlreadyConfiguredException;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Sites\Services\LaravelWorkerPresetBuilder;
-use App\Modules\Servers\Models\Server;
 
 final class SetupLaravelWorkersAction
 {
@@ -38,59 +39,72 @@ final class SetupLaravelWorkersAction
         }
 
         $preset = $this->presetBuilder->build($site, $workerType);
+        $serverId = (string) $server->getKey();
+        $organizationId = (string) $server->organization_id;
 
-        if ($this->daemonCreator->existsByName(
-            (string) $server->getKey(),
-            (string) $server->organization_id,
+        $daemonExists = $this->daemonCreator->existsByName(
+            $serverId,
+            $organizationId,
             $preset->daemonName,
-        )) {
-            throw new LaravelWorkersAlreadyConfiguredException(
-                siteId: (string) $site->getKey(),
-                reason: sprintf('A daemon named [%s] already exists on this server.', $preset->daemonName),
-            );
-        }
+        );
 
-        if ($this->cronJobCreator->existsByCommand(
-            (string) $server->getKey(),
-            (string) $server->organization_id,
+        $cronExists = $this->cronJobCreator->existsByCommand(
+            $serverId,
+            $organizationId,
             $preset->cronCommand,
-        )) {
+        );
+
+        if ($daemonExists && $cronExists) {
+            // Heal cases where the DB row exists but the on-server crontab sync failed.
+            SyncCronJobsJob::dispatch($serverId);
+
             throw new LaravelWorkersAlreadyConfiguredException(
                 siteId: (string) $site->getKey(),
-                reason: 'A scheduler cron job for this site path already exists on this server.',
+                reason: sprintf(
+                    'Laravel workers are already configured (daemon [%s] and scheduler cron). Check the server Daemons and Cron tabs.',
+                    $preset->daemonName,
+                ),
             );
         }
 
-        $this->daemonCreator->queueCreate(
-            serverId: (string) $server->getKey(),
-            actorId: (string) $actor->getKey(),
-            dto: new CreateDaemonDTO(
-                name: $preset->daemonName,
-                command: $preset->daemonCommand,
-                directory: $preset->daemonDirectory,
-                user: $preset->daemonUser,
-                processes: $preset->daemonProcesses,
-            ),
-        );
+        if (! $daemonExists) {
+            $this->daemonCreator->queueCreate(
+                serverId: $serverId,
+                actorId: (string) $actor->getKey(),
+                dto: new CreateDaemonDTO(
+                    name: $preset->daemonName,
+                    command: $preset->daemonCommand,
+                    directory: $preset->daemonDirectory,
+                    user: $preset->daemonUser,
+                    processes: $preset->daemonProcesses,
+                ),
+            );
+        }
 
-        $this->cronJobCreator->create(
-            server: $server,
-            actor: $actor,
-            expression: $preset->cronExpression,
-            command: $preset->cronCommand,
-            user: $preset->cronUser,
-            active: true,
-        );
+        if (! $cronExists) {
+            $this->cronJobCreator->create(
+                server: $server,
+                actor: $actor,
+                expression: $preset->cronExpression,
+                command: $preset->cronCommand,
+                user: $preset->cronUser,
+                active: true,
+            );
+        } else {
+            SyncCronJobsJob::dispatch($serverId);
+        }
 
         AuditLog::record(
             operation: 'site.laravel_workers_setup',
             resource: $site,
             afterState: [
                 'site_id' => (string) $site->getKey(),
-                'server_id' => (string) $server->getKey(),
+                'server_id' => $serverId,
                 'worker_type' => $workerType->value,
                 'daemon_name' => $preset->daemonName,
                 'cron_command' => $preset->cronCommand,
+                'daemon_created' => ! $daemonExists,
+                'cron_created' => ! $cronExists,
             ],
         );
     }
