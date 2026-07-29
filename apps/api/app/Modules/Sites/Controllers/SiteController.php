@@ -20,6 +20,8 @@ use App\Modules\Sites\Requests\ClaimSiteRequest;
 use App\Modules\Sites\Requests\StoreSiteRequest;
 use App\Modules\Sites\Requests\UpdateSiteRequest;
 use App\Modules\Sites\Resources\SiteResource;
+use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\GitProvider;
 use App\Modules\Sites\Services\GitProviderService;
 use App\Modules\Sites\Services\SiteTableFilterService;
@@ -120,6 +122,38 @@ class SiteController extends Controller
         $validated = $request->validated();
         $revealedWebhookSecret = null;
 
+        if (array_key_exists('deployBranch', $validated)) {
+            $siteModel->deploy_branch = (string) $validated['deployBranch'];
+        }
+
+        if (array_key_exists('repositoryUrl', $validated)) {
+            $siteModel->repository_url = $validated['repositoryUrl'];
+        }
+
+        if (array_key_exists('repositoryProvider', $validated)) {
+            $siteModel->repository_provider = $validated['repositoryProvider'];
+        }
+
+        if (array_key_exists('deployMode', $validated)) {
+            $siteModel->deploy_mode = DeployMode::from((string) $validated['deployMode']);
+
+            if ($siteModel->deploy_mode === DeployMode::GIT) {
+                $siteModel->docker_build_mode = null;
+            }
+        }
+
+        if (array_key_exists('dockerBuildMode', $validated)) {
+            $siteModel->docker_build_mode = $validated['dockerBuildMode'] !== null
+                ? DockerBuildMode::from((string) $validated['dockerBuildMode'])
+                : null;
+        } elseif (
+            array_key_exists('deployMode', $validated)
+            && $siteModel->deploy_mode === DeployMode::DOCKER
+            && $siteModel->docker_build_mode === null
+        ) {
+            $siteModel->docker_build_mode = DockerBuildMode::BUILD;
+        }
+
         if (array_key_exists('autoDeployEnabled', $validated)) {
             try {
                 $result = $updateSiteAutoDeployAction->execute(
@@ -133,10 +167,6 @@ class SiteController extends Controller
 
             $siteModel = $result->site;
             $revealedWebhookSecret = $result->revealedWebhookSecret;
-        }
-
-        if (array_key_exists('deployBranch', $validated)) {
-            $siteModel->deploy_branch = (string) $validated['deployBranch'];
         }
 
         if (array_key_exists('preDeployScript', $validated)) {
@@ -181,12 +211,11 @@ class SiteController extends Controller
             $siteModel->pipeline_id = $validated['pipelineId'];
         }
 
-        if (array_key_exists('repositoryUrl', $validated)) {
-            $siteModel->repository_url = $validated['repositoryUrl'];
-        }
-
-        if (array_key_exists('repositoryProvider', $validated)) {
-            $siteModel->repository_provider = $validated['repositoryProvider'];
+        if ((bool) $siteModel->auto_deploy_enabled && ! $siteModel->canAutoDeploy()) {
+            abort(
+                422,
+                'Disable auto deploy or configure a repository and deploy branch before using this deploy mode.',
+            );
         }
 
         $siteModel->save();

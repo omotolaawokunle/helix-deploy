@@ -39,7 +39,7 @@ import {
   EXTERNAL_BUILD_STRATEGY_V2_MESSAGE,
   SELECTABLE_SITE_BUILD_STRATEGY_OPTIONS,
 } from '@/features/sites/constants'
-import type { GitProviderType, Site, SiteBuildStrategy } from '@/types'
+import type { DockerBuildMode, GitProviderType, Site, SiteBuildStrategy, SiteDeployMode } from '@/types'
 
 interface Props {
   site: Site
@@ -84,6 +84,8 @@ const runMigrations = ref(false)
 const dockerImage = ref('')
 const dockerRegistry = ref('')
 const dockerComposePath = ref('')
+const deployMode = ref<SiteDeployMode>('git')
+const dockerBuildMode = ref<DockerBuildMode>('build')
 const isSaving = ref(false)
 const isDeleteDialogOpen = ref(false)
 const autoDeployEnabled = ref(false)
@@ -101,7 +103,22 @@ const providerOptions: Array<{ value: GitProviderType; label: string }> = [
 
 const isExternalBuildStrategy = computed(() => props.site.buildStrategy === 'external')
 
-const isGitSite = computed(() => props.site.repositoryUrl !== null && props.site.repositoryUrl !== '')
+const isAutoDeployEligible = computed((): boolean => {
+  const hasRepo = props.site.repositoryUrl !== null && props.site.repositoryUrl !== ''
+  const hasBranch = deployBranch.value.trim() !== ''
+
+  if (deployMode.value === 'git') {
+    return hasRepo
+  }
+
+  if (deployMode.value === 'docker' && dockerBuildMode.value === 'build') {
+    return hasRepo && hasBranch
+  }
+
+  return false
+})
+
+const isDockerRuntimeSite = computed(() => props.site.runtime === 'docker')
 
 const canEnableAutoDeploy = computed(() => {
   if (!autoDeployEnabled.value) {
@@ -166,6 +183,8 @@ watch(
     dockerImage.value = site.dockerImage ?? ''
     dockerRegistry.value = site.dockerRegistry ?? ''
     dockerComposePath.value = site.dockerComposePath ?? ''
+    deployMode.value = site.deployMode
+    dockerBuildMode.value = site.dockerBuildMode ?? 'build'
     pipelineId.value = site.pipelineId
     repositoryUrl.value = site.repositoryUrl ?? ''
     repositoryProvider.value = site.repositoryProvider ?? 'none'
@@ -381,6 +400,12 @@ async function handleSave(): Promise<void> {
       dockerImage: dockerImage.value || null,
       dockerRegistry: dockerRegistry.value || null,
       dockerComposePath: dockerComposePath.value || null,
+      ...(isDockerRuntimeSite.value
+        ? {
+            deployMode: deployMode.value,
+            dockerBuildMode: deployMode.value === 'docker' ? dockerBuildMode.value : null,
+          }
+        : {}),
       pipelineId: pipelineId.value,
       repositoryUrl: repositoryUrl.value || null,
       repositoryProvider: repositoryProvider.value === 'none' ? null : repositoryProvider.value,
@@ -586,7 +611,7 @@ async function handleDelete(): Promise<void> {
       </div>
 
       <div
-        v-if="isGitSite"
+        v-if="isAutoDeployEligible"
         class="space-y-4 border-t pt-6"
         data-testid="auto-deploy-section"
       >
@@ -833,6 +858,56 @@ async function handleDelete(): Promise<void> {
       <h2 class="section-label pt-4">
         Docker
       </h2>
+
+      <div
+        v-if="isDockerRuntimeSite"
+        class="grid gap-4 sm:grid-cols-2"
+        data-testid="deploy-mode-section"
+      >
+        <div class="space-y-2 sm:col-span-2">
+          <Label for="deploy-mode">Deploy mode</Label>
+          <Select
+            :model-value="deployMode"
+            @update:model-value="(value) => { deployMode = value as SiteDeployMode }"
+          >
+            <SelectTrigger id="deploy-mode" data-testid="deploy-mode-select">
+              <SelectValue placeholder="Select deploy mode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="git">
+                Git release
+              </SelectItem>
+              <SelectItem value="docker">
+                Docker
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-sm text-muted-foreground">
+            Imported Docker sites default to Docker deploy mode. Switch to Git release if this site uses a traditional release directory layout.
+          </p>
+        </div>
+
+        <div v-if="deployMode === 'docker'" class="space-y-2 sm:col-span-2">
+          <Label for="docker-build-mode">Docker build mode</Label>
+          <Select
+            :model-value="dockerBuildMode"
+            @update:model-value="(value) => { dockerBuildMode = value as DockerBuildMode }"
+          >
+            <SelectTrigger id="docker-build-mode" data-testid="docker-build-mode-select">
+              <SelectValue placeholder="Select build mode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="build">
+                Build from repository
+              </SelectItem>
+              <SelectItem value="pull">
+                Pull prebuilt image
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-2">
           <Label for="docker-image">Image</Label>

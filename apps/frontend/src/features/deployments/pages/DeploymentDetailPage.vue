@@ -39,6 +39,7 @@ const isSubmittingRollback = ref(false)
 const isCancelling = ref(false)
 const isApproving = ref(false)
 const isRejecting = ref(false)
+const hasHandledCompletion = ref(false)
 
 const deploymentId = computed(() => String(route.params.id))
 
@@ -82,8 +83,15 @@ const canApprove = computed(
     && authStore.isAdmin,
 )
 
-async function loadDeployment(): Promise<void> {
-  isLoading.value = true
+async function loadDeployment(options: { silent?: boolean } = {}): Promise<void> {
+  const silent = options.silent === true
+
+  // Full-page loading unmounts DeploymentLogViewer. That reconnects the SSE stream,
+  // which immediately re-emits deployment.completed for terminal deployments and loops.
+  if (!silent) {
+    isLoading.value = true
+  }
+
   loadError.value = null
 
   try {
@@ -95,7 +103,9 @@ async function loadDeployment(): Promise<void> {
   } catch {
     loadError.value = 'Unable to load deployment.'
   } finally {
-    isLoading.value = false
+    if (!silent) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -177,6 +187,19 @@ async function handleReject(): Promise<void> {
 }
 
 async function handleDeploymentCompleted(payload: DeploymentCompletedPayload): Promise<void> {
+  if (hasHandledCompletion.value) {
+    return
+  }
+
+  const alreadyTerminal = deployment.value !== null
+    && (
+      deployment.value.status === DeploymentStatus.Succeeded
+      || deployment.value.status === DeploymentStatus.Failed
+      || deployment.value.status === DeploymentStatus.Cancelled
+    )
+
+  hasHandledCompletion.value = true
+
   if (deployment.value !== null) {
     deployment.value = {
       ...deployment.value,
@@ -186,7 +209,11 @@ async function handleDeploymentCompleted(payload: DeploymentCompletedPayload): P
     }
   }
 
-  await loadDeployment()
+  if (alreadyTerminal) {
+    return
+  }
+
+  await loadDeployment({ silent: true })
 }
 
 onMounted(() => {

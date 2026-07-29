@@ -24,6 +24,13 @@ import type {
   DeploymentStepResource,
   DeploymentStepStatus,
 } from '@/features/deployments/types'
+import { DeploymentStatus } from '@/types'
+
+const TERMINAL_DEPLOYMENT_STATUSES = new Set<string>([
+  DeploymentStatus.Succeeded,
+  DeploymentStatus.Failed,
+  DeploymentStatus.Cancelled,
+])
 
 interface Props {
   deploymentId: string
@@ -53,6 +60,8 @@ const autoScrollEnabled = ref(props.autoScroll)
 const showJumpToLatest = ref(false)
 const activePhaseTab = ref<DeploymentStepPhase>('build')
 let scrollRafId: number | null = null
+let hasEmittedCompletion = false
+let openedAsTerminal = false
 
 function rebuildStepIndex(): void {
   stepIndexById.clear()
@@ -341,6 +350,7 @@ async function loadInitialSteps(): Promise<void> {
     const deployment = await fetchDeployment(props.deploymentId)
     steps.value = deployment.steps.map(mapApiStep)
     sortStepsInPlace()
+    openedAsTerminal = TERMINAL_DEPLOYMENT_STATUSES.has(deployment.status)
   } catch {
     loadError.value = 'Unable to load deployment logs.'
   } finally {
@@ -348,42 +358,59 @@ async function loadInitialSteps(): Promise<void> {
   }
 }
 
-useDeploymentStream(props.deploymentId, {
-  onLogLine: (stepId, line, timestamp) => {
-    queueLogLine({ stepId, line, timestamp })
-  },
-  onStepStarted: (stepId, name, order, status, phase) => {
-    upsertStep(stepId, {
-      name,
-      order,
-      status: status as DeploymentStepStatus,
-      phase: phase as DeploymentStepPhase,
-    })
+const { connect: connectDeploymentStream } = useDeploymentStream(
+  props.deploymentId,
+  {
+    onLogLine: (stepId, line, timestamp) => {
+      queueLogLine({ stepId, line, timestamp })
+    },
+    onStepStarted: (stepId, name, order, status, phase) => {
+      upsertStep(stepId, {
+        name,
+        order,
+        status: status as DeploymentStepStatus,
+        phase: phase as DeploymentStepPhase,
+      })
 
-    if (
-      phase === 'deploy'
-      && hasBuildPhase.value
-      && activePhaseTab.value === 'build'
-    ) {
-      activePhaseTab.value = 'deploy'
-    }
+      if (
+        phase === 'deploy'
+        && hasBuildPhase.value
+        && activePhaseTab.value === 'build'
+      ) {
+        activePhaseTab.value = 'deploy'
+      }
+    },
+    onStepUpdate: (stepId, status, duration) => {
+      upsertStep(stepId, {
+        status: status as DeploymentStepStatus,
+        duration,
+      })
+    },
+    onComplete: (payload) => {
+      if (hasEmittedCompletion) {
+        return
+      }
+
+      hasEmittedCompletion = true
+
+      // Already-terminal pages only need catch-up logs; notifying the parent would
+      // re-fetch and (previously) remount this viewer into an SSE reconnect loop.
+      if (openedAsTerminal) {
+        return
+      }
+
+      emit('completed', payload)
+    },
+    onApprovalRequired: (payload) => {
+      emit('approval-required', payload)
+    },
   },
-  onStepUpdate: (stepId, status, duration) => {
-    upsertStep(stepId, {
-      status: status as DeploymentStepStatus,
-      duration,
-    })
-  },
-  onComplete: (payload) => {
-    emit('completed', payload)
-  },
-  onApprovalRequired: (payload) => {
-    emit('approval-required', payload)
-  },
-})
+  { immediate: false },
+)
 
 onMounted(async () => {
   await loadInitialSteps()
+  connectDeploymentStream({ reconnect: !openedAsTerminal })
   await scrollToBottom()
 })
 </script>

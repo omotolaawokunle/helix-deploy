@@ -8,6 +8,9 @@ import { DeploymentStatus } from '@/types'
 const fetchDeploymentMock = vi.fn()
 const rollbackDeploymentMock = vi.fn()
 const cancelDeploymentMock = vi.fn()
+const logViewerControls = vi.hoisted(() => ({
+  emitCompletedOnMount: false,
+}))
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: 'dep-1' }, query: {} }),
@@ -39,6 +42,17 @@ vi.mock('@/features/deployments/components/DeploymentLogViewer.vue', () => ({
   default: {
     name: 'DeploymentLogViewer',
     props: ['deploymentId'],
+    emits: ['completed', 'approval-required'],
+    mounted() {
+      if (logViewerControls.emitCompletedOnMount) {
+        this.$emit('completed', {
+          status: 'success',
+          duration: 12,
+          releaseId: 'rel-1',
+          commitHash: 'abcdef1234567890',
+        })
+      }
+    },
     template: '<div data-testid="deployment-log-viewer-stub" />',
   },
 }))
@@ -83,6 +97,7 @@ describe('DeploymentDetailPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    logViewerControls.emitCompletedOnMount = false
     fetchDeploymentMock.mockResolvedValue(buildDeployment())
   })
 
@@ -174,5 +189,53 @@ describe('DeploymentDetailPage', () => {
     await flushPromises()
 
     expect(submitButton.disabled).toBe(false)
+  })
+
+  it('refreshes quietly on stream completion without remounting the page shell', async () => {
+    logViewerControls.emitCompletedOnMount = true
+
+    let resolveSecondFetch: ((value: DeploymentDetail) => void) | undefined
+    const secondFetch = new Promise<DeploymentDetail>((resolve) => {
+      resolveSecondFetch = resolve
+    })
+
+    fetchDeploymentMock
+      .mockResolvedValueOnce(buildDeployment({ status: DeploymentStatus.Running, isRollbackable: false }))
+      .mockImplementationOnce(() => secondFetch)
+
+    const wrapper = mount(DeploymentDetailPage, {
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(fetchDeploymentMock).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="deployment-log-viewer-stub"]').exists()).toBe(true)
+    expect(wrapper.find('.page-title').exists()).toBe(true)
+
+    resolveSecondFetch?.(buildDeployment({ status: DeploymentStatus.Failed }))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="deployment-log-viewer-stub"]').exists()).toBe(true)
+    expect(wrapper.find('.page-title').exists()).toBe(true)
+    expect(fetchDeploymentMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not refetch when stream completion arrives for an already-failed deployment', async () => {
+    logViewerControls.emitCompletedOnMount = true
+    fetchDeploymentMock.mockResolvedValue(buildDeployment({
+      status: DeploymentStatus.Failed,
+      isRollbackable: false,
+    }))
+
+    const wrapper = mount(DeploymentDetailPage, {
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(fetchDeploymentMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="deployment-log-viewer-stub"]').exists()).toBe(true)
+    expect(wrapper.find('.page-title').exists()).toBe(true)
   })
 })

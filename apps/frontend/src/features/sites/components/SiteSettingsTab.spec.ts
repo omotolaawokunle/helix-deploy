@@ -66,6 +66,8 @@ function createSite(overrides: Partial<Site> = {}): Site {
     dockerImage: null,
     dockerRegistry: null,
     dockerComposePath: null,
+    deployMode: 'git',
+    dockerBuildMode: null,
     pipelineId: null,
     runtime: Runtime.Native,
     status: 'active',
@@ -109,6 +111,67 @@ describe('SiteSettingsTab auto deploy', () => {
     await flushPromises()
 
     expect(document.body.querySelector('[data-testid="auto-deploy-section"]')).not.toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('shows auto deploy section for docker build sites with repository', async () => {
+    const wrapper = mount(SiteSettingsTab, {
+      props: {
+        site: createSite({
+          deployMode: 'docker',
+          dockerBuildMode: 'build',
+          runtime: Runtime.Docker,
+        }),
+        isProduction: false,
+      },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="auto-deploy-section"]')).not.toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('shows deploy mode controls for docker runtime sites', async () => {
+    const wrapper = mount(SiteSettingsTab, {
+      props: {
+        site: createSite({
+          deployMode: 'git',
+          dockerBuildMode: null,
+          runtime: Runtime.Docker,
+        }),
+        isProduction: false,
+      },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="deploy-mode-section"]')).not.toBeNull()
+    expect(document.body.querySelector('[data-testid="deploy-mode-select"]')).not.toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('hides auto deploy section for docker pull sites', async () => {
+    const wrapper = mount(SiteSettingsTab, {
+      props: {
+        site: createSite({
+          deployMode: 'docker',
+          dockerBuildMode: 'pull',
+          runtime: Runtime.Docker,
+        }),
+        isProduction: false,
+      },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="auto-deploy-section"]')).toBeNull()
 
     wrapper.unmount()
   })

@@ -189,7 +189,16 @@ class Site extends Model
 
     public function canAutoDeploy(): bool
     {
-        return $this->deploy_mode === DeployMode::GIT;
+        if ($this->deploy_mode === DeployMode::GIT) {
+            return true;
+        }
+
+        if ($this->deploy_mode !== DeployMode::DOCKER || $this->docker_build_mode !== DockerBuildMode::BUILD) {
+            return false;
+        }
+
+        return ($this->repository_url !== null && $this->repository_url !== '')
+            && ($this->deploy_branch !== null && $this->deploy_branch !== '');
     }
 
     public function hasWebhookCredentials(): bool

@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Sites\DTOs\UpdateSiteAutoDeployResult;
-use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Sites\Services\SiteWebhookSecretService;
 use InvalidArgumentException;
@@ -22,8 +21,10 @@ final class UpdateSiteAutoDeployAction
 
     public function execute(Site $site, User $actor, bool $enabled): UpdateSiteAutoDeployResult
     {
-        if ($site->deploy_mode !== DeployMode::GIT) {
-            throw new InvalidArgumentException('Auto deploy is only available for git deploy mode sites.');
+        if ($enabled && ! $site->canAutoDeploy()) {
+            throw new InvalidArgumentException(
+                'Auto deploy requires git deploy mode, or docker build mode with a repository URL and deploy branch.',
+            );
         }
 
         $organization = $site->organization;

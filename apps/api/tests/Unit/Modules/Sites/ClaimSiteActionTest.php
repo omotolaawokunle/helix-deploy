@@ -9,6 +9,7 @@ use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Actions\ClaimSiteAction;
 use App\Modules\Sites\DTOs\ClaimSiteDTO;
 use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Enums\SiteStatus;
 use App\Modules\Sites\Models\Site;
@@ -62,6 +63,28 @@ it('returns revealed webhook secret when auto deploy is enabled during claim', f
         ->and($result->revealedWebhookSecret)->not->toBe('');
 });
 
+it('enables auto deploy when claiming a docker build mode discovered site', function (): void {
+    [$site, $owner] = claimSiteActionFixture(
+        deployMode: DeployMode::DOCKER,
+        dockerBuildMode: DockerBuildMode::BUILD,
+    );
+
+    $result = app(ClaimSiteAction::class)->execute(
+        site: $site,
+        actor: $owner,
+        dto: new ClaimSiteDTO(
+            repositoryUrl: 'https://github.com/helix/example.git',
+            repositoryProvider: 'github',
+            deployBranch: 'main',
+            autoDeployEnabled: true,
+        ),
+    );
+
+    expect($result->site->status)->toBe(SiteStatus::ACTIVE)
+        ->and($result->site->auto_deploy_enabled)->toBeTrue()
+        ->and($result->revealedWebhookSecret)->not->toBeNull();
+});
+
 it('throws when claiming a site that is not discovered', function (): void {
     [$site, $owner] = claimSiteActionFixture(status: SiteStatus::ACTIVE);
 
@@ -80,8 +103,11 @@ it('throws when claiming a site that is not discovered', function (): void {
 /**
  * @return array{0: Site, 1: User}
  */
-function claimSiteActionFixture(SiteStatus $status = SiteStatus::DISCOVERED): array
-{
+function claimSiteActionFixture(
+    SiteStatus $status = SiteStatus::DISCOVERED,
+    DeployMode $deployMode = DeployMode::GIT,
+    ?DockerBuildMode $dockerBuildMode = null,
+): array {
     $organization = Organization::query()->create([
         'name' => 'Claim Site Action Org',
         'slug' => 'claim-site-action-'.Str::random(6),
@@ -116,8 +142,9 @@ function claimSiteActionFixture(SiteStatus $status = SiteStatus::DISCOVERED): ar
         'domain' => 'discovered-claim.example.test',
         'aliases' => [],
         'webroot' => '/var/www/discovered-claim.example.test/public',
-        'runtime' => Runtime::PHP,
-        'deploy_mode' => DeployMode::GIT,
+        'runtime' => $deployMode === DeployMode::DOCKER ? Runtime::DOCKER : Runtime::PHP,
+        'deploy_mode' => $deployMode,
+        'docker_build_mode' => $dockerBuildMode?->value,
         'deploy_branch' => 'main',
         'run_migrations' => false,
         'status' => $status,

@@ -29,6 +29,10 @@ final class ProcessDeployWebhookAction
             throw new WebhookIgnoredException('Auto deploy is disabled for this site.');
         }
 
+        if (! $site->canAutoDeploy()) {
+            throw new WebhookIgnoredException('Site is not eligible for auto deploy.');
+        }
+
         if (! $payload->isPushEvent()) {
             throw new WebhookIgnoredException('Webhook event is not a push.');
         }

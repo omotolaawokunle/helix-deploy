@@ -33,6 +33,10 @@ export enum DeployMode {
 
 export type SiteBuildStrategy = 'on_server' | 'runner' | 'external' // external: API-only in v1 UI
 
+export type SiteDeployMode = 'git' | 'docker'
+
+export type DockerBuildMode = 'build' | 'pull'
+
 export enum DeploymentStatus {
   Pending = 'pending',
   Building = 'building',
@@ -230,6 +234,8 @@ export interface Site {
   dockerImage: string | null
   dockerRegistry: string | null
   dockerComposePath: string | null
+  deployMode: SiteDeployMode
+  dockerBuildMode: DockerBuildMode | null
   pipelineId: string | null
   runtime: Runtime
   status: string

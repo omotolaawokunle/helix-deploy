@@ -22,7 +22,10 @@ vi.mock('@/features/deployments/composables/useDeploymentStream', () => ({
   ) => {
     streamSetup(deploymentId, callbacks)
 
-    return { teardown: vi.fn() }
+    return {
+      connect: vi.fn(),
+      teardown: vi.fn(),
+    }
   },
 }))
 

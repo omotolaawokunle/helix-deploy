@@ -14,6 +14,8 @@ class MockEventSource {
 
   closed = false
 
+  onerror: ((event?: Event) => void) | null = null
+
   constructor(url: string, options?: { withCredentials?: boolean }) {
     this.url = url
     this.withCredentials = options?.withCredentials ?? false
@@ -113,6 +115,113 @@ describe('useDeploymentStream', () => {
 
     expect(onComplete).toHaveBeenCalledWith(payload)
     expect(source.closed).toBe(true)
+  })
+
+  it('ignores duplicate terminal events after the stream has completed', async () => {
+    const onComplete = vi.fn()
+
+    mount(defineComponent({
+      setup() {
+        useDeploymentStream('dep-4', {
+          onLogLine: vi.fn(),
+          onStepUpdate: vi.fn(),
+          onStepStarted: vi.fn(),
+          onComplete,
+          onApprovalRequired: vi.fn(),
+        })
+      },
+      template: '<div />',
+    }))
+
+    await flushPromises()
+
+    const source = MockEventSource.instances[0]
+    const payload = {
+      status: 'failed',
+      duration: 42,
+      releaseId: 'rel-1',
+      commitHash: 'abc123',
+    }
+
+    source.emit('deployment.completed', payload)
+    source.emit('deployment.completed', payload)
+
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats deployment.cancelled as a terminal event', async () => {
+    const onComplete = vi.fn()
+
+    mount(defineComponent({
+      setup() {
+        useDeploymentStream('dep-5', {
+          onLogLine: vi.fn(),
+          onStepUpdate: vi.fn(),
+          onStepStarted: vi.fn(),
+          onComplete,
+          onApprovalRequired: vi.fn(),
+        })
+      },
+      template: '<div />',
+    }))
+
+    await flushPromises()
+
+    const source = MockEventSource.instances[0]
+    const payload = {
+      status: 'cancelled',
+      duration: 10,
+      releaseId: null,
+      commitHash: 'abc123',
+    }
+
+    source.emit('deployment.cancelled', payload)
+
+    expect(onComplete).toHaveBeenCalledWith(payload)
+    expect(source.closed).toBe(true)
+  })
+
+  it('closes without reconnecting when reconnect is disabled', async () => {
+    mount(defineComponent({
+      setup() {
+        const { connect } = useDeploymentStream('dep-6', {
+          onLogLine: vi.fn(),
+          onStepUpdate: vi.fn(),
+          onStepStarted: vi.fn(),
+          onComplete: vi.fn(),
+          onApprovalRequired: vi.fn(),
+        }, { immediate: false })
+
+        connect({ reconnect: false })
+      },
+      template: '<div />',
+    }))
+
+    await flushPromises()
+
+    const source = MockEventSource.instances[0]
+    source.onerror?.()
+
+    expect(source.closed).toBe(true)
+  })
+
+  it('does not open the stream until connect is called when immediate is false', async () => {
+    mount(defineComponent({
+      setup() {
+        useDeploymentStream('dep-7', {
+          onLogLine: vi.fn(),
+          onStepUpdate: vi.fn(),
+          onStepStarted: vi.fn(),
+          onComplete: vi.fn(),
+          onApprovalRequired: vi.fn(),
+        }, { immediate: false })
+      },
+      template: '<div />',
+    }))
+
+    await flushPromises()
+
+    expect(MockEventSource.instances).toHaveLength(0)
   })
 
   it('calls teardown on unmount (EventSource.close called)', async () => {

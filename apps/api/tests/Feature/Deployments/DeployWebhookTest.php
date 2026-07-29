@@ -16,6 +16,7 @@ use App\Modules\Pipelines\Models\PipelineRun;
 use App\Modules\Pipelines\Models\PipelineStep;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Enums\SiteStatus;
 use App\Modules\Sites\Models\Site;
@@ -45,6 +46,47 @@ it('triggers deployment from a valid github webhook push', function (): void {
     expect(Deployment::query()->withoutGlobalScope('owned_by_organization')->count())->toBe(1);
 
     expect(AuditLog::query()->where('operation', 'deployment.triggered')->exists())->toBeTrue();
+});
+
+it('triggers deployment from webhook for docker build mode site', function (): void {
+    Queue::fake();
+
+    [, , $token, $secret] = autoDeployWebhookFixture(
+        deployMode: DeployMode::DOCKER,
+        dockerBuildMode: DockerBuildMode::BUILD,
+    );
+
+    $payload = githubWebhookPayload(branch: 'main', commit: 'abc123def456');
+
+    postDeployWebhook($token, $payload, [
+        'X-GitHub-Event' => 'push',
+        'X-Hub-Signature-256' => githubSignature($payload, $secret),
+    ])->assertAccepted();
+
+    Queue::assertPushed(RunDeploymentJob::class);
+});
+
+it('ignores webhook for docker pull mode site that is no longer eligible', function (): void {
+    Queue::fake();
+
+    [$site, , $token, $secret] = autoDeployWebhookFixture(
+        deployMode: DeployMode::DOCKER,
+        dockerBuildMode: DockerBuildMode::BUILD,
+    );
+
+    $site->forceFill([
+        'docker_build_mode' => DockerBuildMode::PULL->value,
+    ])->save();
+
+    $payload = githubWebhookPayload();
+
+    postDeployWebhook($token, $payload, [
+        'X-GitHub-Event' => 'push',
+        'X-Hub-Signature-256' => githubSignature($payload, $secret),
+    ])->assertOk()
+        ->assertJsonPath('ignored', true);
+
+    Queue::assertNothingPushed();
 });
 
 it('rejects github webhook with invalid signature', function (): void {
@@ -159,8 +201,11 @@ it('accepts valid gitlab webhook token', function (): void {
 /**
  * @return array{0: Site, 1: Organization, 2: string, 3: string, 4?: User}
  */
-function autoDeployWebhookFixture(bool $withPipeline = false): array
-{
+function autoDeployWebhookFixture(
+    bool $withPipeline = false,
+    DeployMode $deployMode = DeployMode::GIT,
+    ?DockerBuildMode $dockerBuildMode = null,
+): array {
     $organization = Organization::query()->create([
         'name' => 'Webhook Org',
         'slug' => 'webhook-org-'.Str::random(6),
@@ -219,8 +264,9 @@ function autoDeployWebhookFixture(bool $withPipeline = false): array
         'domain' => 'webhook.example.test',
         'aliases' => [],
         'webroot' => '/var/www/webhook.example.test/current/public',
-        'runtime' => Runtime::PHP,
-        'deploy_mode' => DeployMode::GIT,
+        'runtime' => $deployMode === DeployMode::DOCKER ? Runtime::DOCKER : Runtime::PHP,
+        'deploy_mode' => $deployMode,
+        'docker_build_mode' => $dockerBuildMode?->value,
         'repository_url' => 'git@github.com:helix/example.git',
         'repository_provider' => 'github',
         'deploy_branch' => 'main',

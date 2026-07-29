@@ -126,6 +126,8 @@ export async function updateSite(
     | 'dockerImage'
     | 'dockerRegistry'
     | 'dockerComposePath'
+    | 'deployMode'
+    | 'dockerBuildMode'
     | 'pipelineId'
     | 'repositoryUrl'
     | 'repositoryProvider'

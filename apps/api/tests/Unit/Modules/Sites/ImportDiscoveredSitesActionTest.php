@@ -9,6 +9,8 @@ use App\Modules\Servers\DTOs\DiscoveredSiteSnapshot;
 use App\Modules\Servers\Enums\ServerStatus;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Actions\ImportDiscoveredSitesAction;
+use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\SiteStatus;
 use App\Modules\Sites\Jobs\ApplyEnvVarsPullJob;
 use App\Modules\Sites\Models\Site;
@@ -33,6 +35,8 @@ it('imports discovered sites and skips managed active sites', function (): void 
         ->get();
 
     expect($discovered)->toHaveCount(2);
+
+    expect($discovered->firstWhere('domain', 'app.example.com')?->deploy_mode)->toBe(DeployMode::GIT);
 
     Site::query()->create([
         'id' => (string) \Illuminate\Support\Str::uuid(),
@@ -84,6 +88,27 @@ it('does not dispatch env var pull job on observe servers', function (): void {
     ]);
 
     Queue::assertNotPushed(ApplyEnvVarsPullJob::class);
+});
+
+it('imports docker runtime discovered sites with docker deploy defaults', function (): void {
+    [$organization, $owner, $server] = createImportDiscoveredSitesFixture();
+
+    $action = app(ImportDiscoveredSitesAction::class);
+
+    $action->import($server, [
+        new DiscoveredSiteSnapshot('docker.example.com', '/var/www/docker', 'docker'),
+    ]);
+
+    $site = Site::query()
+        ->where('server_id', (string) $server->getKey())
+        ->where('domain', 'docker.example.com')
+        ->first();
+
+    expect($site)->not->toBeNull()
+        ->and($site?->runtime->value)->toBe('docker')
+        ->and($site?->deploy_mode)->toBe(DeployMode::DOCKER)
+        ->and($site?->docker_build_mode)->toBe(DockerBuildMode::BUILD)
+        ->and($site?->docker_compose_path)->toBe('docker-compose.yml');
 });
 
 /**

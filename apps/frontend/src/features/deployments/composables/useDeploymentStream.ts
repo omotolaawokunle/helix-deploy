@@ -9,6 +9,20 @@ export interface DeploymentStreamCallbacks {
   onApprovalRequired: (payload: Record<string, unknown>) => void
 }
 
+export interface UseDeploymentStreamOptions {
+  /** When false, caller must invoke connect(). Defaults to true. */
+  immediate?: boolean
+}
+
+export interface ConnectDeploymentStreamOptions {
+  /**
+   * When false, connection errors close the stream instead of letting EventSource
+   * auto-reconnect. Use for already-terminal deployments whose catch-up stream ends
+   * immediately (success / failed / cancelled).
+   */
+  reconnect?: boolean
+}
+
 function parseEventData<T>(raw: string): T | null {
   try {
     return JSON.parse(raw) as T
@@ -22,8 +36,13 @@ function parseEventData<T>(raw: string): T | null {
 export function useDeploymentStream(
   deploymentId: string,
   callbacks: DeploymentStreamCallbacks,
-): { teardown: () => void } {
+  options: UseDeploymentStreamOptions = {},
+): { connect: (connectOptions?: ConnectDeploymentStreamOptions) => void; teardown: () => void } {
+  const immediate = options.immediate !== false
+
   let eventSource: EventSource | null = null
+  let reachedTerminal = false
+  let allowReconnect = true
 
   const streamUrl = `${import.meta.env.VITE_API_URL}/api/v1/deployments/${deploymentId}/stream`
 
@@ -34,8 +53,10 @@ export function useDeploymentStream(
     }
   }
 
-  const setup = (): void => {
+  const connect = (connectOptions: ConnectDeploymentStreamOptions = {}): void => {
     teardown()
+    reachedTerminal = false
+    allowReconnect = connectOptions.reconnect !== false
 
     eventSource = new EventSource(streamUrl, { withCredentials: true })
 
@@ -92,16 +113,19 @@ export function useDeploymentStream(
     const handleTerminalEvent = (event: MessageEvent<string>): void => {
       const data = parseEventData<DeploymentCompletedPayload>(event.data)
 
-      if (data === null) {
+      if (data === null || reachedTerminal) {
         return
       }
 
+      reachedTerminal = true
       callbacks.onComplete(data)
       teardown()
     }
 
+    // Failed deployments use the same deployment.completed catch-up event as success.
     eventSource.addEventListener('deployment.completed', handleTerminalEvent)
     eventSource.addEventListener('deployment.rolled_back', handleTerminalEvent)
+    eventSource.addEventListener('deployment.cancelled', handleTerminalEvent)
 
     eventSource.addEventListener('deployment.approval_required', (event: MessageEvent<string>) => {
       const data = parseEventData<Record<string, unknown>>(event.data)
@@ -112,12 +136,23 @@ export function useDeploymentStream(
     })
 
     eventSource.onerror = (): void => {
+      // Terminal catch-up streams close right after the final event. Close explicitly so
+      // EventSource does not auto-reconnect and re-play catch-up (looks like a reload loop).
+      if (reachedTerminal || !allowReconnect) {
+        teardown()
+
+        return
+      }
+
       console.warn('Deployment stream connection interrupted; EventSource will retry.')
     }
   }
 
-  setup()
+  if (immediate) {
+    connect()
+  }
+
   onUnmounted(teardown)
 
-  return { teardown }
+  return { connect, teardown }
 }

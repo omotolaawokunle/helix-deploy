@@ -9,6 +9,7 @@ use App\Modules\Servers\DTOs\DiscoveredSiteSnapshot;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Contracts\DiscoveredSiteImporterInterface;
 use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\EnvVarPullStrategy;
 use App\Modules\Sites\Jobs\ApplyEnvVarsPullJob;
 use App\Modules\Sites\Enums\Runtime;
@@ -67,6 +68,8 @@ class ImportDiscoveredSitesAction implements DiscoveredSiteImporterInterface
             ->first();
 
         if ($existing === null) {
+            $runtime = $this->resolveRuntime($discoveredSite->runtime);
+
             $site = Site::query()->create([
                 'id' => (string) Str::uuid(),
                 'server_id' => (string) $server->getKey(),
@@ -76,8 +79,14 @@ class ImportDiscoveredSitesAction implements DiscoveredSiteImporterInterface
                 'domain' => $discoveredSite->domain,
                 'aliases' => [],
                 'webroot' => $discoveredSite->webroot,
-                'runtime' => $this->resolveRuntime($discoveredSite->runtime)->value,
-                'deploy_mode' => DeployMode::GIT->value,
+                'runtime' => $runtime->value,
+                'deploy_mode' => $runtime === Runtime::DOCKER
+                    ? DeployMode::DOCKER->value
+                    : DeployMode::GIT->value,
+                'docker_build_mode' => $runtime === Runtime::DOCKER
+                    ? DockerBuildMode::BUILD->value
+                    : null,
+                'docker_compose_path' => 'docker-compose.yml',
                 'deploy_branch' => 'main',
                 'php_version' => $this->resolvePhpVersion($server, $discoveredSite->runtime),
                 'status' => SiteStatus::DISCOVERED->value,

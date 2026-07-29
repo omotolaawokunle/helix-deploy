@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Sites\Requests;
 
 use App\Modules\BuildRunners\Enums\BuildStrategy;
+use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\GitProvider;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -39,6 +41,14 @@ final class UpdateSiteRequest extends FormRequest
                 ),
             ],
             'runMigrations' => ['sometimes', 'boolean'],
+            'deployMode' => ['sometimes', 'string', Rule::enum(DeployMode::class)],
+            'dockerBuildMode' => [
+                'sometimes',
+                'nullable',
+                'string',
+                Rule::enum(DockerBuildMode::class),
+                Rule::requiredIf(fn (): bool => $this->input('deployMode') === DeployMode::DOCKER->value),
+            ],
             'dockerImage' => ['sometimes', 'nullable', 'string', 'max:255'],
             'dockerRegistry' => ['sometimes', 'nullable', 'string', 'max:255'],
             'dockerComposePath' => ['sometimes', 'nullable', 'string', 'max:255'],

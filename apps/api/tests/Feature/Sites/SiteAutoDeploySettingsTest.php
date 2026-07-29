@@ -7,6 +7,7 @@ use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Enums\SiteStatus;
 use App\Modules\Sites\Models\Site;
@@ -42,8 +43,43 @@ it('disables auto deploy without removing webhook token', function (): void {
         ->assertJsonPath('data.webhookUrl', fn (?string $url): bool => $url !== null && $url !== '');
 });
 
-it('rejects auto deploy enable for docker deploy mode sites', function (): void {
-    [$site, $owner] = autoDeploySiteSettingsFixture(deployMode: DeployMode::DOCKER);
+it('rejects auto deploy enable for docker pull mode sites', function (): void {
+    [$site, $owner] = autoDeploySiteSettingsFixture(
+        deployMode: DeployMode::DOCKER,
+        dockerBuildMode: DockerBuildMode::PULL,
+    );
+
+    $this->actingAs($owner)
+        ->patchJson("/api/v1/sites/{$site->id}", [
+            'autoDeployEnabled' => true,
+        ])
+        ->assertStatus(422);
+});
+
+it('enables auto deploy for docker build mode sites with repository', function (): void {
+    [$site, $owner] = autoDeploySiteSettingsFixture(
+        deployMode: DeployMode::DOCKER,
+        dockerBuildMode: DockerBuildMode::BUILD,
+    );
+
+    $response = $this->actingAs($owner)
+        ->patchJson("/api/v1/sites/{$site->id}", [
+            'autoDeployEnabled' => true,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.autoDeployEnabled', true)
+        ->assertJsonStructure(['webhookSecret', 'data' => ['webhookUrl', 'hasWebhookSecret']]);
+
+    expect($response->json('webhookSecret'))->not->toBeEmpty();
+    expect($response->json('data.hasWebhookSecret'))->toBeTrue();
+});
+
+it('rejects auto deploy enable for docker build mode sites without repository', function (): void {
+    [$site, $owner] = autoDeploySiteSettingsFixture(
+        deployMode: DeployMode::DOCKER,
+        dockerBuildMode: DockerBuildMode::BUILD,
+        repositoryUrl: '',
+    );
 
     $this->actingAs($owner)
         ->patchJson("/api/v1/sites/{$site->id}", [
@@ -95,6 +131,8 @@ it('forbids cross organization site auto deploy update', function (): void {
 function autoDeploySiteSettingsFixture(
     bool $autoDeployEnabled = false,
     DeployMode $deployMode = DeployMode::GIT,
+    ?DockerBuildMode $dockerBuildMode = null,
+    ?string $repositoryUrl = null,
 ): array {
     $organization = Organization::query()->create([
         'name' => 'Auto Deploy Settings Org',
@@ -124,16 +162,25 @@ function autoDeploySiteSettingsFixture(
         'installed_services' => [],
     ]);
 
+    $resolvedRepositoryUrl = $repositoryUrl;
+
+    if ($resolvedRepositoryUrl === null) {
+        $resolvedRepositoryUrl = $deployMode === DeployMode::GIT || $dockerBuildMode === DockerBuildMode::BUILD
+            ? 'git@github.com:helix/example.git'
+            : null;
+    }
+
     $site = Site::query()->withoutGlobalScope('owned_by_organization')->create([
         'server_id' => (string) $server->getKey(),
         'organization_id' => (string) $organization->getKey(),
         'domain' => 'auto-deploy-settings.example.test',
         'aliases' => [],
         'webroot' => '/var/www/auto-deploy-settings.example.test/current/public',
-        'runtime' => Runtime::PHP,
+        'runtime' => $deployMode === DeployMode::DOCKER ? Runtime::DOCKER : Runtime::PHP,
         'deploy_mode' => $deployMode,
-        'repository_url' => $deployMode === DeployMode::GIT ? 'git@github.com:helix/example.git' : null,
-        'repository_provider' => $deployMode === DeployMode::GIT ? 'github' : null,
+        'docker_build_mode' => $dockerBuildMode?->value,
+        'repository_url' => $resolvedRepositoryUrl !== '' ? $resolvedRepositoryUrl : null,
+        'repository_provider' => $resolvedRepositoryUrl !== null && $resolvedRepositoryUrl !== '' ? 'github' : null,
         'deploy_branch' => 'main',
         'run_migrations' => false,
         'status' => SiteStatus::ACTIVE,

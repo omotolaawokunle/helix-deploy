@@ -19,6 +19,7 @@ use App\Modules\Deployments\Jobs\RunDeploymentJob;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Pipelines\Actions\StartPipelineRunAction;
 use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\SiteStatus;
 use App\Modules\Sites\Models\Site;
 use Illuminate\Support\Str;
@@ -51,8 +52,8 @@ class TriggerDeploymentAction
             return $this->startPipelineRunAction->execute($site, $actor, $dto);
         }
 
-        if ($site->deploy_mode === DeployMode::GIT && ($site->repository_url === null || $site->repository_url === '')) {
-            throw new InvalidArgumentException('Site repository URL is required for git deployments.');
+        if ($this->siteRequiresRepositoryUrl($site) && ($site->repository_url === null || $site->repository_url === '')) {
+            throw new InvalidArgumentException('Site repository URL is required for this deployment.');
         }
 
         $buildStrategy = $site->build_strategy ?? BuildStrategy::ON_SERVER;
@@ -131,5 +132,15 @@ class TriggerDeploymentAction
                 DeploymentStatus::AWAITING_APPROVAL->value,
             ])
             ->exists();
+    }
+
+    private function siteRequiresRepositoryUrl(Site $site): bool
+    {
+        if ($site->deploy_mode === DeployMode::GIT) {
+            return true;
+        }
+
+        return $site->deploy_mode === DeployMode::DOCKER
+            && $site->docker_build_mode === DockerBuildMode::BUILD;
     }
 }
