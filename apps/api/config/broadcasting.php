@@ -36,10 +36,12 @@ return [
             'secret' => env('REVERB_APP_SECRET'),
             'app_id' => env('REVERB_APP_ID'),
             'options' => [
-                'host' => env('REVERB_HOST'),
-                'port' => env('REVERB_PORT', 443),
-                'scheme' => env('REVERB_SCHEME', 'https'),
-                'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
+                // Server-side publishing from API/workers: use internal Reverb in Docker (reverb:8080).
+                // REVERB_HOST/PORT/SCHEME remain the public client-facing values for browsers.
+                'host' => env('REVERB_BROADCAST_HOST', env('REVERB_HOST')),
+                'port' => env('REVERB_BROADCAST_PORT', env('REVERB_PORT', 443)),
+                'scheme' => env('REVERB_BROADCAST_SCHEME', env('REVERB_SCHEME', 'https')),
+                'useTLS' => env('REVERB_BROADCAST_SCHEME', env('REVERB_SCHEME', 'https')) === 'https',
             ],
             'client_options' => [
                 // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html
