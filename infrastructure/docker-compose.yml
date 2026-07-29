@@ -1,24 +1,42 @@
+x-api-image: &api-image
+  image: helixdeploy-api:latest
+
+x-api-service: &api-service
+  <<: *api-image
+  env_file: .env
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    - api
+    - redis
+  networks:
+    - internal
+    - observability
+  restart: unless-stopped
+
 services:
   api:
+    <<: *api-image
     build:
       context: ../apps/api
       dockerfile: Dockerfile
     environment:
       APP_ENV: production
     env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - postgres
       - redis
     networks:
       - internal
+      - observability
     restart: unless-stopped
     volumes:
       - api_storage:/var/www/html/storage
 
   worker-deployments:
-    build:
-      context: ../apps/api
-      dockerfile: Dockerfile
+    <<: *api-service
     command: >
       php artisan queue:work redis
       --queue=deployments
@@ -26,18 +44,9 @@ services:
       --tries=1
       --timeout=1800
       --max-time=3600
-    env_file: .env
-    depends_on:
-      - api
-      - redis
-    networks:
-      - internal
-    restart: unless-stopped
 
   worker-builds:
-    build:
-      context: ../apps/api
-      dockerfile: Dockerfile
+    <<: *api-service
     command: >
       php artisan queue:work redis
       --queue=builds
@@ -45,18 +54,9 @@ services:
       --tries=1
       --timeout=1800
       --max-time=3600
-    env_file: .env
-    depends_on:
-      - api
-      - redis
-    networks:
-      - internal
-    restart: unless-stopped
 
   worker-provisioning:
-    build:
-      context: ../apps/api
-      dockerfile: Dockerfile
+    <<: *api-service
     command: >
       php artisan queue:work redis
       --queue=provisioning
@@ -64,18 +64,9 @@ services:
       --tries=1
       --timeout=1800
       --max-time=3600
-    env_file: .env
-    depends_on:
-      - api
-      - redis
-    networks:
-      - internal
-    restart: unless-stopped
 
   worker-default:
-    build:
-      context: ../apps/api
-      dockerfile: Dockerfile
+    <<: *api-service
     command: >
       php artisan queue:work redis
       --queue=commands,monitoring,default
@@ -83,41 +74,16 @@ services:
       --tries=3
       --timeout=120
       --max-time=3600
-    env_file: .env
-    depends_on:
-      - api
-      - redis
-    networks:
-      - internal
-    restart: unless-stopped
 
   scheduler:
-    build:
-      context: ../apps/api
-      dockerfile: Dockerfile
+    <<: *api-service
     command: php artisan schedule:work
-    env_file: .env
-    depends_on:
-      - api
-      - redis
-    networks:
-      - internal
-    restart: unless-stopped
 
   reverb:
-    build:
-      context: ../apps/api
-      dockerfile: Dockerfile
+    <<: *api-service
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
-    env_file: .env
     ports:
       - "8080:8080"
-    depends_on:
-      - api
-      - redis
-    networks:
-      - internal
-    restart: unless-stopped
 
   frontend:
     build:
@@ -167,3 +133,6 @@ volumes:
 networks:
   internal:
     driver: bridge
+  observability:
+    external: true
+    name: observability_net
