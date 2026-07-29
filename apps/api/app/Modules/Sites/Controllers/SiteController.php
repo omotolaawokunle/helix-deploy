@@ -7,13 +7,16 @@ namespace App\Modules\Sites\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Servers\Models\Server;
+use App\Modules\Sites\Actions\ClaimSiteAction;
 use App\Modules\Sites\Actions\CreateSiteAction;
 use App\Modules\Sites\Actions\DeleteSiteAction;
 use App\Modules\Sites\Actions\RotateSiteWebhookSecretAction;
 use App\Modules\Sites\Actions\UpdateSiteAutoDeployAction;
+use App\Modules\Sites\DTOs\ClaimSiteDTO;
 use App\Modules\Sites\Events\SiteProvisioningStarted;
 use App\Modules\Sites\Jobs\CreateSiteJob;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Sites\Requests\ClaimSiteRequest;
 use App\Modules\Sites\Requests\StoreSiteRequest;
 use App\Modules\Sites\Requests\UpdateSiteRequest;
 use App\Modules\Sites\Resources\SiteResource;
@@ -220,6 +223,41 @@ class SiteController extends Controller
                 'webhookUrl' => SiteResource::make($siteModel->refresh())->toArray($request)['webhookUrl'] ?? null,
             ],
         ]);
+    }
+
+    public function claim(
+        string $site,
+        ClaimSiteRequest $request,
+        ClaimSiteAction $claimSiteAction,
+    ): SiteResource|JsonResponse {
+        $siteModel = $this->resolveSite($site);
+        $this->authorize('update', $siteModel);
+
+        $actor = $request->user();
+        abort_unless($actor !== null, 401);
+
+        try {
+            $result = $claimSiteAction->execute(
+                site: $siteModel,
+                actor: $actor,
+                dto: new ClaimSiteDTO(
+                    repositoryUrl: (string) $request->validated('repositoryUrl'),
+                    repositoryProvider: (string) $request->validated('repositoryProvider'),
+                    deployBranch: (string) $request->validated('deployBranch'),
+                    autoDeployEnabled: (bool) $request->validated('autoDeployEnabled', false),
+                ),
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        $resource = SiteResource::make($result->site);
+
+        if ($result->revealedWebhookSecret !== null) {
+            return $resource->additional(['webhookSecret' => $result->revealedWebhookSecret]);
+        }
+
+        return $resource;
     }
 
     public function destroy(string $site, Request $request, DeleteSiteAction $deleteSiteAction): JsonResponse

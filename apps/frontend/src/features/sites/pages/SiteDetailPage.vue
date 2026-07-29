@@ -6,12 +6,15 @@ import FirstVisitHint from '@/features/onboarding/components/FirstVisitHint.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import BackLink from '@/components/layout/BackLink.vue'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchCurrentMemberRole } from '@/features/organizations/api'
 import { fetchServer } from '@/features/servers/api'
+import ClaimSiteDialog from '@/features/sites/components/ClaimSiteDialog.vue'
 import { fetchSite } from '@/features/sites/api'
+import { SiteStatus } from '@/features/sites/types'
 import {
   patchSiteDnsSslFromBroadcast,
   useSiteProvisioningChannel,
@@ -49,6 +52,7 @@ const memberRole = ref<TeamRole | null>(null)
 const isLoading = ref(true)
 const loadError = ref<string | null>(null)
 const activeTab = ref('deployments')
+const isClaimDialogOpen = ref(false)
 
 const serverId = computed(() => String(route.params.id))
 const siteId = computed(() => String(route.params.siteId))
@@ -71,6 +75,12 @@ const showSslBadge = computed(
     && site.value.enableSsl
     && site.value.sslStatus !== null
     && site.value.sslStatus !== 'none',
+)
+
+const isDiscoveredSite = computed(() => site.value?.status === SiteStatus.Discovered)
+
+const canClaimSite = computed(
+  () => memberRole.value === TeamRole.Owner || memberRole.value === TeamRole.Admin,
 )
 
 async function loadPage(): Promise<void> {
@@ -139,6 +149,34 @@ onMounted(() => {
           :is-production="isProduction"
         />
       </div>
+
+      <div
+        v-if="isDiscoveredSite"
+        class="-mx-4 lg:-mx-8"
+        data-testid="discovered-site-banner"
+      >
+        <div class="flex flex-col gap-3 border-b bg-muted px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+          <p class="text-sm text-muted-foreground">
+            This site was discovered on the server and is not yet managed by Helix.
+            Claim it to enable deployments and webhooks.
+          </p>
+          <Button
+            v-if="canClaimSite"
+            size="sm"
+            data-testid="claim-site-button"
+            @click="isClaimDialogOpen = true"
+          >
+            Claim site
+          </Button>
+        </div>
+      </div>
+
+      <ClaimSiteDialog
+        :site="site"
+        :open="isClaimDialogOpen"
+        @update:open="isClaimDialogOpen = $event"
+        @claimed="handleSiteUpdated"
+      />
 
       <div class="flex flex-col gap-4 border-b pb-8 sm:flex-row sm:items-start sm:justify-between">
         <div class="space-y-2">

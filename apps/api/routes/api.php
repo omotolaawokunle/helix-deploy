@@ -178,6 +178,7 @@ Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->p
     Route::get('/sites/{site}', [SiteController::class, 'show']);
     Route::patch('/sites/{site}', [SiteController::class, 'update']);
     Route::post('/sites/{site}/webhook-secret/rotate', [SiteController::class, 'rotateWebhookSecret']);
+    Route::post('/sites/{site}/claim', [SiteController::class, 'claim']);
     Route::delete('/sites/{site}', [SiteController::class, 'destroy']);
     Route::post('/sites/{site}/dns/retry', [SiteDnsController::class, 'retry']);
     Route::post('/sites/{site}/ssl/retry', [SiteSslController::class, 'retry']);

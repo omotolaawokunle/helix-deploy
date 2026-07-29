@@ -1,6 +1,7 @@
 export enum SiteStatus {
   Provisioning = 'provisioning',
   Active = 'active',
+  Discovered = 'discovered',
   Failed = 'failed',
 }
 

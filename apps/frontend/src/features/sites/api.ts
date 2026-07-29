@@ -142,6 +142,28 @@ export async function updateSite(
   }
 }
 
+export interface ClaimSitePayload {
+  repositoryUrl: string
+  repositoryProvider: GitProviderType
+  deployBranch: string
+  autoDeployEnabled?: boolean
+}
+
+export async function claimSite(
+  siteId: string,
+  payload: ClaimSitePayload,
+): Promise<{ site: Site; webhookSecret?: string }> {
+  const response = await api.post<ResourceResponse<Site> & { webhookSecret?: string }>(
+    `/api/v1/sites/${siteId}/claim`,
+    payload,
+  )
+
+  return {
+    site: response.data.data,
+    webhookSecret: response.data.webhookSecret,
+  }
+}
+
 export interface RotateSiteWebhookSecretResponse {
   webhookSecret: string
   webhookUrl: string | null
