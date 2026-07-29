@@ -43,6 +43,7 @@ import {
 import { DNS_PROVIDER_LABELS } from '@/features/integrations/types'
 import type { ProjectDnsZone } from '@/features/integrations/types'
 import { createSite, fetchServerSites, type CreateSitePayload } from '@/features/sites/api'
+import { buildCreateSitePayload } from '@/features/sites/buildCreateSitePayload'
 import {
   patchSiteDnsSslFromBroadcast,
   useSiteProvisioningChannel,
@@ -51,7 +52,7 @@ import { fetchProjects } from '@/features/servers/api'
 import type { ProjectOption } from '@/features/servers/types'
 import { extractFieldErrors, firstFieldError } from '@/lib/validation-errors'
 import { useRealtimeStore } from '@/stores/useRealtimeStore'
-import type { Site } from '@/types'
+import type { DockerBuildMode, Site, SiteDeployMode } from '@/types'
 
 interface Props {
   serverId: string
@@ -85,23 +86,29 @@ const includeWwwAlias = ref(false)
 const sslChallenge = ref<'http-01' | 'dns-01'>('http-01')
 const showAdvancedSsl = ref(false)
 
+const deployMode = ref<SiteDeployMode>('git')
 const runtime = ref('php')
 const phpVersion = ref('8.3')
 const appPort = ref('3000')
 const deployBranch = ref('main')
 const repositoryUrl = ref('')
+const dockerBuildMode = ref<DockerBuildMode>('build')
+const dockerImage = ref('')
+const dockerRegistry = ref('')
+const dockerComposePath = ref('docker-compose.yml')
 
-const runtimeOptions = [
+const gitRuntimeOptions = [
   { value: 'php', label: 'PHP' },
   { value: 'nodejs', label: 'Node.js' },
   { value: 'python', label: 'Python' },
   { value: 'go', label: 'Go' },
   { value: 'static', label: 'Static' },
-  { value: 'docker', label: 'Docker' },
 ]
 
+const isDockerDeployMode = computed(() => deployMode.value === 'docker')
+
 const requiresAppPort = computed(() =>
-  ['nodejs', 'python', 'go', 'docker'].includes(runtime.value),
+  isDockerDeployMode.value || ['nodejs', 'python', 'go'].includes(runtime.value),
 )
 
 const requiresPhpVersion = computed(() => runtime.value === 'php')
@@ -228,11 +235,16 @@ function resetForm(): void {
   includeWwwAlias.value = false
   sslChallenge.value = 'http-01'
   showAdvancedSsl.value = false
+  deployMode.value = 'git'
   runtime.value = 'php'
   phpVersion.value = '8.3'
   appPort.value = '3000'
   deployBranch.value = 'main'
   repositoryUrl.value = ''
+  dockerBuildMode.value = 'build'
+  dockerImage.value = ''
+  dockerRegistry.value = ''
+  dockerComposePath.value = 'docker-compose.yml'
   apiError.value = null
 }
 
@@ -245,43 +257,33 @@ async function handleCreate(): Promise<void> {
   isSubmitting.value = true
   apiError.value = null
 
-  const payload: CreateSitePayload = {
+  const payload: CreateSitePayload = buildCreateSitePayload({
+    deployMode: deployMode.value,
     runtime: runtime.value,
-    deployBranch: deployBranch.value.trim() || 'main',
+    deployBranch: deployBranch.value,
     autoCreateDns: autoCreateDns.value,
     enableSsl: enableSsl.value,
-  }
-
-  if (effectiveProjectId.value !== undefined && effectiveProjectId.value !== '') {
-    payload.projectId = effectiveProjectId.value
-  }
-
-  if (domainInputMode.value === 'prefix') {
-    payload.subdomainPrefix = subdomainPrefix.value.trim()
-    payload.projectDnsZoneId = projectDnsZoneId.value
-
-    if (isApexPrefix.value && includeWwwAlias.value) {
-      payload.includeWwwAlias = true
-    }
-  } else {
-    payload.domain = domain.value.trim()
-  }
-
-  if (enableSsl.value && showAdvancedSsl.value && sslChallenge.value === 'dns-01') {
-    payload.sslChallenge = 'dns-01'
-  }
-
-  if (requiresPhpVersion.value) {
-    payload.phpVersion = phpVersion.value
-  }
-
-  if (requiresAppPort.value) {
-    payload.appPort = Number(appPort.value)
-  }
-
-  if (repositoryUrl.value.trim() !== '') {
-    payload.repositoryUrl = repositoryUrl.value.trim()
-  }
+    phpVersion: phpVersion.value,
+    appPort: appPort.value,
+    repositoryUrl: repositoryUrl.value,
+    dockerBuildMode: dockerBuildMode.value,
+    dockerImage: dockerImage.value,
+    dockerRegistry: dockerRegistry.value,
+    dockerComposePath: dockerComposePath.value,
+    projectId: effectiveProjectId.value,
+    sslChallenge: enableSsl.value && showAdvancedSsl.value && sslChallenge.value === 'dns-01'
+      ? 'dns-01'
+      : undefined,
+    ...(domainInputMode.value === 'prefix'
+      ? {
+          subdomainPrefix: subdomainPrefix.value.trim(),
+          projectDnsZoneId: projectDnsZoneId.value,
+          includeWwwAlias: isApexPrefix.value && includeWwwAlias.value ? true : undefined,
+        }
+      : {
+          domain: domain.value.trim(),
+        }),
+  })
 
   try {
     await createSite(props.serverId, payload)
@@ -402,7 +404,7 @@ onMounted(() => {
       Add site
     </EmptyState>
 
-    <div v-else-if="isLoading || sites.length > 0" class="panel overflow-hidden">
+    <div v-else-if="isLoading || sites.length > 0" class="overflow-hidden panel">
       <Table>
         <TableHeader>
           <TableRow>
@@ -545,7 +547,7 @@ onMounted(() => {
                 </p>
               </div>
 
-              <p v-if="resolvedDomain !== ''" class="rounded-md bg-muted px-3 py-2 text-sm">
+              <p v-if="resolvedDomain !== ''" class="px-3 py-2 text-sm rounded-md bg-muted">
                 <span class="text-muted-foreground">Hostname:</span>
                 <span class="ml-2 font-medium">{{ resolvedDomain }}</span>
               </p>
@@ -562,7 +564,7 @@ onMounted(() => {
             />
           </div>
 
-          <div class="space-y-3 rounded-lg border p-4">
+          <div class="p-4 space-y-3 border rounded-lg">
             <div class="flex items-start gap-3">
               <input
                 id="site-auto-dns"
@@ -572,7 +574,7 @@ onMounted(() => {
                 :disabled="autoDnsDisabled"
               >
               <div class="space-y-1">
-                <Label for="site-auto-dns" class="cursor-pointer font-medium">
+                <Label for="site-auto-dns" class="font-medium cursor-pointer">
                   Auto-create DNS record
                 </Label>
                 <p class="text-xs text-muted-foreground">
@@ -589,7 +591,7 @@ onMounted(() => {
 
             <div
               v-if="isApexPrefix && autoCreateDns && domainInputMode === 'prefix'"
-              class="ml-6 flex items-start gap-3 border-l pl-4"
+              class="flex items-start gap-3 pl-4 ml-6 border-l"
             >
               <input
                 id="site-www-alias"
@@ -608,7 +610,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="space-y-3 rounded-lg border p-4">
+          <div class="p-4 space-y-3 border rounded-lg">
             <div class="flex items-start gap-3">
               <input
                 id="site-enable-ssl"
@@ -617,7 +619,7 @@ onMounted(() => {
                 class="mt-1 rounded border-input"
               >
               <div class="space-y-1">
-                <Label for="site-enable-ssl" class="cursor-pointer font-medium">
+                <Label for="site-enable-ssl" class="font-medium cursor-pointer">
                   Enable SSL (Let's Encrypt)
                 </Label>
                 <p class="text-xs text-muted-foreground">
@@ -626,10 +628,10 @@ onMounted(() => {
               </div>
             </div>
 
-            <div v-if="enableSsl" class="ml-6 space-y-3 border-l pl-4">
+            <div v-if="enableSsl" class="pl-4 ml-6 space-y-3 border-l">
               <button
                 type="button"
-                class="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors duration-200 hover:underline"
+                class="inline-flex items-center gap-1 text-xs font-medium transition-colors duration-200 text-primary hover:underline"
                 @click="showAdvancedSsl = !showAdvancedSsl"
               >
                 <ChevronDownIcon
@@ -668,6 +670,29 @@ onMounted(() => {
           </div>
 
           <div class="space-y-2">
+            <Label for="site-deploy-mode">Deploy mode</Label>
+            <Select
+              :model-value="deployMode"
+              @update:model-value="(value) => { deployMode = value as SiteDeployMode }"
+            >
+              <SelectTrigger id="site-deploy-mode" data-testid="deploy-mode-select">
+                <SelectValue placeholder="Select deploy mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="git">
+                  Git release
+                </SelectItem>
+                <SelectItem value="docker">
+                  Docker
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">
+              Git release deploys from a repository. Docker runs containers via compose on the server.
+            </p>
+          </div>
+
+          <div v-if="!isDockerDeployMode" class="space-y-2" data-testid="git-runtime-section">
             <Label>Runtime</Label>
             <Select v-model="runtime">
               <SelectTrigger>
@@ -675,7 +700,7 @@ onMounted(() => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem
-                  v-for="option in runtimeOptions"
+                  v-for="option in gitRuntimeOptions"
                   :key="option.value"
                   :value="option.value"
                 >
@@ -684,6 +709,59 @@ onMounted(() => {
               </SelectContent>
             </Select>
           </div>
+
+          <template v-if="isDockerDeployMode">
+            <div class="space-y-4" data-testid="docker-deploy-section">
+            <div class="space-y-2">
+              <Label for="site-docker-build-mode">Docker build mode</Label>
+              <Select
+                :model-value="dockerBuildMode"
+                @update:model-value="(value) => { dockerBuildMode = value as DockerBuildMode }"
+              >
+                <SelectTrigger id="site-docker-build-mode" data-testid="docker-build-mode-select">
+                  <SelectValue placeholder="Select build mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="build">
+                    Build from repository
+                  </SelectItem>
+                  <SelectItem value="pull">
+                    Pull prebuilt image
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="site-docker-compose">Compose path</Label>
+              <Input
+                id="site-docker-compose"
+                v-model="dockerComposePath"
+                placeholder="docker-compose.yml"
+              />
+            </div>
+
+            <template v-if="dockerBuildMode === 'pull'">
+              <div class="space-y-2">
+                <Label for="site-docker-image">Image</Label>
+                <Input
+                  id="site-docker-image"
+                  v-model="dockerImage"
+                  placeholder="ghcr.io/org/app:latest"
+                />
+              </div>
+
+              <div class="space-y-2">
+                <Label for="site-docker-registry">Registry</Label>
+                <Input
+                  id="site-docker-registry"
+                  v-model="dockerRegistry"
+                  placeholder="ghcr.io"
+                />
+              </div>
+            </template>
+            </div>
+          </template>
 
           <div v-if="requiresPhpVersion" class="space-y-2">
             <Label for="site-php-version">PHP version</Label>
@@ -695,12 +773,12 @@ onMounted(() => {
             <Input id="site-app-port" v-model="appPort" type="number" min="1" max="65535" />
           </div>
 
-          <div class="space-y-2">
+          <div v-if="!isDockerDeployMode || dockerBuildMode === 'build'" class="space-y-2">
             <Label for="site-deploy-branch">Deploy branch</Label>
             <Input id="site-deploy-branch" v-model="deployBranch" placeholder="main" />
           </div>
 
-          <div class="space-y-2">
+          <div v-if="!isDockerDeployMode || dockerBuildMode === 'build'" class="space-y-2">
             <Label for="site-repository-url">Repository URL</Label>
             <Input
               id="site-repository-url"

@@ -23,6 +23,11 @@ export interface CreateSitePayload {
   includeWwwAlias?: boolean
   sslChallenge?: 'http-01' | 'dns-01'
   runtime: string
+  deployMode?: 'git' | 'docker'
+  dockerBuildMode?: 'build' | 'pull'
+  dockerImage?: string
+  dockerRegistry?: string
+  dockerComposePath?: string
   deployBranch?: string
   repositoryUrl?: string
   phpVersion?: string

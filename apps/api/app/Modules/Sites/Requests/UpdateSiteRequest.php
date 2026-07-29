@@ -8,6 +8,8 @@ use App\Modules\BuildRunners\Enums\BuildStrategy;
 use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\GitProvider;
+use App\Modules\Sites\Enums\Runtime;
+use App\Modules\Sites\Models\Site;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -57,5 +59,37 @@ final class UpdateSiteRequest extends FormRequest
             'repositoryProvider' => ['sometimes', 'nullable', 'string', Rule::enum(GitProvider::class)],
             'autoDeployEnabled' => ['sometimes', 'boolean'],
         ];
+    }
+
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function (\Illuminate\Validation\Validator $validator): void {
+            if ($this->input('deployMode') !== DeployMode::DOCKER->value) {
+                return;
+            }
+
+            $site = $this->resolveSite();
+
+            if ($site === null || $site->runtime !== Runtime::DOCKER) {
+                $validator->errors()->add(
+                    'deployMode',
+                    'Docker deploy mode requires the docker runtime.',
+                );
+            }
+        });
+    }
+
+    private function resolveSite(): ?Site
+    {
+        $siteId = $this->route('site');
+
+        if (! is_string($siteId) || $siteId === '') {
+            return null;
+        }
+
+        return Site::query()
+            ->withoutGlobalScope('owned_by_organization')
+            ->whereKey($siteId)
+            ->first();
     }
 }

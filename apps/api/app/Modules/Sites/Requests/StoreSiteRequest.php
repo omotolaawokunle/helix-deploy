@@ -93,6 +93,16 @@ class StoreSiteRequest extends FormRequest
                     );
                 }
             }
+
+            $runtime = $this->input('runtime');
+            $deployMode = $this->input('deployMode');
+
+            if ($deployMode === DeployMode::DOCKER->value && $runtime !== Runtime::DOCKER->value) {
+                $validator->errors()->add(
+                    'deployMode',
+                    'Docker deploy mode requires the docker runtime.',
+                );
+            }
         });
     }
 
@@ -110,12 +120,15 @@ class StoreSiteRequest extends FormRequest
                 default => '/var/www/'.$domain.'/current',
             };
 
+        $deployMode = $this->resolveDeployMode($validated, $runtime);
+        $dockerBuildMode = $this->resolveDockerBuildMode($validated, $deployMode);
+
         return new CreateSiteDTO(
             domain: $domain,
             aliases: $aliases,
             webroot: $webroot,
             runtime: $runtime,
-            deployMode: DeployMode::from((string) ($validated['deployMode'] ?? DeployMode::GIT->value)),
+            deployMode: $deployMode,
             repositoryUrl: isset($validated['repositoryUrl']) ? (string) $validated['repositoryUrl'] : null,
             repositoryProvider: isset($validated['repositoryProvider']) ? (string) $validated['repositoryProvider'] : null,
             deployBranch: (string) ($validated['deployBranch'] ?? 'main'),
@@ -125,9 +138,7 @@ class StoreSiteRequest extends FormRequest
             dockerImage: isset($validated['dockerImage']) ? (string) $validated['dockerImage'] : null,
             dockerRegistry: isset($validated['dockerRegistry']) ? (string) $validated['dockerRegistry'] : null,
             dockerComposePath: (string) ($validated['dockerComposePath'] ?? 'docker-compose.yml'),
-            dockerBuildMode: isset($validated['dockerBuildMode'])
-                ? DockerBuildMode::from((string) $validated['dockerBuildMode'])
-                : null,
+            dockerBuildMode: $dockerBuildMode,
             phpVersion: isset($validated['phpVersion']) ? (string) $validated['phpVersion'] : null,
             nodePm: isset($validated['nodePm']) ? NodePM::from((string) $validated['nodePm']) : null,
             pythonWsgi: isset($validated['pythonWsgi']) ? PythonWSGI::from((string) $validated['pythonWsgi']) : null,
@@ -170,5 +181,37 @@ class StoreSiteRequest extends FormRequest
         }
 
         return (string) $validated['domain'];
+    }
+
+    /**
+     * @param array<string, mixed> $validated
+     */
+    private function resolveDeployMode(array $validated, Runtime $runtime): DeployMode
+    {
+        if (isset($validated['deployMode'])) {
+            return DeployMode::from((string) $validated['deployMode']);
+        }
+
+        if ($runtime === Runtime::DOCKER) {
+            return DeployMode::DOCKER;
+        }
+
+        return DeployMode::GIT;
+    }
+
+    /**
+     * @param array<string, mixed> $validated
+     */
+    private function resolveDockerBuildMode(array $validated, DeployMode $deployMode): ?DockerBuildMode
+    {
+        if (isset($validated['dockerBuildMode'])) {
+            return DockerBuildMode::from((string) $validated['dockerBuildMode']);
+        }
+
+        if ($deployMode === DeployMode::DOCKER) {
+            return DockerBuildMode::BUILD;
+        }
+
+        return null;
     }
 }
