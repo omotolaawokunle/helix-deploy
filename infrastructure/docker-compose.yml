@@ -81,9 +81,9 @@ services:
 
   reverb:
     <<: *api-service
+    # No host port publish — browsers connect via frontend nginx /app/ → reverb:8080.
+    # For a direct host bind in local setups, add a compose override with ports: ["8080:8080"].
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
-    ports:
-      - "8080:8080"
 
   frontend:
     build:
@@ -91,12 +91,14 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ""
-        VITE_REVERB_HOST: localhost
-        VITE_REVERB_PORT: "8080"
+        VITE_REVERB_HOST: ${VITE_REVERB_HOST:-localhost}
+        VITE_REVERB_PORT: ${VITE_REVERB_PORT:-8080}
+        VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-http}
         VITE_REVERB_APP_KEY: ${REVERB_APP_KEY}
+    # Default binds loopback so a host reverse proxy can terminate TLS.
+    # Bare metal without a proxy: FRONTEND_PUBLISH_BIND=0.0.0.0 FRONTEND_PUBLISH_PORT=80
     ports:
-      - "80:80"
-      - "443:443"
+      - "${FRONTEND_PUBLISH_BIND:-127.0.0.1}:${FRONTEND_PUBLISH_PORT:-8085}:80"
     depends_on:
       - api
       - reverb

@@ -5,18 +5,21 @@ WORKDIR /app
 ARG VITE_API_URL=
 ARG VITE_REVERB_HOST=localhost
 ARG VITE_REVERB_PORT=8080
+ARG VITE_REVERB_SCHEME=http
 ARG VITE_REVERB_APP_KEY=
 
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_REVERB_HOST=$VITE_REVERB_HOST
 ENV VITE_REVERB_PORT=$VITE_REVERB_PORT
+ENV VITE_REVERB_SCHEME=$VITE_REVERB_SCHEME
 ENV VITE_REVERB_APP_KEY=$VITE_REVERB_APP_KEY
 
 COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+# Production image build skips vue-tsc (typecheck runs in CI / npm run build locally).
+RUN npx vite build
 
 FROM nginx:alpine
 

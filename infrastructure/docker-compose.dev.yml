@@ -1,0 +1,12 @@
+# Local-only extras when you need a direct Reverb host bind.
+# Frontend publish is controlled by FRONTEND_PUBLISH_* in .env.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# Production/VPS: use docker-compose.yml alone with infrastructure/.env.
+
+services:
+  reverb:
+    ports:
+      - "8080:8080"

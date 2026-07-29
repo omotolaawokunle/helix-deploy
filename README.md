@@ -264,13 +264,27 @@ Scale build throughput by adding `worker-builds` replicas. Total worker processe
    docker compose up -d --build
    ```
 
+   By default the frontend is published on `127.0.0.1:8085` (for a host reverse proxy). For a direct bind on port 80:
+
+   ```bash
+   # in infrastructure/.env
+   FRONTEND_PUBLISH_BIND=0.0.0.0
+   FRONTEND_PUBLISH_PORT=80
+   ```
+
+   To also publish Reverb on host port 8080 (local only):
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+   ```
+
 6. Run migrations and seed the database:
 
    ```bash
    docker compose exec api php artisan migrate --seed
    ```
 
-7. Open [http://localhost](http://localhost) and register your first account.
+7. Open the app (default [http://127.0.0.1:8085](http://127.0.0.1:8085), or [http://localhost](http://localhost) if you bound port 80) and register your first account.
 
 All `docker compose` commands below assume your current directory is `infrastructure/`.
 
@@ -302,6 +316,9 @@ Environment variables are defined in `infrastructure/.env.example` (Docker) and 
 | `DB_*`                                 | PostgreSQL connection                                   |
 | `REDIS_*`                              | Cache, sessions, queues, and Reverb                     |
 | `REVERB_*`                             | WebSocket server credentials and host                   |
+| `REVERB_BROADCAST_*`                   | Internal host for API→Reverb publish (Docker: `reverb`) |
+| `VITE_REVERB_*`                        | Baked into the frontend image at build time             |
+| `FRONTEND_PUBLISH_BIND` / `FRONTEND_PUBLISH_PORT` | Host bind for the frontend container (default `127.0.0.1:8085`) |
 | `SANCTUM_STATEFUL_DOMAINS`             | Domains allowed for SPA cookie auth                     |
 | `RELEASE_RETENTION`                    | Number of release directories kept on disk (default: 5) |
 | `DEPLOYMENT_TIMEOUT` / `BUILD_TIMEOUT` | Job timeout in minutes (default: 30)                    |
@@ -320,6 +337,9 @@ Frontend build-time variables (`apps/frontend/.env.example`):
 - Set `APP_DEBUG=false` and `APP_ENV=production`
 - Use strong `DB_PASSWORD`, `REDIS_PASSWORD`, and `REVERB_APP_SECRET`
 - Terminate TLS at your reverse proxy; set `APP_URL`, `SPA_URL`, `VERIFICATION_URL_ROOT`, and `SANCTUM_STATEFUL_DOMAINS` to your public `https://` domain (all three URL vars must use the same scheme, host, and port)
+- Set `VITE_REVERB_HOST` / `VITE_REVERB_PORT` / `VITE_REVERB_SCHEME` to that same public origin (e.g. `your-domain.example`, `443`, `https`) and rebuild the frontend image after changing them
+- Keep `FRONTEND_PUBLISH_BIND=127.0.0.1` and `FRONTEND_PUBLISH_PORT=8085` when a host Nginx/Caddy terminates TLS (do not publish container 80/443 on a shared VPS)
+- Do not publish Reverb on the host; the frontend nginx proxies `/app/` to the `reverb` service
 - Rebuild the frontend container after nginx changes so `/email/` verification links proxy correctly
 - Restart API and queue workers after env changes, then resend verification emails (old signed links cannot be fixed retroactively)
 - Back up PostgreSQL and Redis volumes regularly
