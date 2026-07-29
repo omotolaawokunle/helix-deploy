@@ -16,16 +16,25 @@ final class RestartWorkersStep extends BaseDeploymentStep
 
     public function run(DeploymentContext $ctx): void
     {
-        $this->runCommand(
-            $ctx,
-            'cd '.$this->shellQuote($ctx->releasePath).' && php artisan horizon:terminate',
-        );
+        $release = $this->shellQuote($ctx->releasePath);
+
+        if ($this->hasHorizon($ctx)) {
+            $this->runCommand($ctx, 'cd '.$release.' && php artisan horizon:terminate');
+
+            return;
+        }
+
+        $this->runCommand($ctx, 'cd '.$release.' && php artisan queue:restart');
     }
 
-    public function isSkippable(DeploymentContext $ctx): bool
+    private function hasHorizon(DeploymentContext $ctx): bool
     {
-        $horizon = $ctx->ssh->run('test -f '.$this->shellQuote($ctx->releasePath.'/config/horizon.php'));
+        // Prefer the installed package over config/horizon.php — config can remain
+        // after composer --no-dev strips laravel/horizon from vendor.
+        $horizon = $ctx->ssh->run(
+            'test -d '.$this->shellQuote($ctx->releasePath.'/vendor/laravel/horizon'),
+        );
 
-        return $horizon->exitCode !== 0;
+        return $horizon->exitCode === 0;
     }
 }

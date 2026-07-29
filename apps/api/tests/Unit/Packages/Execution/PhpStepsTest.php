@@ -106,13 +106,34 @@ it('reload php fpm uses site php version', function (): void {
     $ssh->assertCommandExecuted('*systemctl reload php8.3-fpm*');
 });
 
-it('restart workers is skippable without horizon config', function (): void {
+it('restart workers uses horizon terminate when horizon is installed', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
     $ssh = fakeSsh();
-    queueSshResponses($ssh, ['test -f *' => sshFailure()]);
+    queueSshResponses($ssh, [
+        'test -d *vendor/laravel/horizon*' => sshSuccess(),
+        '*horizon:terminate*' => sshSuccess(),
+    ]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
-    expect((new RestartWorkersStep())->isSkippable($ctx))->toBeTrue();
+    (new RestartWorkersStep())->run($ctx);
+
+    $ssh->assertCommandExecuted('*horizon:terminate*');
+    $ssh->assertCommandNotExecuted('*queue:restart*');
+});
+
+it('restart workers falls back to queue restart without horizon', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, [
+        'test -d *vendor/laravel/horizon*' => sshFailure(),
+        '*queue:restart*' => sshSuccess(),
+    ]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new RestartWorkersStep())->run($ctx);
+
+    $ssh->assertCommandExecuted('*queue:restart*');
+    $ssh->assertCommandNotExecuted('*horizon:terminate*');
 });
 
 it('php step failure throws deployment step failed with ssh result', function (): void {
