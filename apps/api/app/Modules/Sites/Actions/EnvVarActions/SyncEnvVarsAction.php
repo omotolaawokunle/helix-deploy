@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Actions\EnvVarActions;
 
-use App\Models\Organization;
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Credentials\CredentialVault;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Models\Site;
