@@ -21,7 +21,11 @@ final class DockerBuildStep extends BaseDeploymentStep
         if ($composePath !== null) {
             $this->runCommand(
                 $ctx,
-                DockerComposeCli::command($composePath, 'build'),
+                DockerComposeCli::command(
+                    $composePath,
+                    'build',
+                    rtrim($ctx->sharedPath, '/').'/.env',
+                ),
             );
 
             return;

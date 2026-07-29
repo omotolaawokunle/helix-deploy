@@ -68,6 +68,7 @@ function createSite(overrides: Partial<Site> = {}): Site {
     dockerComposePath: null,
     deployMode: 'git',
     dockerBuildMode: null,
+    phpVersion: null,
     pipelineId: null,
     runtime: Runtime.Native,
     status: 'active',
@@ -100,6 +101,23 @@ describe('SiteSettingsTab auto deploy', () => {
       site: createSite({ autoDeployEnabled: true, webhookUrl: 'https://api.test/hooks/sites/token' }),
       webhookSecret: 'secret-once',
     })
+  })
+
+  it('shows php version picker for php runtime sites', async () => {
+    const wrapper = mount(SiteSettingsTab, {
+      props: {
+        site: createSite({ runtime: 'php' as Site['runtime'], phpVersion: '8.3' }),
+        isProduction: false,
+      },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="php-version-section"]')).not.toBeNull()
+    expect(document.body.querySelector('[data-testid="php-version-select"]')).not.toBeNull()
+
+    wrapper.unmount()
   })
 
   it('shows auto deploy section for git sites', async () => {

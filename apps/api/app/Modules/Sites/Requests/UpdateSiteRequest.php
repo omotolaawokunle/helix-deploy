@@ -10,6 +10,7 @@ use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\GitProvider;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Models\Site;
+use App\Packages\Provisioning\Enums\PhpVersion;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -58,6 +59,7 @@ final class UpdateSiteRequest extends FormRequest
             'repositoryUrl' => ['sometimes', 'nullable', 'string', 'max:2048', 'url'],
             'repositoryProvider' => ['sometimes', 'nullable', 'string', Rule::enum(GitProvider::class)],
             'autoDeployEnabled' => ['sometimes', 'boolean'],
+            'phpVersion' => ['sometimes', 'nullable', 'string', 'max:10', Rule::in(PhpVersion::values())],
         ];
     }
 

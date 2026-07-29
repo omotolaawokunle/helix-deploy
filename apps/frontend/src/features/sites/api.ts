@@ -136,6 +136,7 @@ export async function updateSite(
     | 'pipelineId'
     | 'repositoryUrl'
     | 'repositoryProvider'
+    | 'phpVersion'
   >>,
 ): Promise<{ site: Site; webhookSecret?: string }> {
   const response = await api.patch<ResourceResponse<Site> & { webhookSecret?: string }>(

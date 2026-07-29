@@ -39,6 +39,7 @@ import {
   EXTERNAL_BUILD_STRATEGY_V2_MESSAGE,
   SELECTABLE_SITE_BUILD_STRATEGY_OPTIONS,
 } from '@/features/sites/constants'
+import { PHP_VERSIONS } from '@/features/servers/types'
 import type { DockerBuildMode, GitProviderType, Site, SiteBuildStrategy, SiteDeployMode } from '@/types'
 
 interface Props {
@@ -86,6 +87,7 @@ const dockerRegistry = ref('')
 const dockerComposePath = ref('')
 const deployMode = ref<SiteDeployMode>('git')
 const dockerBuildMode = ref<DockerBuildMode>('build')
+const phpVersion = ref('8.3')
 const isSaving = ref(false)
 const isDeleteDialogOpen = ref(false)
 const autoDeployEnabled = ref(false)
@@ -119,6 +121,7 @@ const isAutoDeployEligible = computed((): boolean => {
 })
 
 const isDockerRuntimeSite = computed(() => props.site.runtime === 'docker')
+const isPhpRuntimeSite = computed(() => props.site.runtime === 'php')
 
 const canEnableAutoDeploy = computed(() => {
   if (!autoDeployEnabled.value) {
@@ -203,6 +206,7 @@ watch(
     dockerComposePath.value = site.dockerComposePath ?? ''
     deployMode.value = site.deployMode
     dockerBuildMode.value = site.dockerBuildMode ?? 'build'
+    phpVersion.value = site.phpVersion ?? '8.3'
     pipelineId.value = site.pipelineId
     repositoryUrl.value = site.repositoryUrl ?? ''
     repositoryProvider.value = site.repositoryProvider ?? 'none'
@@ -422,6 +426,11 @@ async function handleSave(): Promise<void> {
         ? {
             deployMode: deployMode.value,
             dockerBuildMode: deployMode.value === 'docker' ? dockerBuildMode.value : null,
+          }
+        : {}),
+      ...(isPhpRuntimeSite.value
+        ? {
+            phpVersion: phpVersion.value,
           }
         : {}),
       pipelineId: pipelineId.value,
@@ -875,6 +884,36 @@ async function handleDelete(): Promise<void> {
           </RouterLink>
         </p>
       </div>
+
+      <template v-if="isPhpRuntimeSite">
+        <h2 class="section-label pt-4">
+          PHP
+        </h2>
+
+        <div class="space-y-2" data-testid="php-version-section">
+          <Label for="php-version">PHP version</Label>
+          <Select
+            :model-value="phpVersion"
+            @update:model-value="(value) => { phpVersion = String(value) }"
+          >
+            <SelectTrigger id="php-version" data-testid="php-version-select">
+              <SelectValue placeholder="Select PHP version" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="version in PHP_VERSIONS"
+                :key="version"
+                :value="version"
+              >
+                PHP {{ version }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-sm text-muted-foreground">
+            Must match PHP-FPM on the server (e.g. php8.4-fpm). Re-apply the nginx config after changing so the PHP socket updates.
+          </p>
+        </div>
+      </template>
 
       <h2 class="section-label pt-4">
         Docker

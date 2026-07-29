@@ -176,7 +176,9 @@ it('docker build uses compose build when compose path is relative to release', f
         ->and($commands[0])->toContain('docker compose -f')
         ->and($commands[0])->toContain('docker-compose -f')
         ->and($commands[0])->toContain($ctx->releasePath.'/infrastructure/docker-compose.yml')
-        ->and($commands[0])->toContain('build');
+        ->and($commands[0])->toContain('build')
+        ->and($commands[0])->toContain('touch ')
+        ->and($commands[0])->toContain('/.env');
 });
 
 it('docker login is skippable without registry', function (): void {
@@ -219,7 +221,8 @@ it('docker compose up resolves absolute compose path', function (): void {
         ->and($commands[0])->toContain('docker compose -f')
         ->and($commands[0])->toContain('docker-compose -f')
         ->and($commands[0])->toContain('/var/www/app.example.test/shared/docker-compose.yml')
-        ->and($commands[0])->toContain('up -d');
+        ->and($commands[0])->toContain('up -d')
+        ->and($commands[0])->toContain('/.env');
 });
 
 it('docker compose up resolves relative compose path against release', function (): void {
@@ -237,7 +240,8 @@ it('docker compose up resolves relative compose path against release', function 
     expect($commands)->toHaveCount(1)
         ->and($commands[0])->toContain($ctx->releasePath.'/infrastructure/docker-compose.yml')
         ->and($commands[0])->toContain('up -d')
-        ->and($commands[0])->toContain('docker-compose -f');
+        ->and($commands[0])->toContain('docker-compose -f')
+        ->and($commands[0])->toContain($ctx->sharedPath.'/.env');
 });
 
 it('docker cleanup prunes images and containers', function (): void {

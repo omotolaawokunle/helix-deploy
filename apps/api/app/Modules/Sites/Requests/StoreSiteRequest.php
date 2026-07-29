@@ -13,6 +13,7 @@ use App\Modules\Sites\Enums\NodePM;
 use App\Modules\Sites\Enums\PythonWSGI;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Enums\SslChallenge;
+use App\Packages\Provisioning\Enums\PhpVersion;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -53,7 +54,13 @@ class StoreSiteRequest extends FormRequest
             'dockerRegistry' => ['nullable', 'string', 'max:255'],
             'dockerComposePath' => ['nullable', 'string', 'max:255'],
             'dockerBuildMode' => ['nullable', 'string', Rule::in(array_column(DockerBuildMode::cases(), 'value'))],
-            'phpVersion' => ['nullable', 'string', 'max:10', Rule::requiredIf($runtime === Runtime::PHP->value)],
+            'phpVersion' => [
+                'nullable',
+                'string',
+                'max:10',
+                Rule::requiredIf($runtime === Runtime::PHP->value),
+                Rule::in(PhpVersion::values()),
+            ],
             'nodePm' => ['nullable', 'string', Rule::in(array_column(NodePM::cases(), 'value'))],
             'pythonWsgi' => ['nullable', 'string', Rule::in(array_column(PythonWSGI::cases(), 'value'))],
             'goBinaryPath' => ['nullable', 'string', 'max:500'],

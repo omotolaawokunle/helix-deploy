@@ -178,6 +178,17 @@ it('install php 8.3 installs version-specific packages', function (): void {
     expect($connection->getExecutedCommands()[5])->toContain('php8.3-fpm');
 });
 
+it('install php 8.4 installs version-specific packages', function (): void {
+    $fixture = provisioningServerFixture();
+    $server = $fixture[1];
+    $script = new InstallPHP(PhpVersion::V8_4);
+    $connection = phpProvisioningConnection(fpmInstalled: false, nginxInstalled: false);
+
+    $script->handle($connection, $server);
+
+    expect($connection->getExecutedCommands()[5])->toContain('php8.4-fpm');
+});
+
 it('install php skips package installation when fpm is already installed', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];

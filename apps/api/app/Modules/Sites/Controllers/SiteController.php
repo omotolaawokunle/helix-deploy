@@ -211,6 +211,12 @@ class SiteController extends Controller
             $siteModel->pipeline_id = $validated['pipelineId'];
         }
 
+        if (array_key_exists('phpVersion', $validated)) {
+            $siteModel->php_version = $validated['phpVersion'] !== null
+                ? (string) $validated['phpVersion']
+                : null;
+        }
+
         if ((bool) $siteModel->auto_deploy_enabled && ! $siteModel->canAutoDeploy()) {
             abort(
                 422,

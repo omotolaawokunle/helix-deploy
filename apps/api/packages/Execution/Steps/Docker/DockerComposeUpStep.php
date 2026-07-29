@@ -20,7 +20,11 @@ final class DockerComposeUpStep extends BaseDeploymentStep
 
         $this->runCommand(
             $ctx,
-            DockerComposeCli::command($composePath, 'up -d'),
+            DockerComposeCli::command(
+                $composePath,
+                'up -d',
+                rtrim($ctx->sharedPath, '/').'/.env',
+            ),
         );
     }
 }

@@ -346,8 +346,8 @@ final class PipelineBuilder
                 new VerifyConnectionStep(),
                 new CreateReleaseDirectoryStep(),
                 new CloneRepositoryStep(),
-                new DockerBuildStep(),
                 new SyncEnvVarsStep(),
+                new DockerBuildStep(),
                 new DockerComposeUpStep(),
                 new DockerCleanupStep(),
             ];

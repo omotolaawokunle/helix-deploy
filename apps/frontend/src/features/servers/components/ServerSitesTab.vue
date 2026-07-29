@@ -48,8 +48,8 @@ import {
   patchSiteDnsSslFromBroadcast,
   useSiteProvisioningChannel,
 } from '@/features/sites/composables/useSiteProvisioningChannel'
+import { PHP_VERSIONS, type ProjectOption } from '@/features/servers/types'
 import { fetchProjects } from '@/features/servers/api'
-import type { ProjectOption } from '@/features/servers/types'
 import { extractFieldErrors, firstFieldError } from '@/lib/validation-errors'
 import { useRealtimeStore } from '@/stores/useRealtimeStore'
 import type { DockerBuildMode, Site, SiteDeployMode } from '@/types'
@@ -765,7 +765,23 @@ onMounted(() => {
 
           <div v-if="requiresPhpVersion" class="space-y-2">
             <Label for="site-php-version">PHP version</Label>
-            <Input id="site-php-version" v-model="phpVersion" placeholder="8.3" />
+            <Select
+              :model-value="phpVersion"
+              @update:model-value="(value) => { phpVersion = String(value) }"
+            >
+              <SelectTrigger id="site-php-version">
+                <SelectValue placeholder="Select PHP version" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="version in PHP_VERSIONS"
+                  :key="version"
+                  :value="version"
+                >
+                  PHP {{ version }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div v-if="requiresAppPort" class="space-y-2">

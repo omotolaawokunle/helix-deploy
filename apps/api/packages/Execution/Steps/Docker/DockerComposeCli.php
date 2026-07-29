@@ -7,14 +7,34 @@ namespace App\Packages\Execution\Steps\Docker;
 /**
  * Builds a shell snippet that prefers Compose V2 (`docker compose`) and falls
  * back to Compose V1 (`docker-compose`) on hosts that only have the hyphenated binary.
+ *
+ * Also ensures a `.env` exists next to the compose file — Compose fails hard when
+ * services declare `env_file: .env` but the file is missing from a fresh release.
  */
 final class DockerComposeCli
 {
-    public static function command(string $composeFile, string $subcommand): string
-    {
+    public static function command(
+        string $composeFile,
+        string $subcommand,
+        ?string $preferredEnvFile = null,
+    ): string {
         $file = escapeshellarg($composeFile);
+        $composeDir = escapeshellarg(dirname($composeFile));
+        $composeEnv = escapeshellarg(dirname($composeFile).'/.env');
 
-        return 'if docker compose version >/dev/null 2>&1; then'
+        $prepareEnv = 'if [ ! -f '.$composeEnv.' ]; then ';
+        if (is_string($preferredEnvFile) && $preferredEnvFile !== '') {
+            $preferred = escapeshellarg($preferredEnvFile);
+            $prepareEnv .= 'if [ -f '.$preferred.' ]; then cp '.$preferred.' '.$composeEnv.'; '
+                .'else touch '.$composeEnv.'; fi; ';
+        } else {
+            $prepareEnv .= 'touch '.$composeEnv.'; ';
+        }
+        $prepareEnv .= 'fi; ';
+
+        return $prepareEnv
+            .'cd '.$composeDir.' && '
+            .'if docker compose version >/dev/null 2>&1; then'
             .' docker compose -f '.$file.' '.$subcommand.';'
             .' elif command -v docker-compose >/dev/null 2>&1; then'
             .' docker-compose -f '.$file.' '.$subcommand.';'

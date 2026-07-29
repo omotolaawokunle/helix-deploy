@@ -97,10 +97,16 @@ it('builds docker build pipeline with clone', function (): void {
     $steps = (new PipelineBuilder())->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
+    $syncIndex = array_search('sync-env-vars', $names, true);
+    $buildIndex = array_search('docker-build', $names, true);
+
     expect($names[0])->toBe('verify-connection')
         ->and($names)->toContain('clone-repository')
         ->and($names)->toContain('docker-build')
-        ->and($names)->not->toContain('docker-pull');
+        ->and($names)->not->toContain('docker-pull')
+        ->and($syncIndex)->toBeInt()
+        ->and($buildIndex)->toBeInt()
+        ->and($syncIndex)->toBeLessThan($buildIndex);
 });
 
 it('places sync-env-vars before link-shared-directories for php', function (): void {
