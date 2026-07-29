@@ -18,7 +18,7 @@ final class PipelineExecutionContext
         public readonly Server $server,
         public readonly Deployment $deployment,
         public readonly ?SSHConnectionInterface $ssh,
-        public readonly string $actorId,
+        public readonly ?string $actorId,
     ) {
     }
 

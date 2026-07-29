@@ -9,7 +9,6 @@ use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Deployments\DTOs\TriggerDeploymentDTO;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentType;
-use App\Modules\Deployments\Enums\TriggerType;
 use App\Modules\Pipelines\Jobs\RunPipelineJob;
 use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Pipelines\Enums\PipelineRunStatus;
@@ -24,7 +23,7 @@ use Illuminate\Validation\ValidationException;
 
 class StartPipelineRunAction
 {
-    public function execute(Site $site, User $actor, TriggerDeploymentDTO $dto): Deployment
+    public function execute(Site $site, ?User $actor, TriggerDeploymentDTO $dto): Deployment
     {
         if ($site->pipeline_id === null) {
             throw ValidationException::withMessages([
@@ -51,16 +50,20 @@ class StartPipelineRunAction
             ]);
         }
 
-        return DB::transaction(function () use ($site, $actor, $dto, $pipeline): Deployment {
+        $actorId = $actor !== null ? (string) $actor->getKey() : null;
+
+        return DB::transaction(function () use ($site, $actorId, $dto, $pipeline): Deployment {
             $deployment = Deployment::query()->create([
                 'id' => (string) Str::uuid(),
                 'site_id' => (string) $site->getKey(),
                 'organization_id' => (string) $site->organization_id,
                 'type' => DeploymentType::DEPLOY,
                 'status' => DeploymentStatus::PENDING,
-                'triggered_by' => (string) $actor->getKey(),
-                'trigger_type' => TriggerType::MANUAL,
+                'triggered_by' => $actorId,
+                'trigger_type' => $dto->triggerType,
                 'branch' => $dto->branch ?? $site->deploy_branch,
+                'commit_hash' => $dto->commitHash,
+                'commit_message' => $dto->commitMessage,
             ]);
 
             $pipelineRun = PipelineRun::query()->create([
@@ -69,7 +72,7 @@ class StartPipelineRunAction
                 'pipeline_id' => (string) $pipeline->getKey(),
                 'site_id' => (string) $site->getKey(),
                 'deployment_id' => (string) $deployment->getKey(),
-                'triggered_by' => (string) $actor->getKey(),
+                'triggered_by' => $actorId,
                 'status' => PipelineRunStatus::PENDING,
                 'current_step_order' => 0,
                 'metadata' => [],
@@ -114,12 +117,13 @@ class StartPipelineRunAction
                     'branch' => $deployment->branch,
                     'status' => DeploymentStatus::PENDING->value,
                     'pipelineRunId' => $pipelineRun->getKey(),
+                    'triggerType' => $dto->triggerType->value,
                 ],
             );
 
             RunPipelineJob::dispatch(
                 pipelineRunId: (string) $pipelineRun->getKey(),
-                actorId: (string) $actor->getKey(),
+                actorId: $actorId,
             );
 
             return $deployment->refresh();

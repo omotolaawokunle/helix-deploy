@@ -32,7 +32,7 @@ class TriggerDeploymentAction
     ) {
     }
 
-    public function execute(Site $site, User $actor, TriggerDeploymentDTO $dto): Deployment
+    public function execute(Site $site, ?User $actor, TriggerDeploymentDTO $dto): Deployment
     {
         if ($site->status !== SiteStatus::ACTIVE) {
             throw new InvalidArgumentException('Site must be active before deploying.');
@@ -72,15 +72,19 @@ class TriggerDeploymentAction
             $buildRunnerId = (string) $runner->getKey();
         }
 
+        $actorId = $actor !== null ? (string) $actor->getKey() : null;
+
         $deployment = Deployment::query()->create([
             'id' => (string) Str::uuid(),
             'site_id' => (string) $site->getKey(),
             'organization_id' => (string) $site->organization_id,
             'type' => DeploymentType::DEPLOY,
             'status' => DeploymentStatus::PENDING,
-            'triggered_by' => (string) $actor->getKey(),
-            'trigger_type' => TriggerType::MANUAL,
+            'triggered_by' => $actorId,
+            'trigger_type' => $dto->triggerType,
             'branch' => $dto->branch ?? $site->deploy_branch,
+            'commit_hash' => $dto->commitHash,
+            'commit_message' => $dto->commitMessage,
             'build_strategy' => $buildStrategy->value,
             'build_runner_id' => $buildRunnerId,
         ]);
@@ -88,12 +92,12 @@ class TriggerDeploymentAction
         if ($buildStrategy === BuildStrategy::RUNNER) {
             RunBuildJob::dispatch(
                 deploymentId: (string) $deployment->getKey(),
-                actorId: (string) $actor->getKey(),
+                actorId: $actorId,
             );
         } else {
             RunDeploymentJob::dispatch(
                 deploymentId: (string) $deployment->getKey(),
-                actorId: (string) $actor->getKey(),
+                actorId: $actorId,
             );
         }
 
@@ -107,6 +111,7 @@ class TriggerDeploymentAction
                 'status' => DeploymentStatus::PENDING->value,
                 'buildStrategy' => $buildStrategy->value,
                 'buildRunnerId' => $buildRunnerId,
+                'triggerType' => $dto->triggerType->value,
             ],
         );
 

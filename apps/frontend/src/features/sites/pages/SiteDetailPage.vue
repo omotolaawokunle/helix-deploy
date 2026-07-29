@@ -244,6 +244,7 @@ onMounted(() => {
           <SiteSettingsTab
             v-if="activeTab === 'settings'"
             :site="site"
+            :is-production="isProduction"
             @updated="handleSiteUpdated"
           />
         </TabsContent>

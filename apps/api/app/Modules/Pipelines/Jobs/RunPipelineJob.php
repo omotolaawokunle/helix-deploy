@@ -22,7 +22,7 @@ class RunPipelineJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
     public function __construct(
         public readonly string $pipelineRunId,
-        public readonly string $actorId,
+        public readonly ?string $actorId,
         public readonly int $startStepIndex = 0,
     ) {
         $this->onQueue('deployments');

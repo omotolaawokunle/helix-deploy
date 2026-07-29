@@ -32,5 +32,7 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="OBSERVABILITY_METRICS_ENABLED" value="false"/>
+        <env name="OBSERVABILITY_LOKI_ENABLED" value="false"/>
     </php>
 </phpunit>

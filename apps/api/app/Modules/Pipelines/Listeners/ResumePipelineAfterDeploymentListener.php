@@ -53,7 +53,7 @@ class ResumePipelineAfterDeploymentListener
 
             RunPipelineJob::dispatch(
                 pipelineRunId: (string) $run->getKey(),
-                actorId: (string) $deployment->triggered_by,
+                actorId: $deployment->triggered_by,
                 startStepIndex: $nextIndex,
             );
 

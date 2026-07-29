@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
+import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +31,7 @@ import {
   fetchGitProviders,
   fetchGitRepositories,
   storeGitProviderToken,
+  rotateSiteWebhookSecret,
   updateSite,
 } from '@/features/sites/api'
 import {
@@ -41,9 +43,12 @@ import type { GitProviderType, Site, SiteBuildStrategy } from '@/types'
 
 interface Props {
   site: Site
+  isProduction?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  isProduction: false,
+})
 
 const emit = defineEmits<{
   updated: [site: Site]
@@ -81,6 +86,12 @@ const dockerRegistry = ref('')
 const dockerComposePath = ref('')
 const isSaving = ref(false)
 const isDeleteDialogOpen = ref(false)
+const autoDeployEnabled = ref(false)
+const webhookUrl = ref<string | null>(null)
+const revealedWebhookSecret = ref<string | null>(null)
+const productionAutoDeployConfirmed = ref(false)
+const isRotatingWebhookSecret = ref(false)
+const isRotateSecretDialogOpen = ref(false)
 
 const providerOptions: Array<{ value: GitProviderType; label: string }> = [
   { value: 'github', label: 'GitHub' },
@@ -89,6 +100,34 @@ const providerOptions: Array<{ value: GitProviderType; label: string }> = [
 ]
 
 const isExternalBuildStrategy = computed(() => props.site.buildStrategy === 'external')
+
+const isGitSite = computed(() => props.site.repositoryUrl !== null && props.site.repositoryUrl !== '')
+
+const canEnableAutoDeploy = computed(() => {
+  if (!autoDeployEnabled.value) {
+    return true
+  }
+
+  if (props.isProduction) {
+    return productionAutoDeployConfirmed.value
+  }
+
+  return true
+})
+
+const autoDeployProviderHint = computed((): string => {
+  const provider = repositoryProvider.value
+
+  if (provider === 'gitlab') {
+    return 'In GitLab, add a webhook with push events and paste the secret into the token field.'
+  }
+
+  if (provider === 'bitbucket') {
+    return 'In Bitbucket, add a webhook for repository push events and use the secret below.'
+  }
+
+  return 'In GitHub, add a webhook with push events and paste the secret below.'
+})
 
 const deleteSiteDescription = computed(() => {
   const parts = [`This will permanently delete ${props.site.domain}. This cannot be undone.`]
@@ -131,6 +170,8 @@ watch(
     repositoryUrl.value = site.repositoryUrl ?? ''
     repositoryProvider.value = site.repositoryProvider ?? 'none'
     gitCredentialConfigured.value = site.gitCredentialConfigured
+    autoDeployEnabled.value = site.autoDeployEnabled
+    webhookUrl.value = site.webhookUrl
   },
   { immediate: true },
 )
@@ -319,11 +360,18 @@ function handleRepositoryChange(fullName: string): void {
 }
 
 async function handleSave(): Promise<void> {
+  if (autoDeployEnabled.value && !canEnableAutoDeploy.value) {
+    toast.error('Confirm production auto deploy before saving.')
+
+    return
+  }
+
   isSaving.value = true
 
   try {
-    const updated = await updateSite(props.site.id, {
+    const { site: updated, webhookSecret } = await updateSite(props.site.id, {
       deployBranch: deployBranch.value,
+      autoDeployEnabled: autoDeployEnabled.value,
       preDeployScript: preDeployScript.value,
       postDeployScript: postDeployScript.value,
       preBuildScript: preBuildScript.value,
@@ -337,12 +385,60 @@ async function handleSave(): Promise<void> {
       repositoryUrl: repositoryUrl.value || null,
       repositoryProvider: repositoryProvider.value === 'none' ? null : repositoryProvider.value,
     })
+
+    if (webhookSecret !== undefined) {
+      revealedWebhookSecret.value = webhookSecret
+    }
+
+    webhookUrl.value = updated.webhookUrl
     emit('updated', updated)
     toast.success('Site settings saved.')
   } catch {
     toast.error('Unable to save site settings.')
   } finally {
     isSaving.value = false
+  }
+}
+
+async function copyWebhookUrl(): Promise<void> {
+  if (webhookUrl.value === null) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(webhookUrl.value)
+    toast.success('Webhook URL copied.')
+  } catch {
+    toast.error('Unable to copy webhook URL.')
+  }
+}
+
+async function copyWebhookSecret(): Promise<void> {
+  if (revealedWebhookSecret.value === null) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(revealedWebhookSecret.value)
+    toast.success('Webhook secret copied.')
+  } catch {
+    toast.error('Unable to copy webhook secret.')
+  }
+}
+
+async function handleRotateWebhookSecret(): Promise<void> {
+  isRotatingWebhookSecret.value = true
+
+  try {
+    const result = await rotateSiteWebhookSecret(props.site.id)
+    revealedWebhookSecret.value = result.webhookSecret
+    webhookUrl.value = result.webhookUrl
+    toast.success('Webhook secret rotated. Update your git provider webhook configuration.')
+  } catch {
+    toast.error('Unable to rotate webhook secret.')
+  } finally {
+    isRotatingWebhookSecret.value = false
+    isRotateSecretDialogOpen.value = false
   }
 }
 
@@ -487,6 +583,101 @@ async function handleDelete(): Promise<void> {
           id="deploy-branch"
           v-model="deployBranch"
         />
+      </div>
+
+      <div
+        v-if="isGitSite"
+        class="space-y-4 border-t pt-6"
+        data-testid="auto-deploy-section"
+      >
+        <h2 class="section-label">
+          Auto deploy
+        </h2>
+
+        <ProductionWarningBanner
+          v-if="isProduction && autoDeployEnabled"
+          :resource-name="site.domain"
+          :is-production="true"
+          variant="inline"
+          message="Auto deploy on production will trigger deployments on every matching push."
+        />
+
+        <div class="flex items-center gap-3">
+          <input
+            id="auto-deploy-enabled"
+            v-model="autoDeployEnabled"
+            type="checkbox"
+            class="rounded border-input"
+            data-testid="auto-deploy-toggle"
+          >
+          <Label for="auto-deploy-enabled">Enable auto deploy on push</Label>
+        </div>
+
+        <div
+          v-if="isProduction && autoDeployEnabled"
+          class="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+          data-testid="production-auto-deploy-confirm"
+        >
+          <input
+            id="production-auto-deploy-confirmed"
+            v-model="productionAutoDeployConfirmed"
+            type="checkbox"
+            class="mt-0.5 rounded border-input"
+            data-testid="production-auto-deploy-checkbox"
+          >
+          <Label for="production-auto-deploy-confirmed" class="font-normal leading-relaxed">
+            I understand that pushes to the deploy branch will automatically deploy to production.
+          </Label>
+        </div>
+
+        <div v-if="autoDeployEnabled && webhookUrl !== null" class="space-y-3">
+          <div class="space-y-2">
+            <Label for="webhook-url">Webhook URL</Label>
+            <div class="flex gap-2">
+              <Input
+                id="webhook-url"
+                :model-value="webhookUrl"
+                readonly
+                data-testid="webhook-url-input"
+              />
+              <Button type="button" variant="outline" @click="copyWebhookUrl">
+                Copy
+              </Button>
+            </div>
+          </div>
+
+          <div v-if="revealedWebhookSecret !== null" class="space-y-2">
+            <Label for="webhook-secret">Webhook secret</Label>
+            <p class="text-sm text-muted-foreground">
+              Copy this secret now. It will not be shown again.
+            </p>
+            <div class="flex gap-2">
+              <Input
+                id="webhook-secret"
+                :model-value="revealedWebhookSecret"
+                readonly
+                data-testid="webhook-secret-input"
+              />
+              <Button type="button" variant="outline" @click="copyWebhookSecret">
+                Copy
+              </Button>
+            </div>
+          </div>
+
+          <p class="text-sm text-muted-foreground">
+            {{ autoDeployProviderHint }}
+          </p>
+
+          <Button
+            v-if="site.hasWebhookSecret || webhookUrl !== null"
+            type="button"
+            variant="outline"
+            data-testid="rotate-webhook-secret-button"
+            @click="isRotateSecretDialogOpen = true"
+          >
+            Regenerate secret
+          </Button>
+        </div>
       </div>
 
       <h2 class="section-label pt-4">
@@ -686,6 +877,14 @@ async function handleDelete(): Promise<void> {
       :confirm-text="site.domain"
       confirm-button-label="Delete site"
       @confirm="handleDelete"
+    />
+
+    <ConfirmDestructiveDialog
+      v-model:open="isRotateSecretDialogOpen"
+      title="Regenerate webhook secret"
+      description="This invalidates the current webhook secret. You must update the secret in your git provider before the next push can trigger a deploy."
+      confirm-button-label="Regenerate secret"
+      @confirm="handleRotateWebhookSecret"
     />
   </div>
 </template>

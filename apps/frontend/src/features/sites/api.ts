@@ -116,6 +116,7 @@ export async function updateSite(
   payload: Partial<Pick<
     Site,
     | 'deployBranch'
+    | 'autoDeployEnabled'
     | 'preDeployScript'
     | 'postDeployScript'
     | 'preBuildScript'
@@ -129,8 +130,27 @@ export async function updateSite(
     | 'repositoryUrl'
     | 'repositoryProvider'
   >>,
-): Promise<Site> {
-  const response = await api.patch<ResourceResponse<Site>>(`/api/v1/sites/${siteId}`, payload)
+): Promise<{ site: Site; webhookSecret?: string }> {
+  const response = await api.patch<ResourceResponse<Site> & { webhookSecret?: string }>(
+    `/api/v1/sites/${siteId}`,
+    payload,
+  )
+
+  return {
+    site: response.data.data,
+    webhookSecret: response.data.webhookSecret,
+  }
+}
+
+export interface RotateSiteWebhookSecretResponse {
+  webhookSecret: string
+  webhookUrl: string | null
+}
+
+export async function rotateSiteWebhookSecret(siteId: string): Promise<RotateSiteWebhookSecretResponse> {
+  const response = await api.post<ResourceResponse<RotateSiteWebhookSecretResponse>>(
+    `/api/v1/sites/${siteId}/webhook-secret/rotate`,
+  )
 
   return response.data.data
 }

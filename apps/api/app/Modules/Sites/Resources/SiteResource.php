@@ -39,6 +39,9 @@ class SiteResource extends JsonResource
             'repositoryProvider' => $this->repository_provider,
             'gitCredentialConfigured' => $this->gitCredentialConfigured(),
             'deployBranch' => $this->deploy_branch,
+            'autoDeployEnabled' => (bool) $this->auto_deploy_enabled,
+            'webhookUrl' => $this->webhookUrl(),
+            'hasWebhookSecret' => $this->hasWebhookCredentials(),
             'preDeployScript' => $this->pre_deploy_script,
             'postDeployScript' => $this->post_deploy_script,
             'preBuildScript' => $this->pre_build_script,
@@ -108,5 +111,14 @@ class SiteResource extends JsonResource
         }
 
         return app(GitProviderService::class)->hasProviderToken($organization, $provider);
+    }
+
+    private function webhookUrl(): ?string
+    {
+        if ($this->webhook_token === null || $this->webhook_token === '') {
+            return null;
+        }
+
+        return rtrim((string) config('app.url'), '/').'/api/v1/hooks/sites/'.$this->webhook_token;
     }
 }
