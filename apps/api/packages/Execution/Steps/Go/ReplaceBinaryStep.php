@@ -20,7 +20,7 @@ final class ReplaceBinaryStep extends BaseDeploymentStep
         $source = $ctx->releasePath.'/app';
 
         $this->runCommand($ctx, sprintf(
-            'cp %s %s && chmod +x %s',
+            'sudo cp %s %s && sudo chmod +x %s',
             $this->shellQuote($source),
             $this->shellQuote($target),
             $this->shellQuote($target),

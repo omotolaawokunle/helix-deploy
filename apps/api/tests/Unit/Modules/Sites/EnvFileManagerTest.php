@@ -221,8 +221,8 @@ it('sync writes to cached resolved path discovered during read', function (): vo
     $manager->read($site, $readSsh);
 
     $syncSsh = new FakeSSHConnection();
-    $syncSsh->addSequence('chmod 640 *', new SSHResult('chmod', 0, '', '', 0.0));
-    $syncSsh->addSequence('chown deploy:www-data *', new SSHResult('chown', 0, '', '', 0.0));
+    $syncSsh->addSequence('sudo chmod 640 *', new SSHResult('chmod', 0, '', '', 0.0));
+    $syncSsh->addSequence('sudo chown *', new SSHResult('chown', 0, '', '', 0.0));
 
     $manager->sync($site, $organization, $syncSsh);
 

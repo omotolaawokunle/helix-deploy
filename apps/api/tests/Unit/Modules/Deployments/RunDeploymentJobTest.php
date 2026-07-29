@@ -80,7 +80,7 @@ it('runs full php deployment pipeline with ordered steps and release activation'
 
     $commands = $fake->getExecutedCommands();
     $composerIndex = findCommandIndex($commands, '*composer install*');
-    $symlinkIndex = findCommandIndex($commands, 'ln -sfn *');
+    $symlinkIndex = findCommandIndex($commands, 'sudo ln -sfn *');
 
     expect($composerIndex)->toBeGreaterThan(-1)
         ->and($symlinkIndex)->toBeGreaterThan($composerIndex);
@@ -154,7 +154,7 @@ it('leaves later steps pending and skips symlink when a step fails', function ()
     $fake->addSequence('git -C * rev-parse HEAD', sshSuccess('deadbeef'));
     $fake->addSequence('git -C * log -1 *', sshSuccess('Deploy commit'));
     $fake->addSequence('*composer install*', sshFailure('composer failed'));
-    $fake->addSequence('sudo rm -rf *', sshSuccess());
+    $fake->addSequence('sudo rm -rf *', sshSuccess(), sshSuccess());
     $fake->addSequence('rm -rf *', sshSuccess(), sshSuccess(), sshSuccess());
 
     $this->mock(SSHManager::class, function ($mock) use ($fake): void {
@@ -181,6 +181,7 @@ it('leaves later steps pending and skips symlink when a step fails', function ()
         ->count();
 
     expect($pendingAfterFailure)->toBeGreaterThan(0);
+    $fake->assertCommandNotExecuted('sudo ln -sfn *');
     $fake->assertCommandNotExecuted('ln -sfn *');
 });
 
@@ -266,9 +267,9 @@ function stubDeploymentSsh(string $domain, string $deploymentId): FakeSSHConnect
         'git -C * log -1 *' => sshSuccess('Deploy commit'),
         '*composer install*' => $success(),
         'test -f *' => array_fill(0, 10, sshFailure()),
-        'chmod 640 *' => $success(),
-        'chown deploy:www-data *' => $success(),
-        'ln -sfn *' => [$success(), $success(), $success()],
+        'sudo chmod 640 *' => $success(),
+        'sudo chown *' => $success(),
+        'sudo ln -sfn *' => [$success(), $success(), $success()],
         'sudo rm -rf *' => [$success(), $success(), $success()],
         'rm -rf *' => [$success(), $success(), $success()],
         '*php artisan config:cache*' => $success(),

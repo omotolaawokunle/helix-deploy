@@ -13,8 +13,8 @@ it('uploads env vars to shared path and writes audit log during deployment', fun
     $organization->users()->attach($deployment->triggered_by, ['role' => 'owner']);
     $ssh = (new FakeSSHConnection())->connect();
 
-    $ssh->addSequence('chmod 640 *', sshSuccess());
-    $ssh->addSequence('chown deploy:www-data *', sshSuccess());
+    $ssh->addSequence('sudo chmod 640 *', sshSuccess());
+    $ssh->addSequence('sudo chown *', sshSuccess());
 
     $vault = app(CredentialVaultInterface::class);
     $vault->storeSecret($organization, $site, 'APP_KEY', 'secret-value');
@@ -36,8 +36,8 @@ it('uploads empty env file when site has no variables', function (): void {
     [$organization, $server, $site, $deployment] = executionFixture();
     $ssh = (new FakeSSHConnection())->connect();
 
-    $ssh->addSequence('chmod 640 *', sshSuccess());
-    $ssh->addSequence('chown deploy:www-data *', sshSuccess());
+    $ssh->addSequence('sudo chmod 640 *', sshSuccess());
+    $ssh->addSequence('sudo chown *', sshSuccess());
 
     $ctx = executionContext($site, $deployment, $server, $ssh);
 

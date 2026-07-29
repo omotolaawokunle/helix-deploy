@@ -23,7 +23,7 @@ final class LinkSharedDirectoriesStep extends BaseDeploymentStep
 
         foreach ($links as $shared => $release) {
             $this->runCommand($ctx, sprintf(
-                'ln -sfn %s %s',
+                'sudo ln -sfn %s %s',
                 $this->shellQuote($shared),
                 $this->shellQuote($release),
             ));

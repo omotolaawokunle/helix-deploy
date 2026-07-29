@@ -119,7 +119,7 @@ it('activate release uses ln -sfn and verifies readlink', function (): void {
     $ssh = fakeSsh();
     $releasePath = '/var/www/app.example.test/releases/'.$deployment->getKey();
     queueSshResponses($ssh, [
-        'ln -sfn *' => sshSuccess(),
+        'sudo ln -sfn *' => sshSuccess(),
         'readlink -f *' => sshSuccess($releasePath),
     ]);
     Release::query()->create([
@@ -135,7 +135,7 @@ it('activate release uses ln -sfn and verifies readlink', function (): void {
 
     (new ActivateReleaseStep())->run($ctx);
 
-    expect($ssh->getExecutedCommands()[0])->toContain('ln -sfn')
+    expect($ssh->getExecutedCommands()[0])->toContain('sudo ln -sfn')
         ->and($ssh->getExecutedCommands()[0])->not->toContain('ln -s ')
         ->and(Release::query()->where('path', $releasePath)->value('is_active'))->toBeTrue();
 });
@@ -144,7 +144,7 @@ it('activate release throws when readlink does not match release path', function
     [, $server, $site, $deployment] = executionFixture();
     $ssh = fakeSsh();
     queueSshResponses($ssh, [
-        'ln -sfn *' => sshSuccess(),
+        'sudo ln -sfn *' => sshSuccess(),
         'readlink -f *' => sshSuccess('/var/www/app.example.test/releases/old'),
     ]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
@@ -164,7 +164,7 @@ it('cleanup old releases never deletes active release', function (): void {
     queueSshResponses($ssh, [
         'ls -1dt *' => sshSuccess(implode("\n", [$active, $old1, $old2])),
         'readlink -f *' => sshSuccess($active),
-        'rm -rf *' => [sshSuccess(), sshSuccess()],
+        'sudo rm -rf *' => [sshSuccess(), sshSuccess()],
     ]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
@@ -181,14 +181,14 @@ it('link shared directories symlinks env and storage', function (): void {
     [, $server, $site, $deployment] = executionFixture();
     $ssh = fakeSsh();
     queueSshResponses($ssh, [
-        'ln -sfn *' => [sshSuccess(), sshSuccess()],
+        'sudo ln -sfn *' => [sshSuccess(), sshSuccess()],
     ]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     (new LinkSharedDirectoriesStep())->run($ctx);
 
     expect($ssh->getExecutedCommands())->toHaveCount(2)
-        ->and($ssh->getExecutedCommands()[0])->toContain('ln -sfn')
+        ->and($ssh->getExecutedCommands()[0])->toContain('sudo ln -sfn')
         ->and($ssh->getExecutedCommands()[0])->toContain('/shared/.env');
 });
 

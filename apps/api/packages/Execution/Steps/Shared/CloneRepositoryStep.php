@@ -50,6 +50,6 @@ final class CloneRepositoryStep extends BaseDeploymentStep
 
     public function rollback(DeploymentContext $ctx): void
     {
-        $this->runCommand($ctx, 'rm -rf '.$this->shellQuote($ctx->releasePath));
+        $this->runCommand($ctx, 'sudo rm -rf '.$this->shellQuote($ctx->releasePath));
     }
 }

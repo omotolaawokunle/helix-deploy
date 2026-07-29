@@ -180,6 +180,7 @@ function stubRollbackSsh(string $domain, string $releasePath): FakeSSHConnection
         'test -d *' => sshSuccess('exists'),
         'test -f *' => sshFailure(),
         'ln -sfn *' => [$success(), $success()],
+        'sudo ln -sfn *' => [$success(), $success()],
         'readlink -f *' => [sshSuccess($releasePath), sshSuccess($releasePath)],
         '*systemctl reload php*' => $success(),
     ];

@@ -110,12 +110,12 @@ it('go download binary runs go build', function (): void {
 it('go replace binary copies built artifact', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::GO);
     $ssh = fakeSsh();
-    queueSshResponses($ssh, ['cp *' => sshSuccess()]);
+    queueSshResponses($ssh, ['sudo cp *' => sshSuccess()]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     (new ReplaceBinaryStep())->run($ctx);
 
-    $ssh->assertCommandExecuted('cp *');
+    $ssh->assertCommandExecuted('sudo cp *');
 });
 
 it('go restart service uses configured service name', function (): void {

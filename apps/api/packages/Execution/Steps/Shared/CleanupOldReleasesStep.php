@@ -35,7 +35,7 @@ final class CleanupOldReleasesStep extends BaseDeploymentStep
                 continue;
             }
 
-            $this->runCommand($ctx, 'rm -rf '.$this->shellQuote($path));
+            $this->runCommand($ctx, 'sudo rm -rf '.$this->shellQuote($path));
         }
     }
 }

@@ -63,8 +63,10 @@ class EnvFileManager
             throw new \RuntimeException('Failed to upload .env file to server.');
         }
 
-        $ssh->run(sprintf('chmod 640 %s', escapeshellarg($remotePath)))->throw();
-        $ssh->run(sprintf('chown deploy:www-data %s', escapeshellarg($remotePath)))->throw();
+        $owner = $this->webrootOwner($site);
+
+        $ssh->run(sprintf('sudo chmod 640 %s', escapeshellarg($remotePath)))->throw();
+        $ssh->run(sprintf('sudo chown %s %s', escapeshellarg($owner.':www-data'), escapeshellarg($remotePath)))->throw();
 
         AuditLog::record(
             operation: 'env_vars.synced',
@@ -130,6 +132,13 @@ class EnvFileManager
     private function remoteFileExists(SSHConnectionInterface $ssh, string $remotePath): bool
     {
         return $ssh->run(sprintf('test -f %s', escapeshellarg($remotePath)))->successful();
+    }
+
+    private function webrootOwner(Site $site): string
+    {
+        $sshUser = trim((string) ($site->server?->ssh_user ?? ''));
+
+        return $sshUser !== '' ? $sshUser : 'deploy';
     }
 
     private function quoteEnvValue(string $value): string

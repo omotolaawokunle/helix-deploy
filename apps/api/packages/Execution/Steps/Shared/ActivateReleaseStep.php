@@ -20,7 +20,7 @@ final class ActivateReleaseStep extends BaseDeploymentStep
     public function run(DeploymentContext $ctx): void
     {
         $this->runCommand($ctx, sprintf(
-            'ln -sfn %s %s',
+            'sudo ln -sfn %s %s',
             $this->shellQuote($ctx->releasePath),
             $this->shellQuote($ctx->currentPath),
         ));
