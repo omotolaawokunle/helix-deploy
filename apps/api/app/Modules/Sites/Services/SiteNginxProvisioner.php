@@ -8,6 +8,7 @@ use App\Modules\Credentials\CredentialVault;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Exceptions\NginxConfigInvalidException;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Sites\Services\SharedStorageBootstrap;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
 use App\Packages\SSH\SSHManager;
 
@@ -62,7 +63,7 @@ class SiteNginxProvisioner
         $owner = $this->webrootOwner($server);
 
         $this->withConnection($server, function (SSHConnectionInterface $connection) use ($basePath, $owner): void {
-            $this->ensureBootstrapCurrent($connection, $basePath);
+            $this->ensureBootstrapCurrent($connection, $basePath, $owner);
 
             $connection->run(sprintf(
                 'sudo chown -R %s %s && sudo chmod 755 %s',
@@ -78,20 +79,22 @@ class SiteNginxProvisioner
      * symlink current → it so HTTP-01 SSL can run before the first deploy.
      * current must be a symlink (never a real directory) so activate-release's ln -sfn works.
      */
-    public function ensureBootstrapCurrent(SSHConnectionInterface $connection, string $basePath): void
+    public function ensureBootstrapCurrent(SSHConnectionInterface $connection, string $basePath, string $owner = 'deploy'): void
     {
         $base = rtrim($basePath, '/');
         $bootstrap = $base.'/releases/.helix-bootstrap';
         $current = $base.'/current';
 
         $connection->run(sprintf(
-            'sudo mkdir -p %1$s/releases %1$s/shared %1$s/shared/storage %2$s/public/.well-known/acme-challenge'
+            'sudo mkdir -p %1$s/releases %1$s/shared %2$s/public/.well-known/acme-challenge'
             .' && if [ ! -e %3$s ]; then sudo ln -sfn %2$s %3$s;'
             .' elif [ -d %3$s ] && [ ! -L %3$s ]; then sudo rm -rf %3$s && sudo ln -sfn %2$s %3$s; fi',
             escapeshellarg($base),
             escapeshellarg($bootstrap),
             escapeshellarg($current),
         ))->throw();
+
+        app(SharedStorageBootstrap::class)->ensureReady($connection, $base.'/shared/storage', $owner);
     }
 
     public function removeWebroot(Server $server, string $domain): void

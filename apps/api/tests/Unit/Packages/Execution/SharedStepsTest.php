@@ -181,15 +181,51 @@ it('link shared directories symlinks env and storage', function (): void {
     [, $server, $site, $deployment] = executionFixture();
     $ssh = fakeSsh();
     queueSshResponses($ssh, [
+        'sudo mkdir -p *' => sshSuccess(),
+        'sudo chown -R *' => sshSuccess(),
+        'sudo rm -rf *' => [sshSuccess(), sshSuccess()],
         'sudo ln -sfn *' => [sshSuccess(), sshSuccess()],
     ]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     (new LinkSharedDirectoriesStep())->run($ctx);
 
-    expect($ssh->getExecutedCommands())->toHaveCount(2)
-        ->and($ssh->getExecutedCommands()[0])->toContain('sudo ln -sfn')
-        ->and($ssh->getExecutedCommands()[0])->toContain('/shared/.env');
+    expect($ssh->getExecutedCommands())->toHaveCount(4)
+        ->and($ssh->getExecutedCommands()[0])->toContain('sudo mkdir -p')
+        ->and($ssh->getExecutedCommands()[0])->toContain('/shared/storage/logs')
+        ->and($ssh->getExecutedCommands()[2])->toContain('sudo rm -rf')
+        ->and($ssh->getExecutedCommands()[2])->toContain('/shared/.env')
+        ->and($ssh->getExecutedCommands()[3])->toContain('sudo ln -sfn')
+        ->and($ssh->getExecutedCommands()[3])->toContain('/shared/storage');
+});
+
+it('link shared directories removes cloned storage before symlinking', function (): void {
+    [, $server, $site, $deployment] = executionFixture();
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, [
+        'sudo mkdir -p *' => sshSuccess(),
+        'sudo chown -R *' => sshSuccess(),
+        'sudo rm -rf *' => [sshSuccess(), sshSuccess()],
+        'sudo ln -sfn *' => [sshSuccess(), sshSuccess()],
+    ]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new LinkSharedDirectoriesStep())->run($ctx);
+
+    $storageRmIndex = null;
+    $storageLnIndex = null;
+    foreach ($ssh->getExecutedCommands() as $index => $command) {
+        if (str_contains($command, 'sudo rm -rf') && str_contains($command, '/storage')) {
+            $storageRmIndex = $index;
+        }
+        if (str_contains($command, 'sudo ln -sfn') && str_contains($command, '/shared/storage')) {
+            $storageLnIndex = $index;
+        }
+    }
+
+    expect($storageRmIndex)->not->toBeNull()
+        ->and($storageLnIndex)->not->toBeNull()
+        ->and($storageRmIndex)->toBeLessThanOrEqual($storageLnIndex);
 });
 
 it('run pre-deploy script is skippable when script is null', function (): void {

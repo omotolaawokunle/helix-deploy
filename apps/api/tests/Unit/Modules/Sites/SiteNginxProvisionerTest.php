@@ -20,8 +20,14 @@ use Illuminate\Support\Str;
 it('creates webroot directories with sudo ownership', function (): void {
     [$server, $fake] = siteNginxProvisionerFixture();
 
-    $fake->addResponse('sudo mkdir -p *', new SSHResult('sudo mkdir -p', 0, '', '', 0.01));
-    $fake->addResponse('sudo chown -R *', new SSHResult('sudo chown', 0, '', '', 0.01));
+    $fake->addSequence('sudo mkdir -p *',
+        new SSHResult('sudo mkdir -p', 0, '', '', 0.01),
+        new SSHResult('sudo mkdir -p', 0, '', '', 0.01),
+    );
+    $fake->addSequence('sudo chown -R *',
+        new SSHResult('sudo chown', 0, '', '', 0.01),
+        new SSHResult('sudo chown', 0, '', '', 0.01),
+    );
 
     $manager = \Mockery::mock(SSHManager::class);
     $manager->shouldReceive('connect')->once()->andReturn($fake);
@@ -32,13 +38,20 @@ it('creates webroot directories with sudo ownership', function (): void {
     $fake->assertCommandExecuted("sudo mkdir -p *'/var/www/nolbzdesign.com'/releases*");
     $fake->assertCommandExecuted('*ln -sfn*');
     $fake->assertCommandExecuted("sudo chown -R 'deploy:www-data' '/var/www/nolbzdesign.com'*");
+    $fake->assertCommandExecuted('*shared/storage/logs*');
 });
 
 it('owns webroot as the server ssh user when not deploy', function (): void {
     [$server, $fake] = siteNginxProvisionerFixture(sshUser: 'cursor');
 
-    $fake->addResponse('sudo mkdir -p *', new SSHResult('sudo mkdir -p', 0, '', '', 0.01));
-    $fake->addResponse('sudo chown -R *', new SSHResult('sudo chown', 0, '', '', 0.01));
+    $fake->addSequence('sudo mkdir -p *',
+        new SSHResult('sudo mkdir -p', 0, '', '', 0.01),
+        new SSHResult('sudo mkdir -p', 0, '', '', 0.01),
+    );
+    $fake->addSequence('sudo chown -R *',
+        new SSHResult('sudo chown', 0, '', '', 0.01),
+        new SSHResult('sudo chown', 0, '', '', 0.01),
+    );
 
     $manager = \Mockery::mock(SSHManager::class);
     $manager->shouldReceive('connect')->once()->andReturn($fake);
@@ -52,7 +65,14 @@ it('owns webroot as the server ssh user when not deploy', function (): void {
 it('bootstraps current as a symlink for pre-deploy ssl webroot', function (): void {
     [$server, $fake] = siteNginxProvisionerFixture();
 
-    $fake->addResponse('sudo mkdir -p *', new SSHResult('sudo mkdir -p', 0, '', '', 0.01));
+    $fake->addSequence('sudo mkdir -p *',
+        new SSHResult('sudo mkdir -p', 0, '', '', 0.01),
+        new SSHResult('sudo mkdir -p', 0, '', '', 0.01),
+    );
+    $fake->addSequence('sudo chown -R *',
+        new SSHResult('sudo chown', 0, '', '', 0.01),
+        new SSHResult('sudo chown', 0, '', '', 0.01),
+    );
 
     $manager = \Mockery::mock(SSHManager::class);
     $manager->shouldReceive('connect')->never();
@@ -63,7 +83,8 @@ it('bootstraps current as a symlink for pre-deploy ssl webroot', function (): vo
     $commands = $fake->getExecutedCommands();
     expect($commands[0])->toContain("'/var/www/nolbzdesign.com/releases/.helix-bootstrap'")
         ->and($commands[0])->toContain("ln -sfn '/var/www/nolbzdesign.com/releases/.helix-bootstrap' '/var/www/nolbzdesign.com/current'")
-        ->and($commands[0])->toContain('.well-known/acme-challenge');
+        ->and($commands[0])->toContain('.well-known/acme-challenge')
+        ->and($commands[1])->toContain('/shared/storage/logs');
 });
 
 it('uploads nginx config via temp file then installs with sudo', function (): void {
