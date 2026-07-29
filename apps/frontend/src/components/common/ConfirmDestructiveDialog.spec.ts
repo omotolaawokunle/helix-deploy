@@ -1,11 +1,11 @@
 import { mount, flushPromises } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, type Component } from 'vue'
 import { describe, expect, it } from 'vitest'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
 
 describe('ConfirmDestructiveDialog', () => {
   it('disables confirm button until correct text is typed', async () => {
-    mount(ConfirmDestructiveDialog, {
+    mount(ConfirmDestructiveDialog as Component, {
       attachTo: document.body,
       props: {
         open: true,

@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SiteSettingsTab from '@/features/sites/components/SiteSettingsTab.vue'
-import type { Site } from '@/types'
+import { Runtime, type Site } from '@/types'
 
 const updateSiteMock = vi.fn()
 
@@ -67,7 +67,7 @@ function createSite(overrides: Partial<Site> = {}): Site {
     dockerRegistry: null,
     dockerComposePath: null,
     pipelineId: null,
-    runtime: 'php',
+    runtime: Runtime.Native,
     status: 'active',
     autoCreateDns: false,
     isApex: false,

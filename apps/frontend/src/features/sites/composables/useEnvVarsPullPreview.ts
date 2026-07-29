@@ -113,10 +113,6 @@ export function useEnvVarsPullPreview(
       return
     }
 
-    if (payload.status === 'loading') {
-      return
-    }
-
     if (payload.status === 'failed') {
       applyPreview({
         status: 'failed',

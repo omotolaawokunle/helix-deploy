@@ -14,10 +14,6 @@ class EmailVerificationLinkController extends Controller
 {
     public function __invoke(Request $request, string $id, string $hash): RedirectResponse
     {
-        if (! $request->hasValidSignature()) {
-            abort(403, 'Invalid or expired verification link.');
-        }
-
         $user = User::query()->findOrFail($id);
 
         if (! hash_equals(sha1((string) $user->email), $hash)) {

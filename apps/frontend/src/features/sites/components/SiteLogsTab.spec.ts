@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import SiteLogsTab from '@/features/sites/components/SiteLogsTab.vue'
@@ -7,7 +7,7 @@ async function mountSiteLogsTab(props: {
   siteId: string
   serverId: string
   runtime: string
-}): Promise<ReturnType<typeof mount>> {
+}): Promise<VueWrapper> {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [

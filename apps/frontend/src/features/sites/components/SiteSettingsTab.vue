@@ -883,6 +883,7 @@ async function handleDelete(): Promise<void> {
       v-model:open="isRotateSecretDialogOpen"
       title="Regenerate webhook secret"
       description="This invalidates the current webhook secret. You must update the secret in your git provider before the next push can trigger a deploy."
+      confirm-text="regenerate"
       confirm-button-label="Regenerate secret"
       @confirm="handleRotateWebhookSecret"
     />

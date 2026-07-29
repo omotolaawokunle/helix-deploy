@@ -121,7 +121,6 @@ const rowsEmptyDescription = computed((): string => {
 })
 
 const paginationSummary = computed((): string => {
-  const limit = props.data?.limit ?? 50
   const offset = props.data?.offset ?? 0
   const rowCount = props.data?.rowCount ?? 0
   const start = rowCount === 0 ? 0 : offset + 1
@@ -481,7 +480,7 @@ const showFullLoading = computed((): boolean => props.isLoading && ! showRowsTab
           <div
             class="relative transition-opacity duration-150 motion-reduce:transition-none"
             :class="{ 'pointer-events-none opacity-60': isFetching }"
-            aria-busy="isFetching"
+            :aria-busy="isFetching"
           >
             <Table>
               <TableHeader>

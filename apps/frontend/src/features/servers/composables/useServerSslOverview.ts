@@ -47,7 +47,11 @@ export function useServerSslOverview(serverId: Ref<string>): {
       .filter((value): value is string => value !== null)
       .sort()
 
-    return timestamps?.at(-1) ?? null
+    if (timestamps === undefined || timestamps.length === 0) {
+      return null
+    }
+
+    return timestamps[timestamps.length - 1] ?? null
   })
 
   function stopPolling(): void {

@@ -298,7 +298,7 @@ Environment variables are defined in `infrastructure/.env.example` (Docker) and 
 | Variable                               | Purpose                                                 |
 | -------------------------------------- | ------------------------------------------------------- |
 | `APP_KEY`                              | Laravel app key; encrypts organisation master keys      |
-| `APP_URL` / `SPA_URL`                  | API and frontend URLs for Sanctum and redirects         |
+| `APP_URL` / `SPA_URL` / `VERIFICATION_URL_ROOT` | Public site URL — must match what users open in the browser (include `https://` on VPS) |
 | `DB_*`                                 | PostgreSQL connection                                   |
 | `REDIS_*`                              | Cache, sessions, queues, and Reverb                     |
 | `REVERB_*`                             | WebSocket server credentials and host                   |
@@ -319,7 +319,9 @@ Frontend build-time variables (`apps/frontend/.env.example`):
 
 - Set `APP_DEBUG=false` and `APP_ENV=production`
 - Use strong `DB_PASSWORD`, `REDIS_PASSWORD`, and `REVERB_APP_SECRET`
-- Terminate TLS at your reverse proxy; update `APP_URL`, `SPA_URL`, and `SANCTUM_STATEFUL_DOMAINS`
+- Terminate TLS at your reverse proxy; set `APP_URL`, `SPA_URL`, `VERIFICATION_URL_ROOT`, and `SANCTUM_STATEFUL_DOMAINS` to your public `https://` domain (all three URL vars must use the same scheme, host, and port)
+- Rebuild the frontend container after nginx changes so `/email/` verification links proxy correctly
+- Restart API and queue workers after env changes, then resend verification emails (old signed links cannot be fixed retroactively)
 - Back up PostgreSQL and Redis volumes regularly
 - Keep worker containers running; monitor queue depth via Horizon or logs
 

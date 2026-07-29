@@ -277,6 +277,7 @@ onMounted(() => {
         v-if="!hasSites"
         title="No sites on this server"
         description="Sites are discovered when the server connects or when you add them manually. Use Adopt existing SSL after discovery if certbot certificates are already installed."
+        :icon="ShieldCheckIcon"
         data-testid="server-ssl-empty"
       />
 

@@ -9,4 +9,6 @@ return [
     'ping_interval_minutes' => env('PING_INTERVAL', 5),
     'stuck_job_threshold_minutes' => env('STUCK_THRESHOLD', 35),
     'spa_url' => env('SPA_URL', 'http://localhost:5173'),
+    // Public origin used in signed email links. Must match the URL users click (scheme, host, port).
+    'verification_url_root' => env('VERIFICATION_URL_ROOT', env('APP_URL', 'http://localhost')),
 ];

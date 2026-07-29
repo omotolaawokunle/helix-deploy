@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { AcceptableValue } from 'reka-ui'
 import { RefreshCwIcon } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -40,6 +41,12 @@ const emit = defineEmits<{
 
 const logTypeSelectId = `${props.controlsId}-log-type`
 const lineCountSelectId = `${props.controlsId}-lines`
+
+function onLogTypeChange(value: AcceptableValue): void {
+  if (typeof value === 'string') {
+    emit('update:logType', value)
+  }
+}
 </script>
 
 <template>
@@ -53,7 +60,7 @@ const lineCountSelectId = `${props.controlsId}-lines`
           <Label :for="logTypeSelectId">Log type</Label>
           <Select
             :model-value="logType"
-            @update:model-value="emit('update:logType', $event)"
+            @update:model-value="onLogTypeChange"
           >
             <SelectTrigger
               :id="logTypeSelectId"

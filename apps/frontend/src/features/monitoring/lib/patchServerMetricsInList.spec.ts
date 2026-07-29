@@ -27,6 +27,7 @@ const baseServer: Server = {
     diskUsedPercent: 30,
     lastCheckedAt: '2026-06-05T10:00:00Z',
   },
+  sslSummary: null,
   createdAt: '2026-01-01',
   updatedAt: '2026-01-01',
 }

@@ -70,9 +70,9 @@ Route::prefix('v1/auth')->middleware('web')->group(function (): void {
     });
 });
 
+// Legacy signed links issued when this route lived under the /api prefix.
 Route::get('/email/verify/{id}/{hash}', EmailVerificationLinkController::class)
-    ->middleware(['signed', 'throttle:6,1'])
-    ->name('verification.verify');
+    ->middleware(['signed', 'throttle:6,1']);
 
 Route::get('/v1/organizations/invitations/accept', InvitationAcceptRedirectController::class)
     ->middleware(['signed', 'throttle:6,1'])

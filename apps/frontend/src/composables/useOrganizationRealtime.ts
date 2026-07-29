@@ -135,6 +135,7 @@ export function useOrganizationRealtime(): void {
             : 'unknown',
           statusCheckedAt: service.statusCheckedAt,
           controllable: service.controllable,
+          version: null,
         })),
       })
     },

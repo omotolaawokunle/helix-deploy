@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, nextTick, type Component } from 'vue'
+import { defineComponent, nextTick } from 'vue'
 import { resetThemeApplicationState, THEME_STORAGE_KEY } from '@/lib/theme'
 import type { useTheme as UseThemeFn } from '@/composables/useTheme'
 
@@ -17,7 +17,7 @@ function installMatchMediaMock(prefersDark = false): void {
   }))
 }
 
-function createThemeProbe(useTheme: typeof UseThemeFn): Component {
+function createThemeProbe(useTheme: typeof UseThemeFn) {
   return defineComponent({
     setup() {
       const { preference, resolvedTheme, setPreference } = useTheme()

@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import ServerCard from '@/features/servers/components/ServerCard.vue'
-import { ManagementMode, ServerStatus, type Server } from '@/types'
+import { ManagementMode, ServerProvider, ServerStatus, type Server } from '@/types'
 
 vi.mock('vue-router', () => ({
   RouterLink: {
@@ -18,7 +18,7 @@ function makeServer(overrides: Partial<Server> = {}): Server {
     ipAddress: '10.0.0.1',
     sshPort: 22,
     sshUser: 'deploy',
-    provider: 'generic',
+    provider: ServerProvider.Generic,
     providerInstanceId: null,
     region: null,
     serverType: null,
