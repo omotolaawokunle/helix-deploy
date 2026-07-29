@@ -210,7 +210,7 @@ final class PipelineBuilder
      */
     private function buildOnServerDeploySteps(Site $site, Deployment $deployment): array
     {
-        if ($site->runtime === Runtime::DOCKER) {
+        if ($site->runtime === Runtime::DOCKER || $site->deploy_mode === DeployMode::DOCKER) {
             return $this->buildDockerPipeline($site);
         }
 
