@@ -94,8 +94,9 @@ class CronService
         ))->throw();
 
         $verifyTmp = $tmpPath.'.verify';
+        // sudo cp creates a root-owned tempfile; cleanup must also use sudo.
         $listed = $ssh->run(sprintf(
-            'sudo cp %s %s && cat %s && rm -f %s',
+            'sudo cp %s %s && cat %s && sudo rm -f %s',
             escapeshellarg($remotePath),
             escapeshellarg($verifyTmp),
             escapeshellarg($verifyTmp),

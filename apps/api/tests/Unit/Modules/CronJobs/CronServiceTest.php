@@ -101,7 +101,7 @@ it('syncs crontab via /etc/cron.d with sudo because deploy cannot use crontab -u
 
     $ssh = new \App\Packages\SSH\FakeSSHConnection();
     $ssh->addResponse('sudo cp *chmod 644*', new \App\Packages\SSH\SSHResult('sudo cp', 0, '', '', 0.0));
-    $ssh->addResponse('sudo cp *.verify*', new \App\Packages\SSH\SSHResult('verify', 0, $content, '', 0.0));
+    $ssh->addResponse('sudo cp *.verify* && cat *.verify* && sudo rm -f *.verify*', new \App\Packages\SSH\SSHResult('verify', 0, $content, '', 0.0));
 
     $service->sync($server, $ssh->connect());
 
