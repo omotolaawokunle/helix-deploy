@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Modules\Deployments\Enums\DeploymentStatus;
+use App\Modules\Deployments\Enums\DeploymentType;
+use App\Modules\Deployments\Enums\TriggerType;
+use App\Modules\Deployments\Models\Deployment;
 use App\Modules\Sites\Enums\Runtime;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
 use App\Packages\Execution\Steps\PHP\BuildAssetsStep;
@@ -104,6 +108,49 @@ it('reload php fpm uses site php version', function (): void {
     (new ReloadPHPFPMStep())->run($ctx);
 
     $ssh->assertCommandExecuted('*systemctl reload php8.3-fpm*');
+});
+
+it('restart workers is skippable on first deploy', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $ctx = executionContext($site, $deployment, $server, fakeSsh());
+
+    expect((new RestartWorkersStep())->isSkippable($ctx))->toBeTrue();
+});
+
+it('restart workers is skippable when only prior failed deploys exist', function (): void {
+    [$organization, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+
+    Deployment::query()->withoutGlobalScope('owned_by_organization')->create([
+        'site_id' => (string) $site->getKey(),
+        'organization_id' => (string) $organization->getKey(),
+        'type' => DeploymentType::DEPLOY,
+        'status' => DeploymentStatus::FAILED,
+        'triggered_by' => (string) $deployment->triggered_by,
+        'trigger_type' => TriggerType::MANUAL,
+        'branch' => 'main',
+    ]);
+
+    $ctx = executionContext($site, $deployment, $server, fakeSsh());
+
+    expect((new RestartWorkersStep())->isSkippable($ctx))->toBeTrue();
+});
+
+it('restart workers is not skippable when a prior successful deploy exists', function (): void {
+    [$organization, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+
+    Deployment::query()->withoutGlobalScope('owned_by_organization')->create([
+        'site_id' => (string) $site->getKey(),
+        'organization_id' => (string) $organization->getKey(),
+        'type' => DeploymentType::DEPLOY,
+        'status' => DeploymentStatus::SUCCESS,
+        'triggered_by' => (string) $deployment->triggered_by,
+        'trigger_type' => TriggerType::MANUAL,
+        'branch' => 'main',
+    ]);
+
+    $ctx = executionContext($site, $deployment, $server, fakeSsh());
+
+    expect((new RestartWorkersStep())->isSkippable($ctx))->toBeFalse();
 });
 
 it('restart workers uses horizon terminate when horizon is installed', function (): void {
