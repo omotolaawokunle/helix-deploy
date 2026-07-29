@@ -68,6 +68,8 @@ function createSite(overrides: Partial<Site> = {}): Site {
     dockerComposePath: null,
     deployMode: 'git',
     dockerBuildMode: null,
+    composeProjectName: null,
+    resolvedComposeProjectName: 'app-example-test',
     phpVersion: null,
     pipelineId: null,
     runtime: Runtime.Native,

@@ -236,6 +236,8 @@ export interface Site {
   dockerComposePath: string | null
   deployMode: SiteDeployMode
   dockerBuildMode: DockerBuildMode | null
+  composeProjectName: string | null
+  resolvedComposeProjectName: string
   phpVersion: string | null
   pipelineId: string | null
   runtime: Runtime

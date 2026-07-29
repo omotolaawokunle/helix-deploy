@@ -54,6 +54,8 @@ class SiteResource extends JsonResource
             'dockerRegistry' => $this->docker_registry,
             'dockerComposePath' => $this->docker_compose_path,
             'dockerBuildMode' => $this->docker_build_mode?->value,
+            'composeProjectName' => $this->compose_project_name,
+            'resolvedComposeProjectName' => $this->resolvedComposeProjectName(),
             'phpVersion' => $this->php_version,
             'nodePm' => $this->node_pm?->value,
             'pythonWsgi' => $this->python_wsgi?->value,

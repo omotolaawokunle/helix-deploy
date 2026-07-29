@@ -25,6 +25,7 @@ final class DockerBuildStep extends BaseDeploymentStep
                     $composePath,
                     'build',
                     rtrim($ctx->sharedPath, '/').'/.env',
+                    $ctx->site->resolvedComposeProjectName(),
                 ),
             );
 

@@ -85,6 +85,7 @@ const runMigrations = ref(false)
 const dockerImage = ref('')
 const dockerRegistry = ref('')
 const dockerComposePath = ref('')
+const composeProjectName = ref('')
 const deployMode = ref<SiteDeployMode>('git')
 const dockerBuildMode = ref<DockerBuildMode>('build')
 const phpVersion = ref('8.3')
@@ -204,6 +205,7 @@ watch(
     dockerImage.value = site.dockerImage ?? ''
     dockerRegistry.value = site.dockerRegistry ?? ''
     dockerComposePath.value = site.dockerComposePath ?? ''
+    composeProjectName.value = site.composeProjectName ?? ''
     deployMode.value = site.deployMode
     dockerBuildMode.value = site.dockerBuildMode ?? 'build'
     phpVersion.value = site.phpVersion ?? '8.3'
@@ -422,6 +424,7 @@ async function handleSave(): Promise<void> {
       dockerImage: dockerImage.value || null,
       dockerRegistry: dockerRegistry.value || null,
       dockerComposePath: dockerComposePath.value || null,
+      composeProjectName: composeProjectName.value.trim() || null,
       ...(isDockerRuntimeSite.value
         ? {
             deployMode: deployMode.value,
@@ -980,6 +983,20 @@ async function handleDelete(): Promise<void> {
         <div class="space-y-2 sm:col-span-2">
           <Label for="docker-compose">Compose path</Label>
           <Input id="docker-compose" v-model="dockerComposePath" />
+        </div>
+        <div class="space-y-2 sm:col-span-2">
+          <Label for="compose-project-name">Compose project name</Label>
+          <Input
+            id="compose-project-name"
+            v-model="composeProjectName"
+            placeholder="defaults to domain slug"
+            data-testid="compose-project-name-input"
+          />
+          <p class="text-sm text-muted-foreground">
+            Stable Docker Compose project (<code class="text-xs">-p</code>) so redeploys replace the same stack.
+            Leave blank to use
+            <code class="text-xs">{{ props.site.resolvedComposeProjectName }}</code>.
+          </p>
         </div>
       </div>
 

@@ -133,6 +133,7 @@ export async function updateSite(
     | 'dockerComposePath'
     | 'deployMode'
     | 'dockerBuildMode'
+    | 'composeProjectName'
     | 'pipelineId'
     | 'repositoryUrl'
     | 'repositoryProvider'

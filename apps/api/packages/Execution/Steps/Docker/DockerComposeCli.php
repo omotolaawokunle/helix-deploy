@@ -10,6 +10,9 @@ namespace App\Packages\Execution\Steps\Docker;
  *
  * Also ensures a `.env` exists next to the compose file — Compose fails hard when
  * services declare `env_file: .env` but the file is missing from a fresh release.
+ *
+ * A stable `-p` project name keeps redeploys on the same stack (containers/volumes)
+ * instead of creating a competing project from the release directory name.
  */
 final class DockerComposeCli
 {
@@ -17,6 +20,7 @@ final class DockerComposeCli
         string $composeFile,
         string $subcommand,
         ?string $preferredEnvFile = null,
+        ?string $projectName = null,
     ): string {
         $file = escapeshellarg($composeFile);
         $composeDir = escapeshellarg(dirname($composeFile));
@@ -32,12 +36,17 @@ final class DockerComposeCli
         }
         $prepareEnv .= 'fi; ';
 
+        $projectFlag = '';
+        if (is_string($projectName) && trim($projectName) !== '') {
+            $projectFlag = ' -p '.escapeshellarg(trim($projectName));
+        }
+
         return $prepareEnv
             .'cd '.$composeDir.' && '
             .'if docker compose version >/dev/null 2>&1; then'
-            .' docker compose -f '.$file.' '.$subcommand.';'
+            .' docker compose'.$projectFlag.' -f '.$file.' '.$subcommand.';'
             .' elif command -v docker-compose >/dev/null 2>&1; then'
-            .' docker-compose -f '.$file.' '.$subcommand.';'
+            .' docker-compose'.$projectFlag.' -f '.$file.' '.$subcommand.';'
             .' else echo "Neither docker compose nor docker-compose is available on this server" >&2; exit 127;'
             .' fi';
     }

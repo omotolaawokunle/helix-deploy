@@ -31,6 +31,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Str;
 
 class Site extends Model
 {
@@ -77,6 +78,7 @@ class Site extends Model
         'docker_registry',
         'docker_compose_path',
         'docker_build_mode',
+        'compose_project_name',
         'php_version',
         'node_pm',
         'python_wsgi',
@@ -206,5 +208,31 @@ class Site extends Model
         return $this->webhook_token !== null
             && $this->webhook_secret_encrypted !== null
             && $this->webhook_secret_nonce !== null;
+    }
+
+    /**
+     * Stable Docker Compose project name for in-place redeploys on a host.
+     */
+    public function resolvedComposeProjectName(): string
+    {
+        $configured = $this->compose_project_name;
+
+        if (is_string($configured) && trim($configured) !== '') {
+            return trim($configured);
+        }
+
+        return self::defaultComposeProjectName((string) $this->domain);
+    }
+
+    public static function defaultComposeProjectName(string $domain): string
+    {
+        $slug = Str::slug(strtolower($domain), '-');
+        $slug = preg_replace('/[^a-z0-9_-]/', '', $slug) ?? '';
+
+        if ($slug === '' || ! preg_match('/^[a-z]/', $slug)) {
+            $slug = 'site'.($slug !== '' ? '-'.$slug : '');
+        }
+
+        return substr($slug, 0, 63);
     }
 }

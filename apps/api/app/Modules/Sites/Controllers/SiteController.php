@@ -207,6 +207,10 @@ class SiteController extends Controller
             $siteModel->docker_compose_path = $validated['dockerComposePath'];
         }
 
+        if (array_key_exists('composeProjectName', $validated)) {
+            $siteModel->compose_project_name = $validated['composeProjectName'];
+        }
+
         if (array_key_exists('pipelineId', $validated)) {
             $siteModel->pipeline_id = $validated['pipelineId'];
         }

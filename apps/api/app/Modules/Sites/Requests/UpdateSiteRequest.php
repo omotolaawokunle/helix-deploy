@@ -55,6 +55,13 @@ final class UpdateSiteRequest extends FormRequest
             'dockerImage' => ['sometimes', 'nullable', 'string', 'max:255'],
             'dockerRegistry' => ['sometimes', 'nullable', 'string', 'max:255'],
             'dockerComposePath' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'composeProjectName' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:63',
+                'regex:/^[a-z][a-z0-9_-]*$/',
+            ],
             'pipelineId' => ['sometimes', 'nullable', 'uuid'],
             'repositoryUrl' => ['sometimes', 'nullable', 'string', 'max:2048', 'url'],
             'repositoryProvider' => ['sometimes', 'nullable', 'string', Rule::enum(GitProvider::class)],
