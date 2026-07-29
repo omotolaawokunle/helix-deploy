@@ -10,6 +10,7 @@ use App\Modules\Sites\Exceptions\NginxConfigInvalidException;
 use App\Modules\Sites\Models\Site;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
 use App\Packages\SSH\SSHManager;
+
 class SiteNginxProvisioner
 {
     public function __construct(
@@ -23,15 +24,19 @@ class SiteNginxProvisioner
         $this->withConnection($server, function (SSHConnectionInterface $connection) use ($site, $config): void {
             $availablePath = $this->sitesAvailablePath($site->domain);
             $enabledPath = $this->sitesEnabledPath($site->domain);
+            $tmpPath = $this->nginxConfigTempPath($site->domain);
 
-            if (! $connection->upload($config, $availablePath)) {
+            if (! $connection->upload($config, $tmpPath)) {
                 throw new NginxConfigInvalidException($site->domain, 'Failed to upload nginx configuration.');
             }
 
             $connection->run(sprintf(
-                'ln -sfn %s %s',
+                'sudo cp %s %s && sudo ln -sfn %s %s && rm -f %s',
+                escapeshellarg($tmpPath),
+                escapeshellarg($availablePath),
                 escapeshellarg($availablePath),
                 escapeshellarg($enabledPath),
+                escapeshellarg($tmpPath),
             ))->throw();
 
             $this->testAndReload($connection, $site->domain);
@@ -44,8 +49,8 @@ class SiteNginxProvisioner
             $availablePath = $this->sitesAvailablePath($site->domain);
             $enabledPath = $this->sitesEnabledPath($site->domain);
 
-            $connection->run(sprintf('rm -f %s', escapeshellarg($enabledPath)));
-            $connection->run(sprintf('rm -f %s', escapeshellarg($availablePath)));
+            $connection->run(sprintf('sudo rm -f %s', escapeshellarg($enabledPath)))->throw();
+            $connection->run(sprintf('sudo rm -f %s', escapeshellarg($availablePath)))->throw();
 
             $this->testAndReload($connection, $site->domain);
         });
@@ -54,17 +59,19 @@ class SiteNginxProvisioner
     public function createWebroot(Server $server, string $domain): void
     {
         $basePath = $this->webrootBase($domain);
+        $owner = $this->webrootOwner($server);
 
-        $this->withConnection($server, function (SSHConnectionInterface $connection) use ($basePath): void {
+        $this->withConnection($server, function (SSHConnectionInterface $connection) use ($basePath, $owner): void {
             $connection->run(sprintf(
-                'mkdir -p %s/releases %s/shared %s/shared/storage',
+                'sudo mkdir -p %s/releases %s/shared %s/shared/storage',
                 escapeshellarg($basePath),
                 escapeshellarg($basePath),
                 escapeshellarg($basePath),
             ))->throw();
 
             $connection->run(sprintf(
-                'chown -R deploy:www-data %s && chmod 755 %s',
+                'sudo chown -R %s %s && sudo chmod 755 %s',
+                escapeshellarg($owner.':www-data'),
                 escapeshellarg($basePath),
                 escapeshellarg($basePath),
             ))->throw();
@@ -76,7 +83,7 @@ class SiteNginxProvisioner
         $basePath = $this->webrootBase($domain);
 
         $this->withConnection($server, function (SSHConnectionInterface $connection) use ($basePath): void {
-            $connection->run(sprintf('rm -rf %s', escapeshellarg($basePath)));
+            $connection->run(sprintf('sudo rm -rf %s', escapeshellarg($basePath)))->throw();
         });
     }
 
@@ -105,8 +112,8 @@ class SiteNginxProvisioner
     public function rollbackConfig(Server $server, string $domain): void
     {
         $this->withConnection($server, function (SSHConnectionInterface $connection) use ($domain): void {
-            $connection->run(sprintf('rm -f %s', escapeshellarg($this->sitesEnabledPath($domain))));
-            $connection->run(sprintf('rm -f %s', escapeshellarg($this->sitesAvailablePath($domain))));
+            $connection->run(sprintf('sudo rm -f %s', escapeshellarg($this->sitesEnabledPath($domain))))->throw();
+            $connection->run(sprintf('sudo rm -f %s', escapeshellarg($this->sitesAvailablePath($domain))))->throw();
         });
     }
 
@@ -120,8 +127,20 @@ class SiteNginxProvisioner
         return '/etc/nginx/sites-enabled/'.$domain;
     }
 
+    private function nginxConfigTempPath(string $domain): string
+    {
+        return '/tmp/helix-nginx-'.$domain.'.conf';
+    }
+
     private function webrootBase(string $domain): string
     {
         return '/var/www/'.$domain;
+    }
+
+    private function webrootOwner(Server $server): string
+    {
+        $sshUser = trim((string) $server->ssh_user);
+
+        return $sshUser !== '' ? $sshUser : 'deploy';
     }
 }

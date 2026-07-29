@@ -73,6 +73,11 @@ SHELL,
         }
 
         $this->preventApachePortConflict($ssh);
+        $this->runStep(
+            $ssh,
+            'mkdir -p /var/www && chown deploy:www-data /var/www && chmod 775 /var/www',
+            'prepare-webroot',
+        );
         $this->runStep($ssh, 'systemctl enable --now nginx', 'enable-nginx');
         $this->runStep($ssh, 'nginx -t', 'validate-nginx-conf');
         $this->runStep($ssh, 'systemctl reload nginx', 'reload-nginx');

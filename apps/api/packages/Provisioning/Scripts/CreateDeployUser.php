@@ -71,6 +71,20 @@ deploy ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl *
 deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart *
 deploy ALL=(ALL) NOPASSWD: /usr/bin/certbot
 deploy ALL=(ALL) NOPASSWD: /usr/bin/certbot *
+deploy ALL=(ALL) NOPASSWD: /usr/sbin/nginx
+deploy ALL=(ALL) NOPASSWD: /usr/sbin/nginx *
+deploy ALL=(ALL) NOPASSWD: /bin/mkdir
+deploy ALL=(ALL) NOPASSWD: /bin/mkdir *
+deploy ALL=(ALL) NOPASSWD: /bin/chown
+deploy ALL=(ALL) NOPASSWD: /bin/chown *
+deploy ALL=(ALL) NOPASSWD: /bin/chmod
+deploy ALL=(ALL) NOPASSWD: /bin/chmod *
+deploy ALL=(ALL) NOPASSWD: /bin/ln
+deploy ALL=(ALL) NOPASSWD: /bin/ln *
+deploy ALL=(ALL) NOPASSWD: /bin/rm
+deploy ALL=(ALL) NOPASSWD: /bin/rm *
+deploy ALL=(ALL) NOPASSWD: /bin/cp
+deploy ALL=(ALL) NOPASSWD: /bin/cp *
 EOF
 SHELL,
             'write-sudoers',

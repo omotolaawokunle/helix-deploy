@@ -50,6 +50,15 @@ it('create deploy user writes authorized keys with server public key', function 
 
     $commands = $connection->getExecutedCommands();
     expect($commands[3])->toContain($publicKey);
+
+    $sudoers = collect($commands)->first(
+        fn (string $command): bool => str_contains($command, '/etc/sudoers.d/deploy'),
+    );
+
+    expect($sudoers)->toContain('/usr/sbin/nginx')
+        ->and($sudoers)->toContain('/bin/mkdir')
+        ->and($sudoers)->toContain('/bin/chown')
+        ->and($sudoers)->toContain('/bin/cp');
 });
 
 it('install nginx runs expected command sequence on fresh server', function (): void {
@@ -62,9 +71,12 @@ it('install nginx runs expected command sequence on fresh server', function (): 
 
     $commands = $connection->getExecutedCommands();
 
-    expect($commands)->toHaveCount(8)
+    expect($commands)->toHaveCount(9)
         ->and(collect($commands)->first(fn (string $command): bool => str_contains($command, 'apt-get install')))->toContain('--no-install-recommends')
-        ->and(collect($commands)->first(fn (string $command): bool => str_contains($command, '/etc/nginx/nginx.conf')))->not->toBeNull();
+        ->and(collect($commands)->first(fn (string $command): bool => str_contains($command, '/etc/nginx/nginx.conf')))->not->toBeNull()
+        ->and(collect($commands)->first(
+            fn (string $command): bool => str_contains($command, 'chown deploy:www-data /var/www'),
+        ))->not->toBeNull();
 });
 
 it('install nginx preserves existing configuration when nginx is already installed', function (): void {
@@ -77,7 +89,10 @@ it('install nginx preserves existing configuration when nginx is already install
 
     $commands = $connection->getExecutedCommands();
 
-    expect($commands)->toHaveCount(5);
+    expect($commands)->toHaveCount(6)
+        ->and(collect($commands)->first(
+            fn (string $command): bool => str_contains($command, 'chown deploy:www-data /var/www'),
+        ))->not->toBeNull();
 
     foreach ($commands as $command) {
         expect($command)->not->toContain('/etc/nginx/nginx.conf');
