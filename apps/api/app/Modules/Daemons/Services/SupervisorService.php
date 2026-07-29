@@ -39,17 +39,18 @@ class SupervisorService
 
         $config = $this->configGenerator->generate($daemon);
 
-        if (! $ssh->upload($config, $configPath)) {
+        try {
+            $this->installConfig($ssh, $config, $configPath, $dto->name);
+            $ssh->run('sudo supervisorctl reread && sudo supervisorctl update')->throw();
+            $statusResult = $ssh->run('sudo supervisorctl start '.escapeshellarg($dto->name.':*'));
+            $daemon->forceFill([
+                'status' => $this->parseStatus($statusResult),
+            ])->save();
+        } catch (\Throwable $e) {
             $daemon->delete();
 
-            throw new \RuntimeException('Failed to upload supervisor configuration.');
+            throw $e;
         }
-
-        $ssh->run('supervisorctl reread && supervisorctl update')->throw();
-        $statusResult = $ssh->run('supervisorctl start '.$dto->name.':*');
-        $daemon->forceFill([
-            'status' => $this->parseStatus($statusResult),
-        ])->save();
 
         AuditLog::record(
             operation: 'daemon.created',
@@ -65,7 +66,7 @@ class SupervisorService
 
     public function restart(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $result = $ssh->run('supervisorctl restart '.$daemon->name.':*');
+        $result = $ssh->run('sudo supervisorctl restart '.escapeshellarg($daemon->name.':*'));
         $daemon->forceFill(['status' => $this->parseStatus($result)])->save();
 
         AuditLog::record(
@@ -79,7 +80,7 @@ class SupervisorService
 
     public function start(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $result = $ssh->run('supervisorctl start '.$daemon->name.':*');
+        $result = $ssh->run('sudo supervisorctl start '.escapeshellarg($daemon->name.':*'));
         $daemon->forceFill(['status' => $this->parseStatus($result)])->save();
 
         AuditLog::record(
@@ -93,7 +94,7 @@ class SupervisorService
 
     public function stop(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $result = $ssh->run('supervisorctl stop '.$daemon->name.':*');
+        $result = $ssh->run('sudo supervisorctl stop '.escapeshellarg($daemon->name.':*'));
         $daemon->forceFill(['status' => $this->parseStatus($result)])->save();
 
         AuditLog::record(
@@ -116,10 +117,10 @@ class SupervisorService
 
     public function delete(SupervisorProcess $daemon, SSHConnectionInterface $ssh): void
     {
-        $ssh->run('supervisorctl stop '.$daemon->name.':*');
+        $ssh->run('sudo supervisorctl stop '.escapeshellarg($daemon->name.':*'));
         $configPath = $daemon->config_path ?? '/etc/supervisor/conf.d/'.$daemon->name.'.conf';
-        $ssh->run('rm -f '.escapeshellarg($configPath));
-        $ssh->run('supervisorctl reread && supervisorctl update')->throw();
+        $ssh->run('sudo rm -f '.escapeshellarg($configPath));
+        $ssh->run('sudo supervisorctl reread && sudo supervisorctl update')->throw();
 
         $server = $daemon->server;
         $beforeState = ['name' => $daemon->name, 'server_id' => $daemon->server_id];
@@ -131,6 +132,26 @@ class SupervisorService
             resource: $server,
             beforeState: $beforeState,
         );
+    }
+
+    private function installConfig(
+        SSHConnectionInterface $ssh,
+        string $config,
+        string $configPath,
+        string $name,
+    ): void {
+        $tmpPath = '/tmp/helix-supervisor-'.$name.'.conf';
+
+        if (! $ssh->upload($config, $tmpPath)) {
+            throw new \RuntimeException('Failed to upload supervisor configuration.');
+        }
+
+        $ssh->run(sprintf(
+            'sudo cp %s %s && rm -f %s',
+            escapeshellarg($tmpPath),
+            escapeshellarg($configPath),
+            escapeshellarg($tmpPath),
+        ))->throw();
     }
 
     private function parseStatus(SSHResult $result): DaemonStatus

@@ -37,8 +37,9 @@ it('runs the expected ssh command sequence when creating a daemon', function ():
     ]);
 
     $ssh = new FakeSSHConnection();
-    $ssh->addResponse('supervisorctl reread && supervisorctl update', new SSHResult('supervisorctl reread && supervisorctl update', 0, '', '', 0.0));
-    $ssh->addResponse('supervisorctl start worker:*', new SSHResult('supervisorctl start worker:*', 0, 'worker:worker_00 RUNNING', '', 0.0));
+    $ssh->addResponse('sudo cp */tmp/helix-supervisor-worker.conf*', new SSHResult('sudo cp', 0, '', '', 0.0));
+    $ssh->addResponse('sudo supervisorctl reread && sudo supervisorctl update', new SSHResult('sudo supervisorctl reread && sudo supervisorctl update', 0, '', '', 0.0));
+    $ssh->addResponse("sudo supervisorctl start 'worker:*'", new SSHResult('sudo supervisorctl start', 0, 'worker:worker_00 RUNNING', '', 0.0));
 
     $daemon = app(SupervisorService::class)->create(
         $server,
@@ -55,7 +56,9 @@ it('runs the expected ssh command sequence when creating a daemon', function ():
 
     expect($daemon->status)->toBe(DaemonStatus::RUNNING);
     expect($daemon->config_path)->toBe('/etc/supervisor/conf.d/worker.conf');
+    expect($ssh->getUploads())->toHaveKey('/tmp/helix-supervisor-worker.conf');
 
-    $ssh->assertCommandExecuted('supervisorctl reread && supervisorctl update');
-    $ssh->assertCommandExecuted('supervisorctl start worker:*');
+    $ssh->assertCommandExecuted('sudo cp */tmp/helix-supervisor-worker.conf*');
+    $ssh->assertCommandExecuted('sudo supervisorctl reread && sudo supervisorctl update');
+    $ssh->assertCommandExecuted("sudo supervisorctl start 'worker:*'");
 });

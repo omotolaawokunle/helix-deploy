@@ -52,9 +52,13 @@ class CronService
                 continue;
             }
 
+            $user = $this->sanitizeCronUser((string) $job->user);
+
+            // /etc/cron.d requires the username as the sixth field.
             $lines[] = sprintf(
-                '%s %s # helix:%s',
+                '%s %s %s # helix:%s',
                 $job->expression,
+                $user,
                 $job->command,
                 $job->getKey(),
             );
@@ -73,11 +77,30 @@ class CronService
             ->where('active', true)
             ->count();
 
-        $user = $this->resolveCrontabUser($server);
-        $escaped = str_replace("'", "'\\''", $content);
-        $ssh->run(sprintf("printf '%%s\\n' '%s' | crontab -u %s -", $escaped, escapeshellarg($user)))->throw();
+        $remotePath = $this->cronFilePath($server);
+        $tmpPath = '/tmp/helix-cron-'.(string) $server->getKey();
 
-        $listed = $ssh->run(sprintf('crontab -l -u %s', escapeshellarg($user)))->output();
+        if (! $ssh->upload($content, $tmpPath)) {
+            throw new \RuntimeException('Failed to upload crontab configuration.');
+        }
+
+        // deploy cannot use crontab -u; write /etc/cron.d via sudo (allowed in sudoers).
+        $ssh->run(sprintf(
+            'sudo cp %s %s && sudo chmod 644 %s && rm -f %s',
+            escapeshellarg($tmpPath),
+            escapeshellarg($remotePath),
+            escapeshellarg($remotePath),
+            escapeshellarg($tmpPath),
+        ))->throw();
+
+        $verifyTmp = $tmpPath.'.verify';
+        $listed = $ssh->run(sprintf(
+            'sudo cp %s %s && cat %s && rm -f %s',
+            escapeshellarg($remotePath),
+            escapeshellarg($verifyTmp),
+            escapeshellarg($verifyTmp),
+            escapeshellarg($verifyTmp),
+        ))->throw()->output();
 
         if (trim($listed) !== trim($content)) {
             throw new \RuntimeException('Crontab verification failed after sync.');
@@ -89,17 +112,27 @@ class CronService
             afterState: [
                 'server_id' => (string) $server->getKey(),
                 'active_count' => $activeCount,
+                'cron_path' => $remotePath,
             ],
         );
     }
 
-    private function resolveCrontabUser(Server $server): string
+    public function cronFilePath(Server $server): string
     {
-        $jobs = CronJob::query()
-            ->withoutGlobalScope('owned_by_organization')
-            ->where('server_id', (string) $server->getKey())
-            ->first();
+        // cron.d ignores filenames containing a dot — use hyphens only.
+        $id = str_replace('.', '-', (string) $server->getKey());
 
-        return $jobs?->user ?? 'www-data';
+        return '/etc/cron.d/helix-'.$id;
+    }
+
+    private function sanitizeCronUser(string $user): string
+    {
+        $user = trim($user);
+
+        if ($user === '' || ! preg_match('/^[a-z_][a-z0-9_-]*$/i', $user)) {
+            return 'www-data';
+        }
+
+        return $user;
     }
 }

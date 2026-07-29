@@ -57,8 +57,60 @@ it('builds crontab with header and excludes disabled jobs', function (): void {
 
     expect($content)->toContain('# Managed by HelixDeploy — do not edit manually');
     expect($content)->toContain('# Last synced:');
-    expect($content)->toContain("0 0 * * * php artisan schedule:run # helix:{$active->id}");
+    expect($content)->toContain("0 0 * * * www-data php artisan schedule:run # helix:{$active->id}");
     expect($content)->not->toContain('queue:work');
+});
+
+it('syncs crontab via /etc/cron.d with sudo because deploy cannot use crontab -u', function (): void {
+    $organization = Organization::query()->create([
+        'name' => 'Cron Sync Org',
+        'slug' => 'cron-sync-'.Str::random(6),
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+
+    $owner = User::factory()->create();
+
+    $server = Server::query()->withoutGlobalScope('owned_by_organization')->create([
+        'organization_id' => (string) $organization->getKey(),
+        'hostname' => 'cron-sync.test',
+        'ip_address' => '10.0.0.24',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'provider' => 'generic',
+        'status' => 'active',
+        'management_mode' => 'managed',
+        'created_by' => (string) $owner->getKey(),
+        'tags' => [],
+        'installed_services' => [],
+    ]);
+
+    CronJob::query()->create([
+        'server_id' => (string) $server->getKey(),
+        'organization_id' => (string) $organization->getKey(),
+        'expression' => '* * * * *',
+        'command' => 'php artisan schedule:run',
+        'user' => 'www-data',
+        'active' => true,
+        'created_by' => (string) $owner->getKey(),
+    ]);
+
+    $service = app(CronService::class);
+    $content = $service->buildCrontab($server);
+    $tmpPath = '/tmp/helix-cron-'.(string) $server->getKey();
+
+    $ssh = new \App\Packages\SSH\FakeSSHConnection();
+    $ssh->addResponse('sudo cp *chmod 644*', new \App\Packages\SSH\SSHResult('sudo cp', 0, '', '', 0.0));
+    $ssh->addResponse('sudo cp *.verify*', new \App\Packages\SSH\SSHResult('verify', 0, $content, '', 0.0));
+
+    $service->sync($server, $ssh->connect());
+
+    $uploads = $ssh->getUploads();
+    expect($uploads)->toHaveKey($tmpPath)
+        ->and($uploads[$tmpPath])->toBe($content);
+
+    $ssh->assertCommandExecuted('sudo cp *');
+    $ssh->assertCommandNotExecuted('*crontab -u*');
 });
 
 it('describes common cron expressions in human-readable form', function (): void {
