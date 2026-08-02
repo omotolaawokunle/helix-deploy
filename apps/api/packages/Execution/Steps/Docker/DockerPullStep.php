@@ -22,6 +22,10 @@ final class DockerPullStep extends BaseDeploymentStep
             throw new \RuntimeException('Site docker_image is required for docker pull deployments');
         }
 
-        $this->runCommand($ctx, 'docker pull '.$this->shellQuote($image));
+        $this->runCommand(
+            $ctx,
+            'docker pull '.$this->shellQuote($image),
+            $this->longCommandTimeoutSeconds(),
+        );
     }
 }

@@ -21,6 +21,11 @@ class FakeSSHConnection implements SSHConnectionInterface
     private array $executedCommands = [];
 
     /**
+     * @var list<?int>
+     */
+    private array $executedTimeouts = [];
+
+    /**
      * @var array<string, string>
      */
     private array $uploads = [];
@@ -52,6 +57,7 @@ class FakeSSHConnection implements SSHConnectionInterface
     public function run(string $command, ?callable $lineCallback = null, ?int $timeout = null): SSHResult
     {
         $this->executedCommands[] = $command;
+        $this->executedTimeouts[] = $timeout;
 
         foreach ($this->responses as $pattern => $results) {
             if (! fnmatch($pattern, $command)) {
@@ -126,6 +132,14 @@ class FakeSSHConnection implements SSHConnectionInterface
         return $this->executedCommands;
     }
 
+    /**
+     * @return list<?int>
+     */
+    public function getExecutedTimeouts(): array
+    {
+        return $this->executedTimeouts;
+    }
+
     public function assertCommandExecuted(string $pattern): void
     {
         $matched = false;
@@ -138,6 +152,25 @@ class FakeSSHConnection implements SSHConnectionInterface
         }
 
         Assert::assertTrue($matched, "Expected command pattern [{$pattern}] to be executed.");
+    }
+
+    public function assertCommandTimeout(string $pattern, int $timeout): void
+    {
+        foreach ($this->executedCommands as $index => $command) {
+            if (! fnmatch($pattern, $command)) {
+                continue;
+            }
+
+            Assert::assertSame(
+                $timeout,
+                $this->executedTimeouts[$index] ?? null,
+                "Expected command pattern [{$pattern}] to use timeout [{$timeout}].",
+            );
+
+            return;
+        }
+
+        Assert::fail("Expected command pattern [{$pattern}] to be executed.");
     }
 
     public function assertCommandNotExecuted(string $pattern): void

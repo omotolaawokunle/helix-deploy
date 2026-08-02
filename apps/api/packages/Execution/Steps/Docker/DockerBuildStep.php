@@ -27,6 +27,7 @@ final class DockerBuildStep extends BaseDeploymentStep
                     rtrim($ctx->sharedPath, '/').'/.env',
                     $ctx->site->resolvedComposeProjectName(),
                 ),
+                $this->longCommandTimeoutSeconds(),
             );
 
             return;
@@ -37,6 +38,7 @@ final class DockerBuildStep extends BaseDeploymentStep
         $this->runCommand(
             $ctx,
             'docker build -t '.$this->shellQuote($tag).' '.$this->shellQuote($ctx->releasePath),
+            $this->longCommandTimeoutSeconds(),
         );
     }
 }

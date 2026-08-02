@@ -19,6 +19,11 @@ abstract class BaseDeploymentStep implements DeploymentStepInterface
         return false;
     }
 
+    protected function longCommandTimeoutSeconds(): int
+    {
+        return max(1, (int) config('helixdeploy.deployment_timeout_minutes', 30) * 60);
+    }
+
     protected function runCommand(DeploymentContext $ctx, string $command, ?int $timeout = null): SSHResult
     {
         $previous = $ctx->executingStepName;

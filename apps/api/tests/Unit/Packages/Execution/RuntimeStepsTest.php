@@ -159,6 +159,56 @@ it('docker build falls back to docker build in release path without compose file
     $ssh->assertCommandExecuted('docker build -t *helix/app:latest*');
 });
 
+it('docker build uses the long-running SSH timeout', function (): void {
+    config(['helixdeploy.deployment_timeout_minutes' => 30]);
+
+    [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
+        'deploy_mode' => DeployMode::DOCKER,
+        'docker_build_mode' => DockerBuildMode::BUILD,
+        'docker_image' => 'helix/app:latest',
+        'docker_compose_path' => '',
+    ]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['docker build *' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new DockerBuildStep())->run($ctx);
+
+    $ssh->assertCommandTimeout('docker build *', 1800);
+});
+
+it('docker compose up uses the long-running SSH timeout', function (): void {
+    config(['helixdeploy.deployment_timeout_minutes' => 30]);
+
+    [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
+        'deploy_mode' => DeployMode::DOCKER,
+        'docker_compose_path' => 'docker-compose.yml',
+    ]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*docker-compose*-f*up -d*' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new DockerComposeUpStep())->run($ctx);
+
+    $ssh->assertCommandTimeout('*up -d*', 1800);
+});
+
+it('docker pull uses the long-running SSH timeout', function (): void {
+    config(['helixdeploy.deployment_timeout_minutes' => 30]);
+
+    [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
+        'deploy_mode' => DeployMode::DOCKER,
+        'docker_image' => 'ghcr.io/helix/app:latest',
+    ]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['docker pull *' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new DockerPullStep())->run($ctx);
+
+    $ssh->assertCommandTimeout('docker pull *', 1800);
+});
+
 it('docker build uses compose build when compose path is relative to release', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
         'deploy_mode' => DeployMode::DOCKER,

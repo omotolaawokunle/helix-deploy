@@ -26,6 +26,7 @@ final class DockerComposeUpStep extends BaseDeploymentStep
                 rtrim($ctx->sharedPath, '/').'/.env',
                 $ctx->site->resolvedComposeProjectName(),
             ),
+            $this->longCommandTimeoutSeconds(),
         );
     }
 }
