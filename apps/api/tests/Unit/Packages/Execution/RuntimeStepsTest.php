@@ -350,6 +350,37 @@ it('docker cleanup prunes images and containers', function (): void {
     expect($ssh->getExecutedCommands())->toHaveCount(2);
 });
 
+it('docker cleanup uses the long-running SSH timeout', function (): void {
+    config(['helixdeploy.deployment_timeout_minutes' => 30]);
+
+    [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, ['deploy_mode' => DeployMode::DOCKER]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, [
+        'docker image prune*' => sshSuccess(),
+        'docker container prune*' => sshSuccess(),
+    ]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new DockerCleanupStep())->run($ctx);
+
+    $ssh->assertCommandTimeout('docker image prune*', 1800);
+    $ssh->assertCommandTimeout('docker container prune*', 1800);
+});
+
+it('docker cleanup treats prune failures as non-fatal', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, ['deploy_mode' => DeployMode::DOCKER]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, [
+        'docker image prune*' => sshFailure('prune busy'),
+    ]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new DockerCleanupStep())->run($ctx);
+
+    $ssh->assertCommandExecuted('docker image prune*');
+    $ssh->assertCommandNotExecuted('docker container prune*');
+});
+
 it('docker pull failure throws deployment step failed exception', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
         'deploy_mode' => DeployMode::DOCKER,

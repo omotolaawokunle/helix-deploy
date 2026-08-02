@@ -189,6 +189,11 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
             );
             event(new DeploymentCompleted($deployment->refresh()));
         } catch (Throwable $exception) {
+            if (isset($ctx)) {
+                $ctx->flushLog();
+            }
+
+            $this->markRunningStepsFailed($deployment, $exception->getMessage());
             $this->markDeploymentFailed($deployment, null, null, $beforeState, $exception->getMessage());
             event(new DeploymentCompleted($deployment->refresh()));
 
@@ -201,13 +206,24 @@ class RunDeploymentJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
     private function markRunningStepCancelled(Deployment $deployment): void
     {
+        $this->markRunningStepsFailed($deployment);
+    }
+
+    private function markRunningStepsFailed(Deployment $deployment, ?string $output = null): void
+    {
+        $attributes = [
+            'status' => DeploymentStepStatus::FAILED->value,
+            'finished_at' => now(),
+        ];
+
+        if ($output !== null && $output !== '') {
+            $attributes['output'] = $output;
+        }
+
         DeploymentStep::query()
             ->where('deployment_id', (string) $deployment->getKey())
             ->where('status', DeploymentStepStatus::RUNNING->value)
-            ->update([
-                'status' => DeploymentStepStatus::FAILED->value,
-                'finished_at' => now(),
-            ]);
+            ->update($attributes);
     }
 
     public function failed(Throwable $exception): void
