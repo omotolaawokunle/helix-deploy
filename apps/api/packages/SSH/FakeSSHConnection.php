@@ -60,7 +60,7 @@ class FakeSSHConnection implements SSHConnectionInterface
         $this->executedTimeouts[] = $timeout;
 
         foreach ($this->responses as $pattern => $results) {
-            if (! fnmatch($pattern, $command)) {
+            if (! $this->commandMatches($pattern, $command)) {
                 continue;
             }
 
@@ -145,7 +145,7 @@ class FakeSSHConnection implements SSHConnectionInterface
         $matched = false;
 
         foreach ($this->executedCommands as $command) {
-            if (fnmatch($pattern, $command)) {
+            if ($this->commandMatches($pattern, $command)) {
                 $matched = true;
                 break;
             }
@@ -157,7 +157,7 @@ class FakeSSHConnection implements SSHConnectionInterface
     public function assertCommandTimeout(string $pattern, int $timeout): void
     {
         foreach ($this->executedCommands as $index => $command) {
-            if (! fnmatch($pattern, $command)) {
+            if (! $this->commandMatches($pattern, $command)) {
                 continue;
             }
 
@@ -178,7 +178,7 @@ class FakeSSHConnection implements SSHConnectionInterface
         $matched = false;
 
         foreach ($this->executedCommands as $command) {
-            if (fnmatch($pattern, $command)) {
+            if ($this->commandMatches($pattern, $command)) {
                 $matched = true;
                 break;
             }
@@ -190,5 +190,21 @@ class FakeSSHConnection implements SSHConnectionInterface
     public function assertCommandCount(int $count): void
     {
         Assert::assertCount($count, $this->executedCommands);
+    }
+
+    private function commandMatches(string $pattern, string $command): bool
+    {
+        // PHP's fnmatch() rejects subjects longer than 1024 bytes.
+        if (strlen($command) <= 1024 && strlen($pattern) <= 1024) {
+            return fnmatch($pattern, $command);
+        }
+
+        $parts = explode('*', $pattern);
+        $regex = '/^'.implode('.*', array_map(
+            static fn (string $part): string => preg_quote($part, '/'),
+            $parts,
+        )).'$/s';
+
+        return preg_match($regex, $command) === 1;
     }
 }

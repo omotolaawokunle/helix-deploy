@@ -275,6 +275,26 @@ it('docker pull runs docker pull with image', function (): void {
     $ssh->assertCommandExecuted('docker pull *ghcr.io/helix/app:latest*');
 });
 
+it('docker compose up purges stale project containers before up -d', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
+        'deploy_mode' => DeployMode::DOCKER,
+        'docker_compose_path' => 'docker-compose.yml',
+        'compose_project_name' => 'bg-removernolbzdesigncom',
+    ]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*up -d*' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new DockerComposeUpStep())->run($ctx);
+
+    $command = $ssh->getExecutedCommands()[0];
+    expect($command)
+        ->toContain('docker rm -f')
+        ->toContain('label=com.docker.compose.project=bg-removernolbzdesigncom')
+        ->toContain('ContainerConfig')
+        ->toContain('up -d');
+});
+
 it('docker compose up resolves absolute compose path', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::DOCKER, [
         'deploy_mode' => DeployMode::DOCKER,
