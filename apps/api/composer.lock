@@ -2637,12 +2637,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/omotolaawokunle/observability.git",
-                "reference": "e414128b1df07956fd6cf9a87d198158dc057084"
+                "reference": "11ae1c1b15eee6e534a81812290f57dc5d2a43e7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/omotolaawokunle/observability/zipball/e414128b1df07956fd6cf9a87d198158dc057084",
-                "reference": "e414128b1df07956fd6cf9a87d198158dc057084",
+                "url": "https://api.github.com/repos/omotolaawokunle/observability/zipball/11ae1c1b15eee6e534a81812290f57dc5d2a43e7",
+                "reference": "11ae1c1b15eee6e534a81812290f57dc5d2a43e7",
                 "shasum": ""
             },
             "require": {
@@ -2670,7 +2670,7 @@
                 "source": "https://github.com/omotolaawokunle/observability/tree/main",
                 "issues": "https://github.com/omotolaawokunle/observability/issues"
             },
-            "time": "2026-07-28T21:21:21+00:00"
+            "time": "2026-08-05T09:26:15+00:00"
         },
         {
             "name": "monolog/monolog",
