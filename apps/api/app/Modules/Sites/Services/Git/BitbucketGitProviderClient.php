@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Sites\Services\Git;
 
 use App\Modules\Sites\Contracts\GitProviderClientInterface;
+use App\Modules\Sites\DTOs\BitbucketCredential;
 use App\Modules\Sites\DTOs\GitBranchDTO;
 use App\Modules\Sites\DTOs\GitRepositoryDTO;
 use App\Modules\Sites\Enums\GitProvider;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
 class BitbucketGitProviderClient implements GitProviderClientInterface
@@ -18,8 +20,7 @@ class BitbucketGitProviderClient implements GitProviderClientInterface
 
     public function __construct(
         private readonly GitCloneUrlBuilder $cloneUrlBuilder,
-    ) {
-    }
+    ) {}
 
     /**
      * @return list<GitRepositoryDTO>
@@ -28,53 +29,13 @@ class BitbucketGitProviderClient implements GitProviderClientInterface
     {
         /** @var list<array<string, mixed>> $items */
         $items = [];
-        $url = self::API_BASE.'/repositories?role=member&pagelen=100';
 
-        for ($page = 1; $page <= self::MAX_PAGES; $page++) {
-            $response = Http::withToken($token)
-                ->get($url)
-                ->throw();
-
-            /** @var array{values?: list<array<string, mixed>>, next?: string|null} $payload */
-            $payload = $response->json();
-            /** @var list<array<string, mixed>> $pageItems */
-            $pageItems = $payload['values'] ?? [];
-            $items = array_merge($items, $pageItems);
-
-            $next = $payload['next'] ?? null;
-
-            if (! is_string($next) || $next === '' || $pageItems === []) {
-                break;
-            }
-
-            $url = $next;
+        foreach ($this->listWorkspaceSlugs($token) as $workspace) {
+            $url = self::API_BASE.'/repositories/'.rawurlencode($workspace).'?role=member&pagelen=100';
+            $items = array_merge($items, $this->paginate($token, $url));
         }
 
-        return array_map(function (array $item): GitRepositoryDTO {
-            $fullName = (string) ($item['full_name'] ?? '');
-            $links = is_array($item['links'] ?? null) ? $item['links'] : [];
-            $cloneLinks = is_array($links['clone'] ?? null) ? $links['clone'] : [];
-            $cloneUrl = '';
-
-            foreach ($cloneLinks as $link) {
-                if (is_array($link) && ($link['name'] ?? null) === 'https') {
-                    $cloneUrl = (string) ($link['href'] ?? '');
-
-                    break;
-                }
-            }
-
-            $mainBranch = is_array($item['mainbranch'] ?? null) ? $item['mainbranch'] : [];
-
-            return new GitRepositoryDTO(
-                id: $fullName,
-                name: (string) ($item['name'] ?? ''),
-                fullName: $fullName,
-                cloneUrl: $cloneUrl,
-                defaultBranch: (string) ($mainBranch['name'] ?? 'main'),
-                isPrivate: (bool) ($item['is_private'] ?? true),
-            );
-        }, $items);
+        return array_map($this->toRepositoryDto(...), $items);
     }
 
     /**
@@ -82,7 +43,7 @@ class BitbucketGitProviderClient implements GitProviderClientInterface
      */
     public function listBranches(string $token, string $owner, string $repo): array
     {
-        $response = Http::withToken($token)
+        $response = $this->http($token)
             ->get(self::API_BASE.'/repositories/'.rawurlencode($owner).'/'.rawurlencode($repo).'/refs/branches', [
                 'pagelen' => 100,
             ])
@@ -104,6 +65,105 @@ class BitbucketGitProviderClient implements GitProviderClientInterface
 
     public function buildAuthenticatedCloneUrl(string $token, string $repositoryUrl): string
     {
-        return $this->cloneUrlBuilder->build(GitProvider::BITBUCKET, $token, $repositoryUrl);
+        $credential = BitbucketCredential::parse($token);
+        $username = $credential->email !== null
+            ? 'x-bitbucket-api-token-auth'
+            : 'x-token-auth';
+
+        return $this->cloneUrlBuilder->build(
+            GitProvider::BITBUCKET,
+            $credential->token,
+            $repositoryUrl,
+            $username,
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function listWorkspaceSlugs(string $token): array
+    {
+        $slugs = [];
+
+        foreach ($this->paginate($token, self::API_BASE.'/user/workspaces?pagelen=100') as $item) {
+            $workspace = is_array($item['workspace'] ?? null) ? $item['workspace'] : $item;
+            $slug = (string) ($workspace['slug'] ?? '');
+
+            if ($slug !== '') {
+                $slugs[] = $slug;
+            }
+        }
+
+        return array_values(array_unique($slugs));
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function paginate(string $token, string $url): array
+    {
+        /** @var list<array<string, mixed>> $items */
+        $items = [];
+
+        for ($page = 1; $page <= self::MAX_PAGES; $page++) {
+            $response = $this->http($token)->get($url)->throw();
+
+            /** @var array{values?: list<array<string, mixed>>, next?: string|null} $payload */
+            $payload = $response->json();
+            /** @var list<array<string, mixed>> $pageItems */
+            $pageItems = $payload['values'] ?? [];
+            $items = array_merge($items, $pageItems);
+
+            $next = $payload['next'] ?? null;
+
+            if (! is_string($next) || $next === '' || $pageItems === []) {
+                break;
+            }
+
+            $url = $next;
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     */
+    private function toRepositoryDto(array $item): GitRepositoryDTO
+    {
+        $fullName = (string) ($item['full_name'] ?? '');
+        $links = is_array($item['links'] ?? null) ? $item['links'] : [];
+        $cloneLinks = is_array($links['clone'] ?? null) ? $links['clone'] : [];
+        $cloneUrl = '';
+
+        foreach ($cloneLinks as $link) {
+            if (is_array($link) && ($link['name'] ?? null) === 'https') {
+                $cloneUrl = (string) ($link['href'] ?? '');
+
+                break;
+            }
+        }
+
+        $mainBranch = is_array($item['mainbranch'] ?? null) ? $item['mainbranch'] : [];
+
+        return new GitRepositoryDTO(
+            id: $fullName,
+            name: (string) ($item['name'] ?? ''),
+            fullName: $fullName,
+            cloneUrl: $cloneUrl,
+            defaultBranch: (string) ($mainBranch['name'] ?? 'main'),
+            isPrivate: (bool) ($item['is_private'] ?? true),
+        );
+    }
+
+    private function http(string $stored): PendingRequest
+    {
+        $credential = BitbucketCredential::parse($stored);
+
+        if ($credential->email !== null) {
+            return Http::withBasicAuth($credential->email, $credential->token)->acceptJson();
+        }
+
+        return Http::withToken($credential->token)->acceptJson();
     }
 }

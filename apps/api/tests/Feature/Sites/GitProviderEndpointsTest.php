@@ -96,3 +96,69 @@ it('forbids developers from storing git provider tokens', function (): void {
         ])
         ->assertForbidden();
 });
+
+it('lists bitbucket repositories from workspace-scoped endpoints using an api token', function (): void {
+    [$organization, $owner] = createGitProviderFixture();
+
+    Http::fake([
+        'api.bitbucket.org/2.0/user/workspaces*' => Http::response([
+            'values' => [
+                [
+                    'workspace' => ['slug' => 'acme'],
+                ],
+            ],
+        ]),
+        'api.bitbucket.org/2.0/repositories/acme/private-app/refs/branches*' => Http::response([
+            'values' => [['name' => 'main']],
+        ]),
+        'api.bitbucket.org/2.0/repositories/acme*' => Http::response([
+            'values' => [
+                [
+                    'name' => 'private-app',
+                    'full_name' => 'acme/private-app',
+                    'is_private' => true,
+                    'mainbranch' => ['name' => 'main'],
+                    'links' => [
+                        'clone' => [
+                            ['name' => 'https', 'href' => 'https://bitbucket.org/acme/private-app.git'],
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/organizations/{$organization->id}/git-providers", [
+            'provider' => 'bitbucket',
+            'token' => 'ATATT_test_secret_token_value',
+            'email' => 'dev@example.com',
+        ])
+        ->assertCreated();
+
+    $this->actingAs($owner)
+        ->getJson("/api/v1/organizations/{$organization->id}/git-providers/bitbucket/repositories")
+        ->assertOk()
+        ->assertJsonPath('data.0.fullName', 'acme/private-app');
+
+    Http::assertSent(function ($request): bool {
+        return str_contains($request->url(), 'api.bitbucket.org/2.0/user/workspaces')
+            && $request->hasHeader('Authorization', 'Basic '.base64_encode('dev@example.com:ATATT_test_secret_token_value'));
+    });
+
+    Http::assertNotSent(function ($request): bool {
+        return (string) parse_url($request->url(), PHP_URL_PATH) === '/2.0/repositories';
+    });
+});
+
+it('requires an atlassian email when storing a bitbucket token', function (): void {
+    [$organization, $owner] = createGitProviderFixture();
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/organizations/{$organization->id}/git-providers", [
+            'provider' => 'bitbucket',
+            'token' => 'ATATT_test_secret_token_value',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['email']);
+});

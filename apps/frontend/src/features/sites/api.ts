@@ -80,7 +80,7 @@ export async function fetchGitProviders(organizationId: string): Promise<GitProv
 
 export async function storeGitProviderToken(
   organizationId: string,
-  payload: { provider: GitProviderType; token: string },
+  payload: { provider: GitProviderType; token: string; email?: string },
 ): Promise<void> {
   await api.post(`/api/v1/organizations/${organizationId}/git-providers`, payload)
 }

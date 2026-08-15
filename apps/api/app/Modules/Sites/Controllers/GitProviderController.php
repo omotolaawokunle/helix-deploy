@@ -13,7 +13,7 @@ use App\Modules\Sites\Resources\GitBranchResource;
 use App\Modules\Sites\Resources\GitRepositoryResource;
 use App\Modules\Sites\Services\GitProviderService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class GitProviderController extends Controller
 {
@@ -35,10 +35,13 @@ class GitProviderController extends Controller
 
         $provider = GitProvider::from((string) $request->input('provider'));
 
+        $email = $request->input('email');
+
         $gitProviderService->storeProviderToken(
             $org,
             $provider,
             (string) $request->input('token'),
+            is_string($email) && $email !== '' ? $email : null,
         );
 
         return response()->json([
@@ -64,7 +67,7 @@ class GitProviderController extends Controller
         Organization $org,
         string $provider,
         GitProviderService $gitProviderService,
-    ): \Illuminate\Http\Resources\Json\AnonymousResourceCollection {
+    ): AnonymousResourceCollection {
         $this->authorize('viewAny', [GitProviderIntegration::class, $org]);
 
         $resolved = GitProvider::from($provider);
@@ -79,7 +82,7 @@ class GitProviderController extends Controller
         string $owner,
         string $repo,
         GitProviderService $gitProviderService,
-    ): \Illuminate\Http\Resources\Json\AnonymousResourceCollection {
+    ): AnonymousResourceCollection {
         $this->authorize('viewAny', [GitProviderIntegration::class, $org]);
 
         $resolved = GitProvider::from($provider);

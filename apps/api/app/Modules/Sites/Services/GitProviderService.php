@@ -8,25 +8,26 @@ use App\Modules\Credentials\CredentialVault;
 use App\Modules\Credentials\Enums\CredentialType;
 use App\Modules\Credentials\Models\Credential;
 use App\Modules\Organizations\Models\Organization;
+use App\Modules\Sites\DTOs\BitbucketCredential;
 use App\Modules\Sites\DTOs\GitBranchDTO;
 use App\Modules\Sites\DTOs\GitRepositoryDTO;
 use App\Modules\Sites\Enums\GitProvider;
 use App\Modules\Sites\Services\Git\GitProviderClientFactory;
+use Illuminate\Database\Eloquent\Collection;
 
 class GitProviderService
 {
     public function __construct(
         private readonly CredentialVault $credentialVault,
         private readonly GitProviderClientFactory $clientFactory,
-    ) {
-    }
+    ) {}
 
     /**
      * @return list<array<string, mixed>>
      */
     public function listConfiguredProviders(Organization $organization): array
     {
-        /** @var \Illuminate\Database\Eloquent\Collection<int, Credential> $credentials */
+        /** @var Collection<int, Credential> $credentials */
         $credentials = Credential::query()
             ->forOrganization($organization)
             ->ofType(CredentialType::GIT_PROVIDER_TOKEN)
@@ -45,12 +46,20 @@ class GitProviderService
         })->filter(static fn (array $item): bool => $item['provider'] !== null)->values()->all();
     }
 
-    public function storeProviderToken(Organization $organization, GitProvider $provider, string $token): void
-    {
+    public function storeProviderToken(
+        Organization $organization,
+        GitProvider $provider,
+        string $token,
+        ?string $email = null,
+    ): void {
+        $stored = $provider === GitProvider::BITBUCKET
+            ? BitbucketCredential::pack($token, $email)
+            : $token;
+
         $this->credentialVault->storeGitProviderToken(
             $organization,
             $provider->credentialName(),
-            $token,
+            $stored,
         );
     }
 

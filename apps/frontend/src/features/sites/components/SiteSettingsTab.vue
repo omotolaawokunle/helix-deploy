@@ -75,6 +75,7 @@ const deployBranch = ref('')
 const repositoryUrl = ref('')
 const repositoryProvider = ref<GitProviderType | 'none'>('none')
 const providerToken = ref('')
+const providerEmail = ref('')
 const pipelines = ref<PipelineRecord[]>([])
 const gitRepositories = ref<Array<{ id: string; fullName: string; cloneUrl: string; defaultBranch: string }>>([])
 const gitBranches = ref<string[]>([])
@@ -173,7 +174,7 @@ const providerTokenHint = computed((): string => {
   }
 
   if (provider === 'bitbucket') {
-    return 'Bitbucket app password needs Repositories: Read so private repos appear in the list.'
+    return 'Create a Bitbucket API token (app passwords no longer work) with read:workspace:bitbucket and read:repository:bitbucket. Save it with the Atlassian account email used for Bitbucket.'
   }
 
   if (provider === 'github') {
@@ -365,14 +366,20 @@ async function handleSaveProviderToken(): Promise<void> {
     return
   }
 
+  if (repositoryProvider.value === 'bitbucket' && providerEmail.value.trim() === '') {
+    return
+  }
+
   isSavingProviderToken.value = true
 
   try {
     await storeGitProviderToken(activeOrgId, {
       provider: repositoryProvider.value,
       token: providerToken.value.trim(),
+      ...(repositoryProvider.value === 'bitbucket' ? { email: providerEmail.value.trim() } : {}),
     })
     providerToken.value = ''
+    providerEmail.value = ''
     gitCredentialConfigured.value = true
     toast.success('Git provider token saved.')
     await refreshGitMetadata()
@@ -583,6 +590,16 @@ async function handleDelete(): Promise<void> {
             {{ gitCredentialConfigured ? 'Configured' : 'Not configured' }}
           </Badge>
         </div>
+        <div v-if="repositoryProvider === 'bitbucket'" class="space-y-2">
+          <Label for="provider-email">Atlassian account email</Label>
+          <Input
+            id="provider-email"
+            v-model="providerEmail"
+            type="email"
+            autocomplete="off"
+            placeholder="you@example.com"
+          />
+        </div>
         <div class="space-y-2">
           <Label for="provider-token">Personal access token</Label>
           <Input
@@ -600,7 +617,7 @@ async function handleDelete(): Promise<void> {
           <Button
             type="button"
             size="sm"
-            :disabled="isSavingProviderToken || providerToken.trim() === ''"
+            :disabled="isSavingProviderToken || providerToken.trim() === '' || (repositoryProvider === 'bitbucket' && providerEmail.trim() === '')"
             @click="handleSaveProviderToken"
           >
             {{ isSavingProviderToken ? 'Saving…' : 'Save token' }}

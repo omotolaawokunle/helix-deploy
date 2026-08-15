@@ -23,6 +23,7 @@ class StoreGitProviderTokenRequest extends FormRequest
         return [
             'provider' => ['required', 'string', Rule::enum(GitProvider::class)],
             'token' => ['required', 'string', 'min:8', 'max:4096'],
+            'email' => ['required_if:provider,bitbucket', 'nullable', 'email', 'max:255'],
         ];
     }
 }

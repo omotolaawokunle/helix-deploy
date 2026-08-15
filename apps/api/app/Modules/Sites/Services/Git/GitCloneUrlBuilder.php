@@ -9,7 +9,7 @@ use InvalidArgumentException;
 
 class GitCloneUrlBuilder
 {
-    public function build(GitProvider $provider, string $token, string $repositoryUrl): string
+    public function build(GitProvider $provider, string $token, string $repositoryUrl, ?string $username = null): string
     {
         $parts = parse_url($repositoryUrl);
 
@@ -18,7 +18,7 @@ class GitCloneUrlBuilder
         }
 
         $scheme = $parts['scheme'] ?? 'https';
-        $username = match ($provider) {
+        $username ??= match ($provider) {
             GitProvider::GITHUB => 'x-access-token',
             GitProvider::GITLAB => 'oauth2',
             GitProvider::BITBUCKET => 'x-token-auth',
