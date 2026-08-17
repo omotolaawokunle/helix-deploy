@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Services;
 
-use App\Modules\Organizations\Models\Organization;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Credentials\Contracts\CredentialVaultInterface;
 use App\Modules\Credentials\Enums\CredentialType;
 use App\Modules\Credentials\Models\Credential;
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Sites\Models\Site;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
 use Illuminate\Support\Facades\Cache;
@@ -19,8 +19,7 @@ class EnvFileManager
         private readonly CredentialVaultInterface $credentialVault,
         private readonly SiteDeployPathResolver $deployPathResolver,
         private readonly EnvVarValueResolver $envVarValueResolver,
-    ) {
-    }
+    ) {}
 
     public function generate(Site $site, Organization $org): string
     {
@@ -47,9 +46,21 @@ class EnvFileManager
         return implode("\n", $lines)."\n";
     }
 
+    public function writeTo(
+        Site $site,
+        Organization $org,
+        SSHConnectionInterface $ssh,
+        string $remotePath,
+    ): void {
+        $content = $this->generate($site, $org);
+
+        if (! $ssh->upload($content, $remotePath)) {
+            throw new \RuntimeException('Failed to upload .env file to server.');
+        }
+    }
+
     public function sync(Site $site, Organization $org, SSHConnectionInterface $ssh): void
     {
-        $content = $this->generate($site, $org);
         $count = Credential::query()
             ->forOrganization($org)
             ->where('credentialable_type', $site->getMorphClass())
@@ -59,9 +70,7 @@ class EnvFileManager
 
         $remotePath = $this->cachedRemotePath($site) ?? $this->remotePath($site);
 
-        if (! $ssh->upload($content, $remotePath)) {
-            throw new \RuntimeException('Failed to upload .env file to server.');
-        }
+        $this->writeTo($site, $org, $ssh, $remotePath);
 
         $owner = $this->webrootOwner($site);
 

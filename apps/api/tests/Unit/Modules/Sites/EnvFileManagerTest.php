@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use App\Modules\Organizations\Models\Organization;
 use App\Models\User;
 use App\Modules\Credentials\Contracts\CredentialVaultInterface;
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Enums\Runtime;
@@ -102,7 +102,7 @@ it('reads remote env file via ssh and returns empty when missing', function (): 
     ]);
 
     $remotePath = app(EnvFileManager::class)->remotePath($site);
-    $ssh = new FakeSSHConnection();
+    $ssh = new FakeSSHConnection;
 
     $ssh->addSequence('test -f *',
         new SSHResult('test -f', 1, '', '', 0.0),
@@ -111,7 +111,7 @@ it('reads remote env file via ssh and returns empty when missing', function (): 
     );
     expect(app(EnvFileManager::class)->read($site, $ssh))->toBe('');
 
-    $ssh = new FakeSSHConnection();
+    $ssh = new FakeSSHConnection;
     $ssh->addResponse('test -f *', new SSHResult('test -f', 0, '', '', 0.0));
     $ssh->addResponse('cat *', new SSHResult('cat', 0, "APP_ENV=production\n", '', 0.0));
 
@@ -158,7 +158,7 @@ it('reads env file from flat project root when directory name differs from domai
         'status' => SiteStatus::DISCOVERED->value,
     ]);
 
-    $ssh = new FakeSSHConnection();
+    $ssh = new FakeSSHConnection;
     $ssh->addSequence('test -f *',
         new SSHResult('test -f', 1, '', '', 0.0),
         new SSHResult('test -f', 0, '', '', 0.0),
@@ -210,7 +210,7 @@ it('sync writes to cached resolved path discovered during read', function (): vo
 
     app(CredentialVaultInterface::class)->storeSecret($organization, $site, 'APP_KEY', 'from-helix');
 
-    $readSsh = new FakeSSHConnection();
+    $readSsh = new FakeSSHConnection;
     $readSsh->addSequence('test -f *',
         new SSHResult('test -f', 1, '', '', 0.0),
         new SSHResult('test -f', 0, '', '', 0.0),
@@ -220,7 +220,7 @@ it('sync writes to cached resolved path discovered during read', function (): vo
     $manager = app(EnvFileManager::class);
     $manager->read($site, $readSsh);
 
-    $syncSsh = new FakeSSHConnection();
+    $syncSsh = new FakeSSHConnection;
     $syncSsh->addSequence('sudo chmod 640 *', new SSHResult('chmod', 0, '', '', 0.0));
     $syncSsh->addSequence('sudo chown *', new SSHResult('chown', 0, '', '', 0.0));
 
@@ -286,4 +286,54 @@ it('resolves referenced env vars from server secrets when generating env file', 
     $content = app(EnvFileManager::class)->generate($site, $organization);
 
     expect($content)->toBe("DB_PASSWORD=\"linked-postgres-password\"\n");
+});
+
+it('writes generated env contents to an arbitrary remote path', function (): void {
+    $organization = Organization::query()->create([
+        'name' => 'Env Write Org',
+        'slug' => 'env-write-'.Str::random(6),
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $owner = User::factory()->create();
+    $organization->users()->attach($owner->getKey(), ['role' => 'owner']);
+
+    $server = Server::query()->withoutGlobalScope('owned_by_organization')->create([
+        'organization_id' => (string) $organization->getKey(),
+        'hostname' => 'env-write.test',
+        'ip_address' => '10.0.0.29',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'provider' => 'generic',
+        'status' => 'active',
+        'management_mode' => 'managed',
+        'created_by' => (string) $owner->getKey(),
+        'tags' => [],
+        'installed_services' => [],
+    ]);
+
+    $site = Site::query()->withoutGlobalScope('owned_by_organization')->create([
+        'server_id' => (string) $server->getKey(),
+        'organization_id' => (string) $organization->getKey(),
+        'domain' => 'env-write.example.test',
+        'aliases' => [],
+        'webroot' => '/var/www/env-write.example.test/current/public',
+        'runtime' => Runtime::PHP->value,
+        'deploy_mode' => DeployMode::GIT->value,
+        'deploy_branch' => 'main',
+        'run_migrations' => false,
+        'status' => SiteStatus::ACTIVE->value,
+    ]);
+
+    app(CredentialVaultInterface::class)->storeSecret($organization, $site, 'VITE_APP_NAME', 'Helix');
+
+    $ssh = new FakeSSHConnection;
+    $remotePath = '/builds/example/.env';
+
+    app(EnvFileManager::class)->writeTo($site, $organization, $ssh, $remotePath);
+
+    expect($ssh->getUploads())->toHaveKey($remotePath)
+        ->and($ssh->getUploads()[$remotePath])->toBe("VITE_APP_NAME=\"Helix\"\n");
 });

@@ -10,6 +10,7 @@ use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Models\Site;
+use App\Packages\Execution\Contracts\BuildStepInterface;
 use App\Packages\Execution\Contracts\DeploymentStepInterface;
 use App\Packages\Execution\Steps\Build\BuildAssetsBuildStep;
 use App\Packages\Execution\Steps\Build\CleanupRunnerArtifactStep;
@@ -19,6 +20,7 @@ use App\Packages\Execution\Steps\Build\InstallComposerDepsBuildStep;
 use App\Packages\Execution\Steps\Build\InstallNpmDepsBuildStep;
 use App\Packages\Execution\Steps\Build\PrepareBuildDirectoryStep;
 use App\Packages\Execution\Steps\Build\RunPreBuildScriptStep;
+use App\Packages\Execution\Steps\Build\SyncEnvVarsBuildStep;
 use App\Packages\Execution\Steps\Build\TransferArtifactStep;
 use App\Packages\Execution\Steps\Build\VerifyBuildRunnerStep;
 use App\Packages\Execution\Steps\Docker\DockerBuildStep;
@@ -42,22 +44,22 @@ use App\Packages\Execution\Steps\PHP\RunMigrationsStep;
 use App\Packages\Execution\Steps\Python\CollectStaticStep;
 use App\Packages\Execution\Steps\Python\InstallPythonDepsStep;
 use App\Packages\Execution\Steps\Python\ReloadPythonProcessStep;
+use App\Packages\Execution\Steps\RunnerDeploy\CleanupTargetArtifactStep;
+use App\Packages\Execution\Steps\RunnerDeploy\ExtractArtifactStep;
+use App\Packages\Execution\Steps\RunnerDeploy\VerifyTargetArtifactChecksumStep;
 use App\Packages\Execution\Steps\Shared\ActivateReleaseStep;
 use App\Packages\Execution\Steps\Shared\CleanupOldReleasesStep;
 use App\Packages\Execution\Steps\Shared\CloneRepositoryStep;
 use App\Packages\Execution\Steps\Shared\CreateReleaseDirectoryStep;
 use App\Packages\Execution\Steps\Shared\LinkSharedDirectoriesStep;
+use App\Packages\Execution\Steps\Shared\ReloadNginxStep;
+use App\Packages\Execution\Steps\Shared\ReloadServicesStep;
 use App\Packages\Execution\Steps\Shared\RunPostDeployScriptStep;
 use App\Packages\Execution\Steps\Shared\RunPreDeployScriptStep;
-use App\Packages\Execution\Steps\Shared\ReloadServicesStep;
-use App\Packages\Execution\Steps\Shared\ReloadNginxStep;
 use App\Packages\Execution\Steps\Shared\SyncEnvVarsStep;
 use App\Packages\Execution\Steps\Shared\VerifyConnectionStep;
-use App\Packages\Execution\Steps\Static\BuildStaticAssetsStep;
-use App\Packages\Execution\Steps\RunnerDeploy\CleanupTargetArtifactStep;
-use App\Packages\Execution\Steps\RunnerDeploy\ExtractArtifactStep;
-use App\Packages\Execution\Steps\RunnerDeploy\VerifyTargetArtifactChecksumStep;
 use App\Packages\Execution\Steps\Shared\VerifyReleaseExistsStep;
+use App\Packages\Execution\Steps\Static\BuildStaticAssetsStep;
 use InvalidArgumentException;
 
 final class PipelineBuilder
@@ -68,10 +70,10 @@ final class PipelineBuilder
     public function buildRollback(Site $site): array
     {
         return [
-            new VerifyConnectionStep(),
-            new VerifyReleaseExistsStep(),
-            new ActivateReleaseStep(),
-            new ReloadServicesStep(),
+            new VerifyConnectionStep,
+            new VerifyReleaseExistsStep,
+            new ActivateReleaseStep,
+            new ReloadServicesStep,
         ];
     }
 
@@ -101,7 +103,7 @@ final class PipelineBuilder
     }
 
     /**
-     * @return list<\App\Packages\Execution\Contracts\BuildStepInterface>
+     * @return list<BuildStepInterface>
      */
     private function buildRunnerBuildSteps(Site $site): array
     {
@@ -110,32 +112,33 @@ final class PipelineBuilder
         }
 
         $shared = [
-            new VerifyBuildRunnerStep(),
-            new PrepareBuildDirectoryStep(),
-            new CloneRepositoryBuildStep(),
+            new VerifyBuildRunnerStep,
+            new PrepareBuildDirectoryStep,
+            new CloneRepositoryBuildStep,
+            new SyncEnvVarsBuildStep,
         ];
 
         $runtimeSteps = match ($site->runtime) {
             Runtime::PHP => [
-                new InstallComposerDepsBuildStep(),
-                new InstallNpmDepsBuildStep(),
-                new BuildAssetsBuildStep(),
+                new InstallComposerDepsBuildStep,
+                new InstallNpmDepsBuildStep,
+                new BuildAssetsBuildStep,
             ],
             Runtime::NODEJS => [
-                new InstallNpmDepsBuildStep(),
-                new BuildAssetsBuildStep(),
+                new InstallNpmDepsBuildStep,
+                new BuildAssetsBuildStep,
             ],
             Runtime::STATIC => [
-                new BuildAssetsBuildStep(),
+                new BuildAssetsBuildStep,
             ],
             default => throw new InvalidArgumentException('Runner build is not supported for runtime: '.$site->runtime->value),
         };
 
         return array_merge($shared, $runtimeSteps, [
-            new RunPreBuildScriptStep(),
-            new CreateArtifactStep(),
-            new TransferArtifactStep(),
-            new CleanupRunnerArtifactStep(),
+            new RunPreBuildScriptStep,
+            new CreateArtifactStep,
+            new TransferArtifactStep,
+            new CleanupRunnerArtifactStep,
         ]);
     }
 
@@ -153,55 +156,55 @@ final class PipelineBuilder
         }
 
         $prefix = [
-            new VerifyConnectionStep(),
-            new CreateReleaseDirectoryStep(),
-            new VerifyTargetArtifactChecksumStep(),
-            new ExtractArtifactStep(),
-            new SyncEnvVarsStep(),
-            new LinkSharedDirectoriesStep(),
+            new VerifyConnectionStep,
+            new CreateReleaseDirectoryStep,
+            new VerifyTargetArtifactChecksumStep,
+            new ExtractArtifactStep,
+            new SyncEnvVarsStep,
+            new LinkSharedDirectoriesStep,
         ];
 
         $runtimeSteps = match ($site->runtime) {
             Runtime::PHP => [
-                new RunMigrationsStep(),
-                new ClearCacheStep(),
-                new RunPreDeployScriptStep(),
-                new ActivateReleaseStep(),
-                new ReloadPHPFPMStep(),
-                new RestartWorkersStep(),
-                new RunPostDeployScriptStep(),
+                new RunMigrationsStep,
+                new ClearCacheStep,
+                new RunPreDeployScriptStep,
+                new ActivateReleaseStep,
+                new ReloadPHPFPMStep,
+                new RestartWorkersStep,
+                new RunPostDeployScriptStep,
             ],
             Runtime::NODEJS => [
-                new RunPreDeployScriptStep(),
-                new ActivateReleaseStep(),
-                new ReloadPM2Step(),
-                new RunPostDeployScriptStep(),
+                new RunPreDeployScriptStep,
+                new ActivateReleaseStep,
+                new ReloadPM2Step,
+                new RunPostDeployScriptStep,
             ],
             Runtime::PYTHON => [
-                new RunPreDeployScriptStep(),
-                new ActivateReleaseStep(),
-                new ReloadPythonProcessStep(),
-                new RunPostDeployScriptStep(),
+                new RunPreDeployScriptStep,
+                new ActivateReleaseStep,
+                new ReloadPythonProcessStep,
+                new RunPostDeployScriptStep,
             ],
             Runtime::GO => [
-                new RunPreDeployScriptStep(),
-                new ActivateReleaseStep(),
-                new ReplaceBinaryStep(),
-                new RestartGoServiceStep(),
-                new RunPostDeployScriptStep(),
+                new RunPreDeployScriptStep,
+                new ActivateReleaseStep,
+                new ReplaceBinaryStep,
+                new RestartGoServiceStep,
+                new RunPostDeployScriptStep,
             ],
             Runtime::STATIC => [
-                new RunPreDeployScriptStep(),
-                new ActivateReleaseStep(),
-                new ReloadNginxStep(),
-                new RunPostDeployScriptStep(),
+                new RunPreDeployScriptStep,
+                new ActivateReleaseStep,
+                new ReloadNginxStep,
+                new RunPostDeployScriptStep,
             ],
             default => throw new InvalidArgumentException('Unsupported runtime for runner deploy: '.$site->runtime->value),
         };
 
         return array_merge($prefix, $runtimeSteps, [
-            new CleanupTargetArtifactStep(),
-            new CleanupOldReleasesStep(),
+            new CleanupTargetArtifactStep,
+            new CleanupOldReleasesStep,
         ]);
     }
 
@@ -234,22 +237,22 @@ final class PipelineBuilder
     private function phpGitPipeline(): array
     {
         return [
-            new VerifyConnectionStep(),
-            new CreateReleaseDirectoryStep(),
-            new CloneRepositoryStep(),
-            new InstallComposerDepsStep(),
-            new InstallNpmDepsStep(),
-            new BuildAssetsStep(),
-            new SyncEnvVarsStep(),
-            new LinkSharedDirectoriesStep(),
-            new RunMigrationsStep(),
-            new ClearCacheStep(),
-            new RunPreDeployScriptStep(),
-            new ActivateReleaseStep(),
-            new ReloadPHPFPMStep(),
-            new RestartWorkersStep(),
-            new RunPostDeployScriptStep(),
-            new CleanupOldReleasesStep(),
+            new VerifyConnectionStep,
+            new CreateReleaseDirectoryStep,
+            new CloneRepositoryStep,
+            new InstallComposerDepsStep,
+            new InstallNpmDepsStep,
+            new SyncEnvVarsStep,
+            new LinkSharedDirectoriesStep,
+            new BuildAssetsStep,
+            new RunMigrationsStep,
+            new ClearCacheStep,
+            new RunPreDeployScriptStep,
+            new ActivateReleaseStep,
+            new ReloadPHPFPMStep,
+            new RestartWorkersStep,
+            new RunPostDeployScriptStep,
+            new CleanupOldReleasesStep,
         ];
     }
 
@@ -259,18 +262,18 @@ final class PipelineBuilder
     private function nodeGitPipeline(): array
     {
         return [
-            new VerifyConnectionStep(),
-            new CreateReleaseDirectoryStep(),
-            new CloneRepositoryStep(),
-            new InstallNpmDepsNodeStep(),
-            new BuildNodeAssetsStep(),
-            new SyncEnvVarsStep(),
-            new LinkSharedDirectoriesStep(),
-            new RunPreDeployScriptStep(),
-            new ActivateReleaseStep(),
-            new ReloadPM2Step(),
-            new RunPostDeployScriptStep(),
-            new CleanupOldReleasesStep(),
+            new VerifyConnectionStep,
+            new CreateReleaseDirectoryStep,
+            new CloneRepositoryStep,
+            new InstallNpmDepsNodeStep,
+            new SyncEnvVarsStep,
+            new LinkSharedDirectoriesStep,
+            new BuildNodeAssetsStep,
+            new RunPreDeployScriptStep,
+            new ActivateReleaseStep,
+            new ReloadPM2Step,
+            new RunPostDeployScriptStep,
+            new CleanupOldReleasesStep,
         ];
     }
 
@@ -280,18 +283,18 @@ final class PipelineBuilder
     private function pythonGitPipeline(): array
     {
         return [
-            new VerifyConnectionStep(),
-            new CreateReleaseDirectoryStep(),
-            new CloneRepositoryStep(),
-            new InstallPythonDepsStep(),
-            new CollectStaticStep(),
-            new SyncEnvVarsStep(),
-            new LinkSharedDirectoriesStep(),
-            new RunPreDeployScriptStep(),
-            new ActivateReleaseStep(),
-            new ReloadPythonProcessStep(),
-            new RunPostDeployScriptStep(),
-            new CleanupOldReleasesStep(),
+            new VerifyConnectionStep,
+            new CreateReleaseDirectoryStep,
+            new CloneRepositoryStep,
+            new InstallPythonDepsStep,
+            new SyncEnvVarsStep,
+            new LinkSharedDirectoriesStep,
+            new CollectStaticStep,
+            new RunPreDeployScriptStep,
+            new ActivateReleaseStep,
+            new ReloadPythonProcessStep,
+            new RunPostDeployScriptStep,
+            new CleanupOldReleasesStep,
         ];
     }
 
@@ -301,18 +304,18 @@ final class PipelineBuilder
     private function goGitPipeline(): array
     {
         return [
-            new VerifyConnectionStep(),
-            new CreateReleaseDirectoryStep(),
-            new CloneRepositoryStep(),
-            new DownloadBinaryStep(),
-            new SyncEnvVarsStep(),
-            new LinkSharedDirectoriesStep(),
-            new RunPreDeployScriptStep(),
-            new ActivateReleaseStep(),
-            new ReplaceBinaryStep(),
-            new RestartGoServiceStep(),
-            new RunPostDeployScriptStep(),
-            new CleanupOldReleasesStep(),
+            new VerifyConnectionStep,
+            new CreateReleaseDirectoryStep,
+            new CloneRepositoryStep,
+            new DownloadBinaryStep,
+            new SyncEnvVarsStep,
+            new LinkSharedDirectoriesStep,
+            new RunPreDeployScriptStep,
+            new ActivateReleaseStep,
+            new ReplaceBinaryStep,
+            new RestartGoServiceStep,
+            new RunPostDeployScriptStep,
+            new CleanupOldReleasesStep,
         ];
     }
 
@@ -322,17 +325,17 @@ final class PipelineBuilder
     private function staticGitPipeline(): array
     {
         return [
-            new VerifyConnectionStep(),
-            new CreateReleaseDirectoryStep(),
-            new CloneRepositoryStep(),
-            new BuildStaticAssetsStep(),
-            new SyncEnvVarsStep(),
-            new LinkSharedDirectoriesStep(),
-            new RunPreDeployScriptStep(),
-            new ActivateReleaseStep(),
-            new ReloadNginxStep(),
-            new RunPostDeployScriptStep(),
-            new CleanupOldReleasesStep(),
+            new VerifyConnectionStep,
+            new CreateReleaseDirectoryStep,
+            new CloneRepositoryStep,
+            new SyncEnvVarsStep,
+            new LinkSharedDirectoriesStep,
+            new BuildStaticAssetsStep,
+            new RunPreDeployScriptStep,
+            new ActivateReleaseStep,
+            new ReloadNginxStep,
+            new RunPostDeployScriptStep,
+            new CleanupOldReleasesStep,
         ];
     }
 
@@ -343,23 +346,23 @@ final class PipelineBuilder
     {
         if ($site->docker_build_mode === DockerBuildMode::BUILD) {
             return [
-                new VerifyConnectionStep(),
-                new CreateReleaseDirectoryStep(),
-                new CloneRepositoryStep(),
-                new SyncEnvVarsStep(),
-                new DockerBuildStep(),
-                new DockerComposeUpStep(),
-                new DockerCleanupStep(),
+                new VerifyConnectionStep,
+                new CreateReleaseDirectoryStep,
+                new CloneRepositoryStep,
+                new SyncEnvVarsStep,
+                new DockerBuildStep,
+                new DockerComposeUpStep,
+                new DockerCleanupStep,
             ];
         }
 
         return [
-            new VerifyConnectionStep(),
-            new DockerLoginStep(),
-            new DockerPullStep(),
-            new SyncEnvVarsStep(),
-            new DockerComposeUpStep(),
-            new DockerCleanupStep(),
+            new VerifyConnectionStep,
+            new DockerLoginStep,
+            new DockerPullStep,
+            new SyncEnvVarsStep,
+            new DockerComposeUpStep,
+            new DockerCleanupStep,
         ];
     }
 }

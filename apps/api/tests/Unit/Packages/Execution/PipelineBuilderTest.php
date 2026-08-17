@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\BuildRunners\Enums\BuildStrategy;
 use App\Modules\Sites\Enums\DeployMode;
 use App\Modules\Sites\Enums\DockerBuildMode;
 use App\Modules\Sites\Enums\Runtime;
@@ -17,7 +18,7 @@ use App\Packages\Execution\Steps\Shared\VerifyReleaseExistsStep;
 
 it('builds rollback pipeline with verify, activate, and reload steps', function (): void {
     [, , $site] = executionFixture(Runtime::PHP);
-    $steps = (new PipelineBuilder())->buildRollback($site);
+    $steps = (new PipelineBuilder)->buildRollback($site);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
     expect($names)->toBe([
@@ -34,7 +35,7 @@ it('builds rollback pipeline with verify, activate, and reload steps', function 
 
 it('places activate before php service reload steps', function (): void {
     [, , $site, $deployment] = executionFixture(Runtime::PHP);
-    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $steps = (new PipelineBuilder)->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
     $activateIndex = array_search('activate-release', $names, true);
@@ -47,7 +48,7 @@ it('places activate before php service reload steps', function (): void {
 
 it('runs all pre-activation steps before activate for php', function (): void {
     [, , $site, $deployment] = executionFixture(Runtime::PHP);
-    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $steps = (new PipelineBuilder)->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
     $activateIndex = array_search('activate-release', $names, true);
 
@@ -74,7 +75,7 @@ it('builds docker pull pipeline without git clone', function (): void {
         'docker_image' => 'ghcr.io/helix/app:latest',
     ]);
 
-    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $steps = (new PipelineBuilder)->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
     expect($names)->toBe([
@@ -94,7 +95,7 @@ it('builds docker build pipeline with clone', function (): void {
         'docker_image' => 'helix/app:latest',
     ]);
 
-    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $steps = (new PipelineBuilder)->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
     $syncIndex = array_search('sync-env-vars', $names, true);
@@ -109,21 +110,27 @@ it('builds docker build pipeline with clone', function (): void {
         ->and($syncIndex)->toBeLessThan($buildIndex);
 });
 
-it('places sync-env-vars before link-shared-directories for php', function (): void {
-    [, , $site, $deployment] = executionFixture(Runtime::PHP);
-    $steps = (new PipelineBuilder())->build($site, $deployment);
+it('places sync-env-vars and link-shared-directories before the asset build step', function (Runtime $runtime, string $buildStep): void {
+    [, , $site, $deployment] = executionFixture($runtime);
+    $steps = (new PipelineBuilder)->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
     $syncIndex = array_search('sync-env-vars', $names, true);
     $linkIndex = array_search('link-shared-directories', $names, true);
-    $activateIndex = array_search('activate-release', $names, true);
+    $buildIndex = array_search($buildStep, $names, true);
 
     expect($syncIndex)->toBeInt()
         ->and($linkIndex)->toBeInt()
+        ->and($buildIndex)->toBeInt()
         ->and($syncIndex)->toBeLessThan($linkIndex)
-        ->and($syncIndex)->toBeLessThan($activateIndex)
+        ->and($linkIndex)->toBeLessThan($buildIndex)
         ->and($steps[$syncIndex])->toBeInstanceOf(SyncEnvVarsStep::class);
-});
+})->with([
+    'php' => [Runtime::PHP, 'build-assets'],
+    'nodejs' => [Runtime::NODEJS, 'build-node-assets'],
+    'python' => [Runtime::PYTHON, 'collect-static'],
+    'static' => [Runtime::STATIC, 'build-static-assets'],
+]);
 
 it('includes sync-env-vars in docker pull pipeline before compose up', function (): void {
     [, , $site, $deployment] = executionFixture(Runtime::DOCKER, [
@@ -132,7 +139,7 @@ it('includes sync-env-vars in docker pull pipeline before compose up', function 
         'docker_image' => 'ghcr.io/helix/app:latest',
     ]);
 
-    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $steps = (new PipelineBuilder)->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
     $syncIndex = array_search('sync-env-vars', $names, true);
@@ -145,7 +152,7 @@ it('includes sync-env-vars in docker pull pipeline before compose up', function 
 
 it('builds static git pipeline with asset build and nginx reload', function (): void {
     [, , $site, $deployment] = executionFixture(Runtime::STATIC);
-    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $steps = (new PipelineBuilder)->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
     $preIndex = array_search('run-pre-deploy-script', $names, true);
@@ -161,7 +168,7 @@ it('builds static git pipeline with asset build and nginx reload', function (): 
 
 it('places pre-deploy hook before activation and post-deploy hook after service reload for php', function (): void {
     [, , $site, $deployment] = executionFixture(Runtime::PHP);
-    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $steps = (new PipelineBuilder)->build($site, $deployment);
     $names = array_map(static fn ($step): string => $step->name(), $steps);
 
     $preIndex = array_search('run-pre-deploy-script', $names, true);
@@ -175,7 +182,7 @@ it('places pre-deploy hook before activation and post-deploy hook after service 
 
 it('php pipeline starts with verify and includes expected steps', function (): void {
     [, , $site, $deployment] = executionFixture(Runtime::PHP);
-    $steps = (new PipelineBuilder())->build($site, $deployment);
+    $steps = (new PipelineBuilder)->build($site, $deployment);
 
     expect($steps[0])->toBeInstanceOf(VerifyConnectionStep::class)
         ->and($steps[1]->name())->toBe('create-release-directory')
@@ -184,3 +191,26 @@ it('php pipeline starts with verify and includes expected steps', function (): v
         ->and(collect($steps)->first(fn ($s) => $s instanceof RunMigrationsStep))->not->toBeNull()
         ->and(collect($steps)->first(fn ($s) => $s instanceof ReloadPHPFPMStep))->not->toBeNull();
 });
+
+it('writes env vars on the runner after clone and before build-assets', function (Runtime $runtime): void {
+    [, , $site, $deployment] = executionFixture($runtime);
+    $site->forceFill(['build_strategy' => BuildStrategy::RUNNER->value])->save();
+    $deployment->forceFill(['build_strategy' => BuildStrategy::RUNNER->value])->save();
+
+    $plan = (new PipelineBuilder)->buildPlan($site, $deployment);
+    $names = array_map(static fn ($step): string => $step->name(), $plan->buildSteps);
+
+    $cloneIndex = array_search('clone-repository', $names, true);
+    $syncIndex = array_search('sync-env-vars', $names, true);
+    $buildIndex = array_search('build-assets', $names, true);
+
+    expect($cloneIndex)->toBeInt()
+        ->and($syncIndex)->toBeInt()
+        ->and($buildIndex)->toBeInt()
+        ->and($cloneIndex)->toBeLessThan($syncIndex)
+        ->and($syncIndex)->toBeLessThan($buildIndex);
+})->with([
+    Runtime::PHP,
+    Runtime::NODEJS,
+    Runtime::STATIC,
+]);

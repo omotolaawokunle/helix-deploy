@@ -35,10 +35,11 @@ final class ArtifactManager
         $quotedArtifactPath = escapeshellarg($artifactPath);
 
         $ssh->run(sprintf(
-            'tar -czf %s -C %s . --exclude=%s',
+            'tar -czf %s -C %s . --exclude=%s --exclude=%s',
             $quotedArtifactPath,
             $quotedBuildPath,
             escapeshellarg('.git'),
+            escapeshellarg('.env'),
         ))->throw();
 
         $checksumResult = $ssh->run(sprintf('sha256sum %s', $quotedArtifactPath))->throw();

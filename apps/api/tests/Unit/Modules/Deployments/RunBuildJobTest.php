@@ -2,17 +2,27 @@
 
 declare(strict_types=1);
 
+use App\Models\Organization;
+use App\Models\User;
 use App\Modules\BuildRunners\Enums\BuildRunnerStatus;
 use App\Modules\BuildRunners\Enums\BuildStrategy;
 use App\Modules\BuildRunners\Models\BuildRunner;
+use App\Modules\BuildRunners\Services\RunnerSlotManager;
+use App\Modules\Credentials\CredentialVault;
 use App\Modules\Credentials\Models\Credential;
+use App\Modules\Deployments\Actions\TriggerDeploymentAction;
+use App\Modules\Deployments\DTOs\TriggerDeploymentDTO;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentStepPhase;
 use App\Modules\Deployments\Exceptions\ConcurrentDeploymentException;
 use App\Modules\Deployments\Jobs\RunBuildJob;
 use App\Modules\Deployments\Jobs\RunDeploymentJob;
 use App\Modules\Deployments\Models\DeploymentStep;
+use App\Modules\Deployments\Services\DeploymentCancellationService;
+use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Enums\Runtime;
+use App\Modules\Sites\Services\Git\AuthenticatedGitCloneUrlResolver;
+use App\Packages\Execution\BuildStepRunner;
 use App\Packages\Execution\PipelineBuilder;
 use App\Packages\SSH\BuildRunnerSSHManager;
 use App\Packages\SSH\FakeSSHConnection;
@@ -28,7 +38,7 @@ beforeEach(function (): void {
 it('returns empty build steps for on_server strategy', function (): void {
     [, , $site, $deployment] = executionFixture(Runtime::PHP);
 
-    $plan = (new PipelineBuilder())->buildPlan($site, $deployment);
+    $plan = (new PipelineBuilder)->buildPlan($site, $deployment);
 
     expect($plan->buildSteps)->toBe([])
         ->and($plan->usesRunnerBuild())->toBeFalse()
@@ -40,14 +50,14 @@ it('builds separate build and deploy step lists for runner strategy', function (
     $site->forceFill(['build_strategy' => BuildStrategy::RUNNER->value])->save();
     $deployment->forceFill(['build_strategy' => BuildStrategy::RUNNER->value])->save();
 
-    $plan = (new PipelineBuilder())->buildPlan($site, $deployment);
+    $plan = (new PipelineBuilder)->buildPlan($site, $deployment);
 
     $buildNames = array_map(static fn ($step): string => $step->name(), $plan->buildSteps);
     $deployNames = array_map(static fn ($step): string => $step->name(), $plan->deploySteps);
 
     expect($plan->usesRunnerBuild())->toBeTrue()
-        ->and($buildNames)->toContain('create-artifact', 'transfer-artifact', 'clone-repository')
-        ->and($deployNames)->toContain('extract-artifact', 'activate-release')
+        ->and($buildNames)->toContain('create-artifact', 'transfer-artifact', 'clone-repository', 'sync-env-vars')
+        ->and($deployNames)->toContain('extract-artifact', 'activate-release', 'sync-env-vars')
         ->and($deployNames)->not->toContain('clone-repository');
 });
 
@@ -108,12 +118,12 @@ it('marks build failed and does not dispatch deployment job when a build step fa
         'build_runner_id' => (string) $runner->getKey(),
     ])->save();
 
-    $runnerFake = (new FakeSSHConnection())->connect();
+    $runnerFake = (new FakeSSHConnection)->connect();
     $runnerFake->addSequence('echo "_helix_runner_ok_"*', sshSuccess('_helix_runner_ok_'));
     $runnerFake->addSequence('mkdir -p *', sshSuccess());
     $runnerFake->addSequence('git clone *', sshFailure('clone failed'));
 
-    $targetFake = (new FakeSSHConnection())->connect();
+    $targetFake = (new FakeSSHConnection)->connect();
 
     $this->mock(BuildRunnerSSHManager::class, function ($mock) use ($runnerFake): void {
         $mock->shouldReceive('connect')->once()->andReturn($runnerFake);
@@ -135,10 +145,10 @@ it('throws conflict when triggering while a build is in progress', function (): 
     [, , $site, $deployment] = executionFixture(Runtime::PHP);
     $deployment->forceFill(['status' => DeploymentStatus::BUILDING])->save();
 
-    $actor = \App\Models\User::query()->findOrFail($deployment->triggered_by);
-    $action = app(\App\Modules\Deployments\Actions\TriggerDeploymentAction::class);
+    $actor = User::query()->findOrFail($deployment->triggered_by);
+    $action = app(TriggerDeploymentAction::class);
 
-    expect(fn () => $action->execute($site, $actor, new \App\Modules\Deployments\DTOs\TriggerDeploymentDTO()))
+    expect(fn () => $action->execute($site, $actor, new TriggerDeploymentDTO))
         ->toThrow(ConcurrentDeploymentException::class);
 });
 
@@ -155,18 +165,18 @@ it('run build and deployment jobs share the same unique id for a site', function
 function invokeRunBuildJob(RunBuildJob $job): void
 {
     $job->handle(
-        new PipelineBuilder(),
-        new \App\Packages\Execution\BuildStepRunner(),
+        new PipelineBuilder,
+        new BuildStepRunner,
         app(BuildRunnerSSHManager::class),
         app(SSHManager::class),
-        app(\App\Modules\Credentials\CredentialVault::class),
-        app(\App\Modules\Sites\Services\Git\AuthenticatedGitCloneUrlResolver::class),
-        app(\App\Modules\Deployments\Services\DeploymentCancellationService::class),
-        app(\App\Modules\BuildRunners\Services\RunnerSlotManager::class),
+        app(CredentialVault::class),
+        app(AuthenticatedGitCloneUrlResolver::class),
+        app(DeploymentCancellationService::class),
+        app(RunnerSlotManager::class),
     );
 }
 
-function createRunnerForBuildJob(\App\Models\Organization $organization, string $ownerId): BuildRunner
+function createRunnerForBuildJob(Organization $organization, string $ownerId): BuildRunner
 {
     $credential = Credential::query()->create([
         'organization_id' => (string) $organization->getKey(),
@@ -195,7 +205,7 @@ function createRunnerForBuildJob(\App\Models\Organization $organization, string 
     ]);
 }
 
-function attachServerCredential(\App\Modules\Servers\Models\Server $server, string $ownerId): void
+function attachServerCredential(Server $server, string $ownerId): void
 {
     $credential = Credential::query()->create([
         'organization_id' => (string) $server->organization_id,
@@ -215,7 +225,7 @@ function attachServerCredential(\App\Modules\Servers\Models\Server $server, stri
 
 function stubRunnerBuildSsh(string $deploymentId): FakeSSHConnection
 {
-    $fake = (new FakeSSHConnection())->connect();
+    $fake = (new FakeSSHConnection)->connect();
     $buildPath = '/builds/'.$deploymentId.'/';
     $artifactPath = '/tmp/'.$deploymentId.'.tar.gz';
     $success = static fn (): SSHResult => sshSuccess();
@@ -225,6 +235,7 @@ function stubRunnerBuildSsh(string $deploymentId): FakeSSHConnection
     $fake->addSequence('git clone *', $success());
     $fake->addSequence('git -C * rev-parse HEAD', sshSuccess('deadbeef'));
     $fake->addSequence('git -C * log -1 *', sshSuccess('Build commit'));
+    $fake->addSequence('chmod 600 *', $success());
     $fake->addSequence('*composer install*', $success());
     $fake->addSequence('test -f *', sshFailure());
     $fake->addSequence('test -f *', sshFailure());
@@ -241,7 +252,7 @@ function stubRunnerBuildSsh(string $deploymentId): FakeSSHConnection
 
 function stubRunnerTargetSsh(string $domain, string $deploymentId): FakeSSHConnection
 {
-    $fake = (new FakeSSHConnection())->connect();
+    $fake = (new FakeSSHConnection)->connect();
     $artifactPath = '/tmp/'.$deploymentId.'.tar.gz';
     $releasePath = '/var/www/'.$domain.'/releases/'.$deploymentId;
     $success = static fn (): SSHResult => sshSuccess();
