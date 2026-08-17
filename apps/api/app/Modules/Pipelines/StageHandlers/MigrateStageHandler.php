@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Pipelines\StageHandlers;
 
 use App\Modules\Pipelines\Contracts\PipelineStageHandlerInterface;
-use App\Modules\Sites\Services\SiteDeployPathResolver;
 use App\Modules\Pipelines\DTOs\PipelineExecutionContext;
 use App\Modules\Pipelines\Enums\PipelineStageResult;
 use App\Modules\Pipelines\Enums\PipelineStepType;
 use App\Modules\Pipelines\Exceptions\PipelineStageFailedException;
 use App\Modules\Pipelines\Models\PipelineRunStep;
+use App\Modules\Sites\Services\SiteDeployPathResolver;
+use App\Packages\Execution\Support\ArtisanMigrateShellCommand;
 
 class MigrateStageHandler implements PipelineStageHandlerInterface
 {
@@ -37,7 +38,7 @@ class MigrateStageHandler implements PipelineStageHandlerInterface
         $releasePath = $context->deployment->release_path
             ?? app(SiteDeployPathResolver::class)->currentPath($context->site);
 
-        $command = 'cd '.escapeshellarg($releasePath).' && php artisan migrate --force --no-interaction';
+        $command = ArtisanMigrateShellCommand::forReleasePath($releasePath);
         $result = $ssh->run($command);
 
         if ($result->failed()) {

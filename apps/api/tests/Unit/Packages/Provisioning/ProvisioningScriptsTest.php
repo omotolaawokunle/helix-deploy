@@ -22,6 +22,7 @@ use App\Packages\Provisioning\Scripts\InstallRedis;
 use App\Packages\Provisioning\Scripts\InstallSupervisor;
 use App\Packages\SSH\FakeSSHConnection;
 use App\Packages\SSH\SSHResult;
+use Illuminate\Support\Str;
 
 it('create deploy user writes authorized keys with server public key', function (): void {
     [$organization, $server] = provisioningServerFixture();
@@ -40,7 +41,7 @@ it('create deploy user writes authorized keys with server public key', function 
     $server->forceFill(['credential_id' => (string) $credential->getKey()])->save();
 
     $publicKey = 'ssh-ed25519 AAAA-test-public-key';
-    $vault = \Mockery::mock(CredentialVaultInterface::class);
+    $vault = Mockery::mock(CredentialVaultInterface::class);
     $vault->shouldReceive('getPublicKey')->once()->andReturn($publicKey);
 
     $script = new CreateDeployUser($vault, $organization);
@@ -64,7 +65,7 @@ it('create deploy user writes authorized keys with server public key', function 
 it('install nginx runs expected command sequence on fresh server', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
-    $script = new InstallNginx();
+    $script = new InstallNginx;
     $connection = nginxProvisioningConnection(nginxInstalled: false);
 
     $script->handle($connection, $server);
@@ -82,7 +83,7 @@ it('install nginx runs expected command sequence on fresh server', function (): 
 it('install nginx preserves existing configuration when nginx is already installed', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
-    $script = new InstallNginx();
+    $script = new InstallNginx;
     $connection = nginxProvisioningConnection(nginxInstalled: true);
 
     $script->handle($connection, $server);
@@ -103,7 +104,7 @@ it('install nginx preserves existing configuration when nginx is already install
 it('install nginx disables apache when present', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
-    $script = new InstallNginx();
+    $script = new InstallNginx;
     $connection = nginxProvisioningConnection(nginxInstalled: true);
 
     $script->handle($connection, $server);
@@ -116,8 +117,8 @@ it('install nginx disables apache when present', function (): void {
 it('install certbot skips when already installed', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
-    $script = new InstallCertbot();
-    $connection = (new FakeSSHConnection())->connect();
+    $script = new InstallCertbot;
+    $connection = (new FakeSSHConnection)->connect();
     $connection->addResponse('*command -v certbot*', new SSHResult('cmd', 0, 'yes', '', 0.01));
 
     $script->handle($connection, $server);
@@ -128,8 +129,8 @@ it('install certbot skips when already installed', function (): void {
 it('install certbot installs packages when missing', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
-    $script = new InstallCertbot();
-    $connection = (new FakeSSHConnection())->connect();
+    $script = new InstallCertbot;
+    $connection = (new FakeSSHConnection)->connect();
     $connection->addResponse('*command -v certbot*', new SSHResult('cmd', 0, 'no', '', 0.01));
     $connection->addResponse('*apt-get update*', provisioningScriptSshSuccess());
     $connection->addResponse('*certbot*', provisioningScriptSshSuccess());
@@ -207,7 +208,7 @@ it('install php skips package installation when fpm is already installed', funct
 
 it('install mysql stores generated deploy password in vault', function (): void {
     [$organization, $server] = provisioningServerFixture();
-    $vault = \Mockery::mock(CredentialVaultInterface::class);
+    $vault = Mockery::mock(CredentialVaultInterface::class);
     $vault->shouldReceive('storeServerSecret')->once();
     $script = new InstallMySQL($vault, $organization);
     $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 6);
@@ -219,7 +220,7 @@ it('install mysql stores generated deploy password in vault', function (): void 
 
 it('install mysql skips package installation when mysql is already installed', function (): void {
     [$organization, $server] = provisioningServerFixture();
-    $vault = \Mockery::mock(CredentialVaultInterface::class);
+    $vault = Mockery::mock(CredentialVaultInterface::class);
     $vault->shouldReceive('storeServerSecret')->never();
     $script = new InstallMySQL($vault, $organization);
     $connection = serviceProvisioningConnection(serviceInstalled: true, installSteps: 0, serviceBinary: 'mysql');
@@ -231,21 +232,49 @@ it('install mysql skips package installation when mysql is already installed', f
 
 it('install postgresql stores generated deploy password in vault', function (): void {
     [$organization, $server] = provisioningServerFixture();
-    $vault = \Mockery::mock(CredentialVaultInterface::class);
+    $vault = Mockery::mock(CredentialVaultInterface::class);
     $vault->shouldReceive('storeServerSecret')->once();
     $script = new InstallPostgreSQL($vault, $organization);
-    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 7);
+    $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 8, serviceBinary: 'psql');
 
     $script->handle($connection, $server, ['postgresqlVersion' => '18']);
 
-    expect(collect($connection->getExecutedCommands())->contains(
+    $commands = $connection->getExecutedCommands();
+
+    expect(collect($commands)->contains(
         fn (string $command): bool => str_contains($command, 'postgresql-18'),
-    ))->toBeTrue();
+    ))->toBeTrue()
+        ->and(collect($commands)->contains(
+            fn (string $command): bool => str_contains($command, 'CREATE ROLE deploy LOGIN CREATEDB'),
+        ))->toBeTrue()
+        ->and(collect($commands)->contains(
+            fn (string $command): bool => str_contains($command, 'GRANT USAGE, CREATE ON SCHEMA public TO deploy'),
+        ))->toBeTrue();
+});
+
+it('install postgresql grants schema privileges when already installed', function (): void {
+    [$organization, $server] = provisioningServerFixture();
+    $vault = Mockery::mock(CredentialVaultInterface::class);
+    $vault->shouldReceive('storeServerSecret')->never();
+    $script = new InstallPostgreSQL($vault, $organization);
+    $connection = serviceProvisioningConnection(serviceInstalled: true, installSteps: 1, serviceBinary: 'psql');
+
+    $script->handle($connection, $server);
+
+    $commands = $connection->getExecutedCommands();
+
+    expect($commands)->toHaveCount(4)
+        ->and(collect($commands)->contains(
+            fn (string $command): bool => str_contains($command, 'GRANT USAGE, CREATE ON SCHEMA public TO deploy'),
+        ))->toBeTrue()
+        ->and(collect($commands)->contains(
+            fn (string $command): bool => str_contains($command, 'CREATE ROLE'),
+        ))->toBeFalse();
 });
 
 it('install redis sets password when provided and stores it in vault', function (): void {
     [$organization, $server] = provisioningServerFixture();
-    $vault = \Mockery::mock(CredentialVaultInterface::class);
+    $vault = Mockery::mock(CredentialVaultInterface::class);
     $vault->shouldReceive('storeServerSecret')->once();
     $script = new InstallRedis($vault, $organization, 'redis-secret-123');
     $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 6, serviceBinary: 'redis-cli');
@@ -271,7 +300,7 @@ it('install nodejs uses configured major version', function (): void {
 it('install python runs expected command sequence', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
-    $script = new InstallPython();
+    $script = new InstallPython;
     $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 5, serviceBinary: 'python3.12');
 
     $script->handle($connection, $server, ['pythonVersion' => '3.12']);
@@ -284,7 +313,7 @@ it('install python runs expected command sequence', function (): void {
 it('install supervisor runs expected command sequence', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
-    $script = new InstallSupervisor();
+    $script = new InstallSupervisor;
     $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 4, serviceBinary: 'supervisorctl');
 
     $script->handle($connection, $server);
@@ -295,7 +324,7 @@ it('install supervisor runs expected command sequence', function (): void {
 it('install docker runs expected command sequence', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
-    $script = new InstallDocker();
+    $script = new InstallDocker;
     $connection = serviceProvisioningConnection(serviceInstalled: false, installSteps: 3, serviceBinary: 'docker');
 
     $script->handle($connection, $server);
@@ -306,8 +335,8 @@ it('install docker runs expected command sequence', function (): void {
 it('idempotent scripts can run twice without errors', function (): void {
     $fixture = provisioningServerFixture();
     $server = $fixture[1];
-    $script = new InstallSupervisor();
-    $connection = (new FakeSSHConnection())->connect();
+    $script = new InstallSupervisor;
+    $connection = (new FakeSSHConnection)->connect();
     $connection->addSequence(
         '*command -v*supervisorctl*',
         new SSHResult('cmd', 0, 'yes', '', 0.01),
@@ -328,7 +357,7 @@ function provisioningServerFixture(): array
 {
     $organization = Organization::query()->create([
         'name' => 'Provisioning Scripts Org',
-        'slug' => 'provisioning-scripts-org-'.\Illuminate\Support\Str::random(6),
+        'slug' => 'provisioning-scripts-org-'.Str::random(6),
         'master_key_encrypted' => '{}',
         'settings' => [],
     ]);
@@ -360,7 +389,7 @@ function provisioningServerFixture(): array
 
 function fakeSuccessfulConnection(int $stepCount): FakeSSHConnection
 {
-    $connection = (new FakeSSHConnection())->connect();
+    $connection = (new FakeSSHConnection)->connect();
     $responses = [];
 
     foreach (range(1, $stepCount) as $index) {
@@ -385,7 +414,7 @@ function provisioningScriptSshSuccess(): SSHResult
 
 function nginxProvisioningConnection(bool $nginxInstalled): FakeSSHConnection
 {
-    $connection = (new FakeSSHConnection())->connect();
+    $connection = (new FakeSSHConnection)->connect();
     $connection->addResponse(
         '*command -v*nginx*',
         new SSHResult('cmd', 0, $nginxInstalled ? 'yes' : 'no', '', 0.01),
@@ -397,7 +426,7 @@ function nginxProvisioningConnection(bool $nginxInstalled): FakeSSHConnection
 
 function phpProvisioningConnection(bool $fpmInstalled, bool $nginxInstalled): FakeSSHConnection
 {
-    $connection = (new FakeSSHConnection())->connect();
+    $connection = (new FakeSSHConnection)->connect();
     $connection->addResponse(
         '*dpkg -s*',
         new SSHResult('cmd', 0, $fpmInstalled ? 'yes' : 'no', '', 0.01),
@@ -420,7 +449,7 @@ function serviceProvisioningConnection(
     int $installSteps,
     string $serviceBinary = 'mysql',
 ): FakeSSHConnection {
-    $connection = (new FakeSSHConnection())->connect();
+    $connection = (new FakeSSHConnection)->connect();
     $connection->addResponse(
         "*command -v*{$serviceBinary}*",
         new SSHResult('cmd', 0, $serviceInstalled ? 'yes' : 'no', '', 0.01),

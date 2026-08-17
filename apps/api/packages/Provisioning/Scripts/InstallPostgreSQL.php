@@ -18,8 +18,7 @@ class InstallPostgreSQL extends BaseProvisioningScript
         private readonly CredentialVaultInterface $credentialVault,
         private readonly Organization $organization,
         private readonly PostgresqlVersion $configuredVersion = PostgresqlVersion::V16,
-    ) {
-    }
+    ) {}
 
     public function name(): string
     {
@@ -37,7 +36,7 @@ class InstallPostgreSQL extends BaseProvisioningScript
     }
 
     /**
-     * @param array<string, mixed> $options
+     * @param  array<string, mixed>  $options
      */
     public function handle(SSHConnectionInterface $ssh, Server $server, array $options = []): void
     {
@@ -61,6 +60,7 @@ class InstallPostgreSQL extends BaseProvisioningScript
             $this->logInfo($options, 'postgresql already installed — skipping package installation');
             $this->runStep($ssh, 'systemctl enable postgresql', 'enable-postgresql');
             $this->runStep($ssh, 'systemctl start postgresql', 'start-postgresql');
+            $this->grantDeployRolePrivileges($ssh);
 
             return;
         }
@@ -75,15 +75,42 @@ class InstallPostgreSQL extends BaseProvisioningScript
         $this->runStep($ssh, 'systemctl start postgresql', 'start-postgresql');
         $this->runStep(
             $ssh,
-            "sudo -u postgres psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='deploy'\" | grep -q 1 || sudo -u postgres psql -c \"CREATE ROLE deploy LOGIN PASSWORD '{$escapedPassword}';\"",
+            "sudo -u postgres psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='deploy'\" | grep -q 1 || sudo -u postgres psql -c \"CREATE ROLE deploy LOGIN CREATEDB PASSWORD '{$escapedPassword}';\"",
             'create-postgres-role',
         );
+        $this->grantDeployRolePrivileges($ssh);
 
         $this->credentialVault->storeServerSecret(
             organization: $this->organization,
             owner: $server,
             name: sprintf('%s-postgresql-deploy-password', $server->hostname),
             value: $password,
+        );
+    }
+
+    /**
+     * PostgreSQL 15+ revoked CREATE on schema public from PUBLIC, so Laravel
+     * migrate as the deploy role fails unless we grant it on template1 (inherited
+     * by CREATE DATABASE) and every existing database.
+     */
+    private function grantDeployRolePrivileges(SSHConnectionInterface $ssh): void
+    {
+        $this->runStep(
+            $ssh,
+            <<<'SHELL'
+sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='deploy'" | grep -q 1 || exit 0
+sudo -u postgres psql -c "ALTER ROLE deploy WITH LOGIN CREATEDB;"
+for db in template1 $(sudo -u postgres psql -Atqc "SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn"); do
+  sudo -u postgres psql -d "$db" -c "GRANT CONNECT, TEMP, CREATE ON DATABASE \"$db\" TO deploy;"
+  sudo -u postgres psql -d "$db" -c "GRANT USAGE, CREATE ON SCHEMA public TO deploy;"
+  sudo -u postgres psql -d "$db" -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO deploy;"
+  sudo -u postgres psql -d "$db" -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO deploy;"
+  sudo -u postgres psql -d "$db" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO deploy;"
+  sudo -u postgres psql -d "$db" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO deploy;"
+done
+SHELL
+            ,
+            'grant-postgres-deploy-role',
         );
     }
 

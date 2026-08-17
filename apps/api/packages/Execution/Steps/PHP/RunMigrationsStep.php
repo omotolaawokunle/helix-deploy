@@ -6,6 +6,7 @@ namespace App\Packages\Execution\Steps\PHP;
 
 use App\Packages\Execution\DeploymentContext;
 use App\Packages\Execution\Steps\BaseDeploymentStep;
+use App\Packages\Execution\Support\ArtisanMigrateShellCommand;
 
 final class RunMigrationsStep extends BaseDeploymentStep
 {
@@ -22,10 +23,7 @@ final class RunMigrationsStep extends BaseDeploymentStep
             $ctx->log('WARNING: running database migrations on production');
         }
 
-        $this->runCommand(
-            $ctx,
-            'cd '.$this->shellQuote($ctx->releasePath).' && php artisan migrate --force --no-interaction',
-        );
+        $this->runCommand($ctx, ArtisanMigrateShellCommand::forReleasePath($ctx->releasePath));
     }
 
     public function isSkippable(DeploymentContext $ctx): bool

@@ -120,6 +120,8 @@ it('run migrations logs production warning and runs artisan migrate', function (
     (new RunMigrationsStep)->run($ctx);
 
     $ssh->assertCommandExecuted('*php artisan migrate --force --no-interaction*');
+    $ssh->assertCommandExecuted('*create database if not exists*');
+    $ssh->assertCommandExecuted('*pg_database*');
     Event::assertDispatched(DeploymentLogLine::class, function ($event): bool {
         return str_contains($event->line, 'WARNING: running database migrations on production');
     });
