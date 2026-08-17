@@ -9,6 +9,8 @@ use App\Packages\Execution\Steps\BaseDeploymentStep;
 
 final class BuildAssetsStep extends BaseDeploymentStep
 {
+    private const TIMEOUT_SECONDS = 90;
+
     public function name(): string
     {
         return 'build-assets';
@@ -19,6 +21,7 @@ final class BuildAssetsStep extends BaseDeploymentStep
         $this->runCommand(
             $ctx,
             'cd '.$this->shellQuote($ctx->releasePath).' && npm run build',
+            self::TIMEOUT_SECONDS,
         );
     }
 

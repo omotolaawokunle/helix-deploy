@@ -9,6 +9,8 @@ use App\Packages\Execution\Steps\BaseBuildStep;
 
 final class BuildAssetsBuildStep extends BaseBuildStep
 {
+    private const TIMEOUT_SECONDS = 90;
+
     public function name(): string
     {
         return 'build-assets';
@@ -19,6 +21,7 @@ final class BuildAssetsBuildStep extends BaseBuildStep
         $this->runCommand(
             $ctx,
             'cd '.$this->shellQuote($this->workPath($ctx)).' && npm run build',
+            self::TIMEOUT_SECONDS,
         );
     }
 
