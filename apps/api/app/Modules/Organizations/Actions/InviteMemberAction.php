@@ -17,8 +17,7 @@ class InviteMemberAction
 {
     public function __construct(
         private readonly InvitationTokenService $invitationTokenService,
-    ) {
-    }
+    ) {}
 
     public function execute(
         Organization $organization,
@@ -60,7 +59,12 @@ class InviteMemberAction
             ],
         );
 
-        SendInvitationEmailJob::dispatch($email, $invitationUrl);
+        SendInvitationEmailJob::dispatch(
+            $email,
+            $invitationUrl,
+            $organization->name,
+            $actor->name,
+        );
 
         AuditLog::record(
             operation: 'member.invited',

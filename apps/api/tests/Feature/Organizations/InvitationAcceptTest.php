@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Modules\Audit\Models\AuditLog;
+use App\Modules\Organizations\Mail\OrganizationInvitationMail;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Organizations\Services\InvitationTokenService;
 use App\Modules\Teams\Enums\TeamRole;
+use App\Modules\Teams\Models\Team;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 
 function makeInvitationAcceptUrl(
@@ -14,7 +17,7 @@ function makeInvitationAcceptUrl(
     string $email,
     TeamRole $role,
     ?string $teamId = null,
-    ?\DateTimeInterface $expiration = null,
+    ?DateTimeInterface $expiration = null,
 ): string {
     $token = app(InvitationTokenService::class)->encode(
         organizationId: $organizationId,
@@ -189,6 +192,45 @@ it('owner can invite with role and accept redirect preserves encrypted token', f
         ->assertRedirect();
 });
 
+it('sends an invitation email when an owner invites a member', function (): void {
+    Mail::fake();
+
+    config([
+        'helixdeploy.spa_url' => 'https://app.helix.test',
+    ]);
+
+    $organization = Organization::query()->create([
+        'name' => 'Mail Org',
+        'slug' => 'mail-org',
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $owner = User::factory()->create([
+        'name' => 'Org Owner',
+        'email_verified_at' => now(),
+        'current_organization_id' => (string) $organization->getKey(),
+    ]);
+    $organization->users()->attach($owner->getKey(), ['role' => TeamRole::OWNER->value]);
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/organizations/{$organization->id}/invitations", [
+            'email' => 'newmember@example.test',
+            'role' => TeamRole::DEVELOPER->value,
+        ])
+        ->assertCreated();
+
+    Mail::assertSent(OrganizationInvitationMail::class, function (OrganizationInvitationMail $mail): bool {
+        return $mail->hasTo('newmember@example.test')
+            && $mail->organizationName === 'Mail Org'
+            && $mail->inviterName === 'Org Owner'
+            && str_starts_with($mail->invitationUrl, 'https://app.helix.test/accept-invitation?')
+            && str_contains($mail->invitationUrl, 'token=')
+            && str_contains($mail->invitationUrl, 'signature=');
+    });
+});
+
 it('cannot invite a member as owner', function (): void {
     $organization = Organization::query()->create([
         'name' => 'Owner Invite Org',
@@ -228,7 +270,7 @@ it('accepts invitation with optional team and adds user to team', function (): v
     ]);
     $organization->users()->attach($owner->getKey(), ['role' => TeamRole::OWNER->value]);
 
-    $team = \App\Modules\Teams\Models\Team::query()->create([
+    $team = Team::query()->create([
         'organization_id' => (string) $organization->getKey(),
         'name' => 'Platform',
         'slug' => 'platform',
@@ -286,7 +328,7 @@ it('rejects invite with team outside the organization', function (): void {
     ]);
     $organization->users()->attach($owner->getKey(), ['role' => TeamRole::OWNER->value]);
 
-    $foreignTeam = \App\Modules\Teams\Models\Team::query()->create([
+    $foreignTeam = Team::query()->create([
         'organization_id' => (string) $otherOrganization->getKey(),
         'name' => 'Foreign Team',
         'slug' => 'foreign-team',
