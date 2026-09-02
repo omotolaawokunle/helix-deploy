@@ -125,16 +125,20 @@ async function sendInvite(): Promise<void> {
     return
   }
 
+  const email = inviteEmail.value.trim()
+
   try {
-    const url = await inviteOrganizationMember(orgId, {
-      email: inviteEmail.value.trim(),
+    await inviteOrganizationMember(orgId, {
+      email,
       role: inviteRole.value,
       teamId: inviteTeamId.value === 'none' ? undefined : inviteTeamId.value,
     })
     inviteEmail.value = ''
     inviteTeamId.value = 'none'
     await load()
-    toast.success(`Invitation created: ${url}`)
+    toast.success('Invitation sent.', {
+      description: `Sent to ${email}.`,
+    })
   } catch {
     toast.error('Unable to send invitation.')
   }

@@ -18,7 +18,9 @@ const props = defineProps<ToasterProps>()
 const mergedToastOptions = computed(() => ({
   ...props.toastOptions,
   classes: {
-    toast: 'rounded-2xl',
+    toast: 'rounded-2xl overflow-hidden max-w-[min(24rem,calc(100vw-2rem))]',
+    title: 'break-words [overflow-wrap:anywhere]',
+    description: 'break-words [overflow-wrap:anywhere]',
     ...props.toastOptions?.classes,
   },
 }))

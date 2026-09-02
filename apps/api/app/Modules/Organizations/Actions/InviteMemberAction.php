@@ -17,8 +17,7 @@ class InviteMemberAction
 {
     public function __construct(
         private readonly InvitationTokenService $invitationTokenService,
-    ) {
-    }
+    ) {}
 
     public function execute(
         Organization $organization,
@@ -60,7 +59,13 @@ class InviteMemberAction
             ],
         );
 
-        SendInvitationEmailJob::dispatch($email, $invitationUrl);
+        SendInvitationEmailJob::dispatch(
+            $email,
+            $invitationUrl,
+            $organization->name,
+            $actor->name,
+            $this->teamNameForInvitation($organization, $teamId),
+        );
 
         AuditLog::record(
             operation: 'member.invited',
@@ -78,5 +83,22 @@ class InviteMemberAction
         );
 
         return $invitationUrl;
+    }
+
+    private function teamNameForInvitation(Organization $organization, ?string $teamId): ?string
+    {
+        if ($teamId === null) {
+            return null;
+        }
+
+        $teamName = $organization->teams()->whereKey($teamId)->value('name');
+
+        if (! is_string($teamName) || $teamName === '') {
+            throw ValidationException::withMessages([
+                'teamId' => ['The selected team is invalid.'],
+            ]);
+        }
+
+        return $teamName;
     }
 }
