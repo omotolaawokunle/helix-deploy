@@ -13,12 +13,14 @@ function makeInvitationAcceptUrl(
     string $organizationId,
     string $email,
     TeamRole $role,
+    ?string $teamId = null,
     ?\DateTimeInterface $expiration = null,
 ): string {
     $token = app(InvitationTokenService::class)->encode(
         organizationId: $organizationId,
         email: $email,
         role: $role,
+        teamId: $teamId,
     );
 
     return URL::temporarySignedRoute(
@@ -209,4 +211,93 @@ it('cannot invite a member as owner', function (): void {
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['role']);
+});
+
+it('accepts invitation with optional team and adds user to team', function (): void {
+    $organization = Organization::query()->create([
+        'name' => 'Team Invite Org',
+        'slug' => 'team-invite-org',
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $owner = User::factory()->create([
+        'email_verified_at' => now(),
+        'current_organization_id' => (string) $organization->getKey(),
+    ]);
+    $organization->users()->attach($owner->getKey(), ['role' => TeamRole::OWNER->value]);
+
+    $team = \App\Modules\Teams\Models\Team::query()->create([
+        'organization_id' => (string) $organization->getKey(),
+        'name' => 'Platform',
+        'slug' => 'platform',
+    ]);
+
+    $invitee = User::factory()->create([
+        'email' => 'team-invitee@example.test',
+        'email_verified_at' => now(),
+    ]);
+
+    $acceptUrl = makeInvitationAcceptUrl(
+        organizationId: (string) $organization->getKey(),
+        email: 'team-invitee@example.test',
+        role: TeamRole::DEVELOPER,
+        teamId: (string) $team->getKey(),
+    );
+
+    $this->actingAs($invitee)
+        ->postJson($acceptUrl)
+        ->assertOk();
+
+    $this->assertDatabaseHas('organization_users', [
+        'organization_id' => (string) $organization->getKey(),
+        'user_id' => (string) $invitee->getKey(),
+        'role' => TeamRole::DEVELOPER->value,
+    ]);
+
+    $this->assertDatabaseHas('team_user', [
+        'team_id' => (string) $team->getKey(),
+        'user_id' => (string) $invitee->getKey(),
+        'role' => TeamRole::DEVELOPER->value,
+    ]);
+});
+
+it('rejects invite with team outside the organization', function (): void {
+    $organization = Organization::query()->create([
+        'name' => 'Invite Org',
+        'slug' => 'invite-org-team-validation',
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $otherOrganization = Organization::query()->create([
+        'name' => 'Other Org',
+        'slug' => 'other-org-team-validation',
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $otherOrganization->generateAndStoreMasterKey();
+
+    $owner = User::factory()->create([
+        'email_verified_at' => now(),
+        'current_organization_id' => (string) $organization->getKey(),
+    ]);
+    $organization->users()->attach($owner->getKey(), ['role' => TeamRole::OWNER->value]);
+
+    $foreignTeam = \App\Modules\Teams\Models\Team::query()->create([
+        'organization_id' => (string) $otherOrganization->getKey(),
+        'name' => 'Foreign Team',
+        'slug' => 'foreign-team',
+    ]);
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/organizations/{$organization->id}/invitations", [
+            'email' => 'newmember@example.test',
+            'role' => TeamRole::DEVELOPER->value,
+            'teamId' => (string) $foreignTeam->getKey(),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['teamId']);
 });

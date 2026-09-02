@@ -76,7 +76,7 @@ export async function fetchOrganizationMembers(
 
 export async function inviteOrganizationMember(
   organizationId: string,
-  payload: { email: string; role: TeamRole },
+  payload: { email: string; role: TeamRole; teamId?: string | null },
 ): Promise<string> {
   const response = await api.post<{ data: { invitationUrl: string } }>(
     `/api/v1/organizations/${organizationId}/invitations`,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Servers\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Projects\Models\Environment;
 use App\Modules\Projects\Models\Project;
 use App\Modules\Servers\Actions\DeleteServerAction;
@@ -108,19 +109,57 @@ class ServerController extends Controller
         $this->authorize('update', $serverModel);
 
         $validated = $request->validated();
-        $project = $this->resolveProject($validated['projectId'] ?? null, (string) $serverModel->organization_id);
-        $environment = $this->resolveEnvironment(
-            $validated['environmentId'] ?? null,
-            (string) $serverModel->organization_id,
-            $project?->getKey(),
-        );
+        $updates = [];
+        $beforeState = [];
+        $afterState = [];
 
-        $serverModel->forceFill([
-            'hostname' => (string) ($validated['name'] ?? $serverModel->hostname),
-            'project_id' => $project?->getKey(),
-            'environment_id' => $environment?->getKey(),
-            'tags' => $validated['tags'] ?? $serverModel->tags,
-        ])->save();
+        if (array_key_exists('name', $validated)) {
+            $updates['hostname'] = (string) $validated['name'];
+        }
+
+        if (array_key_exists('tags', $validated)) {
+            $updates['tags'] = $validated['tags'];
+        }
+
+        if (array_key_exists('projectId', $validated)) {
+            $project = $this->resolveProject($validated['projectId'], (string) $serverModel->organization_id);
+            $updates['project_id'] = $project?->getKey();
+
+            if ((string) $serverModel->project_id !== (string) ($project?->getKey() ?? '')) {
+                $beforeState['project_id'] = $serverModel->project_id;
+                $afterState['project_id'] = $project?->getKey();
+            }
+
+            if (! array_key_exists('environmentId', $validated)) {
+                $updates['environment_id'] = null;
+            }
+        }
+
+        $projectIdForEnvironment = array_key_exists('project_id', $updates)
+            ? $updates['project_id']
+            : ($serverModel->project_id !== null ? (string) $serverModel->project_id : null);
+
+        if (array_key_exists('environmentId', $validated)) {
+            $environment = $this->resolveEnvironment(
+                $validated['environmentId'],
+                (string) $serverModel->organization_id,
+                $projectIdForEnvironment,
+            );
+            $updates['environment_id'] = $environment?->getKey();
+        }
+
+        if ($updates !== []) {
+            $serverModel->forceFill($updates)->save();
+        }
+
+        if ($beforeState !== [] || $afterState !== []) {
+            AuditLog::record(
+                operation: 'server.project_assignment_changed',
+                resource: $serverModel,
+                beforeState: $beforeState,
+                afterState: $afterState,
+            );
+        }
 
         return ServerResource::make($serverModel->refresh()->loadMissing(['project', 'environment']));
     }

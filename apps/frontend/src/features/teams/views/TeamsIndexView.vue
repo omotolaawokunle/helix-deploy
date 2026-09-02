@@ -52,7 +52,7 @@ const isEmpty = computed(
 
 function projectScopeLabel(team: TeamRecord): string {
   if (team.projectIds.length === 0) {
-    return 'All projects'
+    return 'No projects'
   }
 
   return `${team.projectIds.length} project${team.projectIds.length === 1 ? '' : 's'}`
@@ -210,7 +210,7 @@ onMounted(() => {
         <SheetHeader>
           <SheetTitle>Create team</SheetTitle>
           <SheetDescription>
-            Teams group organization members. Leave project access empty to grant full visibility.
+            Teams group organization members. Select projects to grant access; leave empty to deny project and server visibility.
           </SheetDescription>
         </SheetHeader>
 

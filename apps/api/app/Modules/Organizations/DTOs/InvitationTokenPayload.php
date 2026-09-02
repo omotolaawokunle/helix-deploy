@@ -12,6 +12,7 @@ readonly class InvitationTokenPayload
         public string $organizationId,
         public string $email,
         public TeamRole $role,
+        public ?string $teamId = null,
     ) {
     }
 }

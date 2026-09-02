@@ -34,6 +34,8 @@ import {
   updateMemberRole,
   updateOrganization,
 } from '@/features/organizations/api'
+import { fetchTeams } from '@/features/teams/api'
+import type { TeamRecord } from '@/features/teams/types'
 import type { Organization, OrganizationMemberRecord } from '@/types'
 import { TeamRole } from '@/types'
 
@@ -46,6 +48,8 @@ const isLoading = ref(true)
 const orgName = ref('')
 const inviteEmail = ref('')
 const inviteRole = ref<TeamRole>(TeamRole.Developer)
+const inviteTeamId = ref<string>('none')
+const teams = ref<TeamRecord[]>([])
 const isDeleteOrgOpen = ref(false)
 const isDeletingOrg = ref(false)
 
@@ -82,14 +86,16 @@ async function load(): Promise<void> {
   isLoading.value = true
 
   try {
-    const [organizationData, membersData] = await Promise.all([
+    const [organizationData, membersData, teamsData] = await Promise.all([
       fetchOrganization(orgId),
       fetchOrganizationMembers(orgId),
+      fetchTeams(orgId),
     ])
 
     organization.value = organizationData
     orgName.value = organizationData.name
     members.value = membersData
+    teams.value = teamsData
   } catch {
     toast.error('Unable to load organization settings.')
   } finally {
@@ -123,8 +129,10 @@ async function sendInvite(): Promise<void> {
     const url = await inviteOrganizationMember(orgId, {
       email: inviteEmail.value.trim(),
       role: inviteRole.value,
+      teamId: inviteTeamId.value === 'none' ? undefined : inviteTeamId.value,
     })
     inviteEmail.value = ''
+    inviteTeamId.value = 'none'
     await load()
     toast.success(`Invitation created: ${url}`)
   } catch {
@@ -295,6 +303,26 @@ onMounted(() => {
                 :value="role"
               >
                 {{ role }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="w-48 space-y-2">
+          <Label>Team (optional)</Label>
+          <Select v-model="inviteTeamId">
+            <SelectTrigger>
+              <SelectValue placeholder="No team" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">
+                No team
+              </SelectItem>
+              <SelectItem
+                v-for="team in teams"
+                :key="team.id"
+                :value="team.id"
+              >
+                {{ team.name }}
               </SelectItem>
             </SelectContent>
           </Select>

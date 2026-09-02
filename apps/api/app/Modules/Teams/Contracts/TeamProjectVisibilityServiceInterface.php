@@ -16,8 +16,8 @@ use App\Modules\Projects\Models\Project;
  * Rules:
  * - Org owners/admins see all projects and servers.
  * - Org members with no team assignments see all projects and servers.
- * - Team members on unrestricted teams (no linked projects) see all projects and servers.
- * - Team members on scoped teams see only linked projects and servers assigned to them.
+ * - Team members see the union of projects linked to their teams.
+ * - Team members on teams with no linked projects see no projects or servers.
  * - Servers without a project_id are hidden from scoped team members.
  */
 interface TeamProjectVisibilityServiceInterface

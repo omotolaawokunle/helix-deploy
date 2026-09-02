@@ -23,14 +23,20 @@ class InvitationTokenService
     ) {
     }
 
-    public function encode(string $organizationId, string $email, TeamRole $role): string
+    public function encode(string $organizationId, string $email, TeamRole $role, ?string $teamId = null): string
     {
         try {
-            $plaintext = json_encode([
+            $payload = [
                 'organization_id' => $organizationId,
                 'email' => $email,
                 'role' => $role->value,
-            ], JSON_THROW_ON_ERROR);
+            ];
+
+            if ($teamId !== null) {
+                $payload['team_id'] = $teamId;
+            }
+
+            $plaintext = json_encode($payload, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
             throw InvalidInvitationTokenException::malformed();
         }
@@ -46,7 +52,7 @@ class InvitationTokenService
             $encrypted = $this->fromUrlSafeToken($token);
             $plaintext = $this->encryption->decrypt($encrypted, $this->masterKeyManager->deriveAppKey());
 
-            /** @var array{organization_id?:mixed,email?:mixed,role?:mixed} $data */
+            /** @var array{organization_id?:mixed,email?:mixed,role?:mixed,team_id?:mixed} $data */
             $data = json_decode($plaintext, true, 512, JSON_THROW_ON_ERROR);
         } catch (DecryptionFailedException|InvalidArgumentException|JsonException|ValueError) {
             throw InvalidInvitationTokenException::malformed();
@@ -61,10 +67,21 @@ class InvitationTokenService
             throw InvalidInvitationTokenException::malformed();
         }
 
+        $teamId = null;
+
+        if (array_key_exists('team_id', $data)) {
+            if ($data['team_id'] !== null && ! is_string($data['team_id'])) {
+                throw InvalidInvitationTokenException::malformed();
+            }
+
+            $teamId = $data['team_id'];
+        }
+
         return new InvitationTokenPayload(
             organizationId: $data['organization_id'],
             email: $data['email'],
             role: TeamRole::from($data['role']),
+            teamId: $teamId,
         );
     }
 
