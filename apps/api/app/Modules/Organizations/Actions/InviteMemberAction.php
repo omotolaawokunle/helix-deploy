@@ -20,8 +20,13 @@ class InviteMemberAction
     ) {
     }
 
-    public function execute(Organization $organization, User $actor, string $email, TeamRole $role): string
-    {
+    public function execute(
+        Organization $organization,
+        User $actor,
+        string $email,
+        TeamRole $role,
+        ?string $teamId = null,
+    ): string {
         if ($role === TeamRole::OWNER) {
             throw ValidationException::withMessages([
                 'role' => ['Cannot invite a member as owner. Transfer ownership instead.'],
@@ -44,6 +49,7 @@ class InviteMemberAction
             organizationId: (string) $organization->getKey(),
             email: $email,
             role: $role,
+            teamId: $teamId,
         );
 
         $invitationUrl = URL::temporarySignedRoute(
@@ -64,10 +70,11 @@ class InviteMemberAction
                 'actor_id' => (string) $actor->getKey(),
                 'email' => $email,
             ],
-            afterState: [
+            afterState: array_filter([
                 'email' => $email,
                 'role' => $role->value,
-            ],
+                'team_id' => $teamId,
+            ], static fn (mixed $value): bool => $value !== null),
         );
 
         return $invitationUrl;

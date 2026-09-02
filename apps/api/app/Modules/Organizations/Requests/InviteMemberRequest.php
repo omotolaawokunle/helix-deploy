@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Organizations\Requests;
 
+use App\Modules\Organizations\Models\Organization;
 use App\Modules\Teams\Enums\TeamRole;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -28,12 +29,23 @@ class InviteMemberRequest extends FormRequest
             static fn (string $role): bool => $role !== TeamRole::OWNER->value,
         ));
 
+        /** @var Organization $organization */
+        $organization = $this->route('org');
+
         return [
             'email' => ['required', 'email', 'max:255'],
             'role' => [
                 'required',
                 'string',
                 Rule::in($assignableRoles),
+            ],
+            'teamId' => [
+                'sometimes',
+                'nullable',
+                'uuid',
+                Rule::exists('teams', 'id')->where(
+                    static fn ($query) => $query->where('organization_id', (string) $organization->getKey()),
+                ),
             ],
         ];
     }

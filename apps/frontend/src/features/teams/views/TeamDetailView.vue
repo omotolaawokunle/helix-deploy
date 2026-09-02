@@ -74,7 +74,7 @@ const teamId = computed(() => String(route.params.id))
 
 const canManage = computed(() => authStore.isAdmin)
 
-const isProjectScopeUnrestricted = computed(() => selectedProjectIds.value.length === 0)
+const hasNoProjectScope = computed(() => selectedProjectIds.value.length === 0)
 
 const availableOrgMembers = computed(() => {
   const memberIds = new Set(members.value.map(member => member.id))
@@ -88,7 +88,7 @@ const projectScopeSummary = computed((): string => {
   }
 
   if (team.value.projectIds.length === 0) {
-    return 'All projects'
+    return 'No projects'
   }
 
   return `${team.value.projectIds.length} project${team.value.projectIds.length === 1 ? '' : 's'}`
@@ -449,8 +449,8 @@ onMounted(() => {
         </h2>
 
         <p class="max-w-2xl text-sm text-muted-foreground">
-          <template v-if="isProjectScopeUnrestricted">
-            No projects selected — members on this team can see all organization projects and servers.
+          <template v-if="hasNoProjectScope">
+            No projects selected — members on this team cannot see any organization projects or servers until you grant access.
           </template>
           <template v-else>
             Members on this team can only access the selected projects and servers assigned within them.
@@ -512,7 +512,7 @@ onMounted(() => {
               variant="outline"
               @click="selectedProjectIds = []"
             >
-              Clear selection (all projects)
+              Clear selection (no access)
             </Button>
           </div>
         </div>

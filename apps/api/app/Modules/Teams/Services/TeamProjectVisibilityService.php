@@ -35,22 +35,11 @@ class TeamProjectVisibilityService implements TeamProjectVisibilityServiceInterf
         }
 
         $projectIds = [];
-        $hasUnrestrictedTeam = false;
 
         foreach ($teams as $team) {
-            if ($team->projects->isEmpty()) {
-                $hasUnrestrictedTeam = true;
-
-                break;
-            }
-
             foreach ($team->projects as $project) {
                 $projectIds[] = (string) $project->getKey();
             }
-        }
-
-        if ($hasUnrestrictedTeam) {
-            return null;
         }
 
         return array_values(array_unique($projectIds));

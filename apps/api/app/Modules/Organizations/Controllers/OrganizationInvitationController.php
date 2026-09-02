@@ -50,6 +50,7 @@ class OrganizationInvitationController extends Controller
             user: $user,
             email: $payload->email,
             role: $payload->role,
+            teamId: $payload->teamId,
         );
 
         return response()->json([

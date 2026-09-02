@@ -35,7 +35,22 @@ it('encodes and decodes invitation payload without exposing plaintext parameters
 
     expect($payload->organizationId)->toBe($organizationId)
         ->and($payload->email)->toBe($email)
-        ->and($payload->role)->toBe(TeamRole::DEVELOPER);
+        ->and($payload->role)->toBe(TeamRole::DEVELOPER)
+        ->and($payload->teamId)->toBeNull();
+
+    $teamId = (string) Str::uuid();
+
+    $tokenWithTeam = $service->encode(
+        organizationId: $organizationId,
+        email: $email,
+        role: TeamRole::VIEWER,
+        teamId: $teamId,
+    );
+
+    $payloadWithTeam = $service->decode($tokenWithTeam);
+
+    expect($payloadWithTeam->teamId)->toBe($teamId)
+        ->and($payloadWithTeam->role)->toBe(TeamRole::VIEWER);
 });
 
 it('rejects tampered invitation tokens', function (): void {

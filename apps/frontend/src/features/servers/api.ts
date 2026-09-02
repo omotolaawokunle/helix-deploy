@@ -26,6 +26,7 @@ interface ResourceResponse<T> {
 export interface FetchServersOptions {
   tags?: string[]
   serverGroupId?: string
+  projectId?: string
 }
 
 export type CloudProviderType = 'hetzner' | 'digitalocean' | 'aws'
@@ -99,6 +100,10 @@ export async function fetchServers(
     params['filter[server_group_id]'] = options.serverGroupId
   }
 
+  if (options.projectId !== undefined) {
+    params['filter[project_id]'] = options.projectId
+  }
+
   const response = await api.get<PaginatedResponse<Server>>(
     `/api/v1/organizations/${organizationId}/servers`,
     { params },
@@ -113,6 +118,19 @@ export async function deleteServer(serverId: string): Promise<void> {
 
 export async function fetchServer(serverId: string): Promise<Server> {
   const response = await api.get<ResourceResponse<Server>>(`/api/v1/servers/${serverId}`)
+
+  return response.data.data
+}
+
+export interface UpdateServerPayload {
+  name?: string
+  projectId?: string | null
+  environmentId?: string | null
+  tags?: string[]
+}
+
+export async function updateServer(serverId: string, payload: UpdateServerPayload): Promise<Server> {
+  const response = await api.patch<ResourceResponse<Server>>(`/api/v1/servers/${serverId}`, payload)
 
   return response.data.data
 }

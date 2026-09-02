@@ -100,7 +100,7 @@ it('filters project and server listings by scoped team membership', function ():
         ->assertJsonCount(2, 'data');
 });
 
-it('allows unrestricted access for team members on teams without project scope', function (): void {
+it('denies project and server access for team members on teams without project scope', function (): void {
     $organization = Organization::query()->create([
         'name' => 'Unrestricted Org',
         'slug' => 'unrestricted-org-'.Str::random(6),
@@ -109,14 +109,19 @@ it('allows unrestricted access for team members on teams without project scope',
     ]);
     $organization->generateAndStoreMasterKey();
 
+    $owner = User::factory()->create([
+        'email_verified_at' => now(),
+        'current_organization_id' => (string) $organization->getKey(),
+    ]);
     $developer = User::factory()->create([
         'email_verified_at' => now(),
         'current_organization_id' => (string) $organization->getKey(),
     ]);
 
+    $organization->users()->attach($owner->getKey(), ['role' => TeamRole::OWNER->value]);
     $organization->users()->attach($developer->getKey(), ['role' => TeamRole::DEVELOPER->value]);
 
-    Project::query()->create([
+    $project = Project::query()->create([
         'organization_id' => (string) $organization->getKey(),
         'name' => 'Project One',
         'description' => null,
@@ -134,8 +139,26 @@ it('allows unrestricted access for team members on teams without project scope',
     ]);
     $team->users()->attach($developer->getKey(), ['role' => TeamRole::DEVELOPER->value]);
 
+    Server::query()->create([
+        'organization_id' => (string) $organization->getKey(),
+        'project_id' => (string) $project->getKey(),
+        'hostname' => 'scoped.example.test',
+        'ip_address' => '203.0.113.20',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'provider' => ServerProvider::GENERIC->value,
+        'status' => ServerStatus::ACTIVE->value,
+        'management_mode' => ManagementMode::MANAGED->value,
+        'created_by' => (string) $owner->getKey(),
+    ]);
+
     $this->actingAs($developer)
         ->getJson("/api/v1/organizations/{$organization->id}/projects")
         ->assertOk()
-        ->assertJsonCount(2, 'data');
+        ->assertJsonCount(0, 'data');
+
+    $this->actingAs($developer)
+        ->getJson("/api/v1/organizations/{$organization->id}/servers")
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
 });
