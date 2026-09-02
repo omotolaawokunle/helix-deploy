@@ -136,7 +136,9 @@ async function sendInvite(): Promise<void> {
     inviteEmail.value = ''
     inviteTeamId.value = 'none'
     await load()
-    toast.success(`Invitation sent to ${email}.`)
+    toast.success('Invitation sent.', {
+      description: `Sent to ${email}.`,
+    })
   } catch {
     toast.error('Unable to send invitation.')
   }
