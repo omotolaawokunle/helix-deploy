@@ -48,11 +48,9 @@ const selectedAttachServerId = ref<string | undefined>(undefined)
 const detachTarget = ref<Server | null>(null)
 const isDetaching = ref(false)
 
-const attachableServers = computed(() => {
-  return orgServers.value.filter((server) => server.project?.id !== props.projectId)
-})
-
-const canAttach = computed(() => attachableServers.value.length > 0)
+const attachableServers = computed(() =>
+  orgServers.value.filter((server) => server.project?.id !== props.projectId),
+)
 
 async function loadServers(): Promise<void> {
   const activeOrgId = orgId.value
@@ -65,34 +63,25 @@ async function loadServers(): Promise<void> {
   loadError.value = null
 
   try {
-    projectServers.value = await fetchServers(activeOrgId, { projectId: props.projectId })
+    const [projectData, orgData] = await Promise.all([
+      fetchServers(activeOrgId, { projectId: props.projectId }),
+      props.canManage ? fetchServers(activeOrgId) : Promise.resolve([] as Server[]),
+    ])
+
+    projectServers.value = projectData
+    orgServers.value = orgData
   } catch {
     projectServers.value = []
+    orgServers.value = []
     loadError.value = 'Unable to load servers for this project.'
   } finally {
     isLoading.value = false
   }
 }
 
-async function loadOrgServersForAttach(): Promise<void> {
-  const activeOrgId = orgId.value
-
-  if (activeOrgId === null) {
-    return
-  }
-
-  try {
-    orgServers.value = await fetchServers(activeOrgId)
-  } catch {
-    orgServers.value = []
-    toast.error('Unable to load organization servers.')
-  }
-}
-
-async function openAttachSheet(): Promise<void> {
+function openAttachSheet(): void {
   selectedAttachServerId.value = undefined
   isAttachOpen.value = true
-  await loadOrgServersForAttach()
 }
 
 async function attachServer(): Promise<void> {
@@ -157,7 +146,7 @@ watch(
         </p>
       </div>
       <Button
-        v-if="canManage && canAttach"
+        v-if="canManage && attachableServers.length > 0"
         type="button"
         size="sm"
         data-testid="attach-server-button"
@@ -196,7 +185,7 @@ watch(
       <template v-if="canManage">
         No servers assigned yet.
         <Button
-          v-if="canAttach"
+          v-if="attachableServers.length > 0"
           type="button"
           variant="link"
           class="px-1"
