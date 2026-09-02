@@ -18,6 +18,7 @@ class SendInvitationEmailJob implements ShouldQueue
         public readonly string $invitationUrl,
         public readonly string $organizationName,
         public readonly string $inviterName,
+        public readonly ?string $teamName = null,
     ) {
         $this->onQueue('default');
     }
@@ -28,6 +29,7 @@ class SendInvitationEmailJob implements ShouldQueue
             organizationName: $this->organizationName,
             inviterName: $this->inviterName,
             invitationUrl: $this->spaInvitationUrl(),
+            teamName: $this->teamName,
         ));
     }
 

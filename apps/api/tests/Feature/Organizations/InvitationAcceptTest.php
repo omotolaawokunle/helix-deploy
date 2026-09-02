@@ -225,9 +225,51 @@ it('sends an invitation email when an owner invites a member', function (): void
         return $mail->hasTo('newmember@example.test')
             && $mail->organizationName === 'Mail Org'
             && $mail->inviterName === 'Org Owner'
+            && $mail->teamName === null
+            && $mail->invitationHeadline() === "You've been invited to Mail Org"
             && str_starts_with($mail->invitationUrl, 'https://app.helix.test/accept-invitation?')
             && str_contains($mail->invitationUrl, 'token=')
             && str_contains($mail->invitationUrl, 'signature=');
+    });
+});
+
+it('includes the team name in the invitation email when an owner invites to a team', function (): void {
+    Mail::fake();
+
+    $organization = Organization::query()->create([
+        'name' => 'Mail Org',
+        'slug' => 'mail-org-with-team',
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $owner = User::factory()->create([
+        'name' => 'Org Owner',
+        'email_verified_at' => now(),
+        'current_organization_id' => (string) $organization->getKey(),
+    ]);
+    $organization->users()->attach($owner->getKey(), ['role' => TeamRole::OWNER->value]);
+
+    $team = Team::query()->create([
+        'organization_id' => (string) $organization->getKey(),
+        'name' => 'Platform',
+        'slug' => 'platform-mail',
+    ]);
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/organizations/{$organization->id}/invitations", [
+            'email' => 'newmember@example.test',
+            'role' => TeamRole::DEVELOPER->value,
+            'teamId' => (string) $team->getKey(),
+        ])
+        ->assertCreated();
+
+    Mail::assertSent(OrganizationInvitationMail::class, function (OrganizationInvitationMail $mail): bool {
+        return $mail->hasTo('newmember@example.test')
+            && $mail->teamName === 'Platform'
+            && $mail->organizationName === 'Mail Org'
+            && $mail->invitationHeadline() === "You've been invited to Platform in Mail Org";
     });
 });
 

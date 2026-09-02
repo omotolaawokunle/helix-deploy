@@ -17,12 +17,22 @@ final class OrganizationInvitationMail extends Mailable
         public readonly string $organizationName,
         public readonly string $inviterName,
         public readonly string $invitationUrl,
+        public readonly ?string $teamName = null,
     ) {}
+
+    public function invitationHeadline(): string
+    {
+        if ($this->teamName === null || $this->teamName === '') {
+            return "You've been invited to {$this->organizationName}";
+        }
+
+        return "You've been invited to {$this->teamName} in {$this->organizationName}";
+    }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "You've been invited to {$this->organizationName}",
+            subject: $this->invitationHeadline(),
         );
     }
 
@@ -30,6 +40,9 @@ final class OrganizationInvitationMail extends Mailable
     {
         return new Content(
             markdown: 'mail.organization-invitation',
+            with: [
+                'invitationHeadline' => $this->invitationHeadline(),
+            ],
         );
     }
 }

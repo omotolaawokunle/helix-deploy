@@ -1,7 +1,11 @@
 <x-mail::message>
-# You're invited to {{ $organizationName }}
+# {{ $invitationHeadline }}
 
+@if (filled($teamName))
+{{ $inviterName }} invited you to join **{{ $teamName }}** in **{{ $organizationName }}** on HelixDeploy.
+@else
 {{ $inviterName }} invited you to join **{{ $organizationName }}** on HelixDeploy.
+@endif
 
 <x-mail::button :url="$invitationUrl">
 Accept invitation

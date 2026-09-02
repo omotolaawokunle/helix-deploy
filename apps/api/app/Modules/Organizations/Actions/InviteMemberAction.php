@@ -64,6 +64,7 @@ class InviteMemberAction
             $invitationUrl,
             $organization->name,
             $actor->name,
+            $this->teamNameForInvitation($organization, $teamId),
         );
 
         AuditLog::record(
@@ -82,5 +83,22 @@ class InviteMemberAction
         );
 
         return $invitationUrl;
+    }
+
+    private function teamNameForInvitation(Organization $organization, ?string $teamId): ?string
+    {
+        if ($teamId === null) {
+            return null;
+        }
+
+        $teamName = $organization->teams()->whereKey($teamId)->value('name');
+
+        if (! is_string($teamName) || $teamName === '') {
+            throw ValidationException::withMessages([
+                'teamId' => ['The selected team is invalid.'],
+            ]);
+        }
+
+        return $teamName;
     }
 }
