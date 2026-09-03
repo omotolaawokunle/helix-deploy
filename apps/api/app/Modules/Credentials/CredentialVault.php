@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Credentials;
 
-use App\Modules\Organizations\Models\Organization;
+use App\Http\Middleware\AttachRequestId;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Credentials\Contracts\CredentialVaultInterface;
 use App\Modules\Credentials\DTOs\StoredKeyPair;
@@ -12,9 +12,11 @@ use App\Modules\Credentials\Enums\CredentialType;
 use App\Modules\Credentials\Exceptions\CredentialAccessDeniedException;
 use App\Modules\Credentials\Exceptions\CredentialNotFoundException;
 use App\Modules\Credentials\Models\Credential;
+use App\Modules\Organizations\Models\Organization;
 use App\Packages\Encryption\EncryptedPayload;
 use App\Packages\Encryption\MasterKeyManager;
 use App\Packages\Encryption\SodiumEncryption;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use phpseclib3\Crypt\EC;
@@ -24,8 +26,7 @@ class CredentialVault implements CredentialVaultInterface
     public function __construct(
         private readonly SodiumEncryption $encryption,
         private readonly MasterKeyManager $masterKeyManager,
-    ) {
-    }
+    ) {}
 
     public function generateSSHKeyPair(Organization $organization, Model $owner, string $name): StoredKeyPair
     {
@@ -667,7 +668,7 @@ class CredentialVault implements CredentialVaultInterface
         $newMasterKey = $this->getMasterKey($organization);
 
         try {
-            /** @var \Illuminate\Database\Eloquent\Collection<int, Credential> $credentials */
+            /** @var Collection<int, Credential> $credentials */
             $credentials = Credential::query()->forOrganization($organization)->get();
 
             foreach ($credentials as $credential) {
@@ -739,7 +740,7 @@ class CredentialVault implements CredentialVaultInterface
         string $name,
         CredentialType $type,
         string $plaintext,
-        string|null $publicKey,
+        ?string $publicKey,
     ): Credential {
         $masterKey = $this->getMasterKey($organization);
 
@@ -802,27 +803,31 @@ class CredentialVault implements CredentialVaultInterface
     }
 
     /**
-     * @param array<string, mixed>|null $beforeState
-     * @param array<string, mixed>|null $afterState
+     * @param  array<string, mixed>|null  $beforeState
+     * @param  array<string, mixed>|null  $afterState
      */
     private function writeAuditLog(
         Organization $organization,
         string $operation,
-        string|null $resourceId,
-        array|null $beforeState = null,
-        array|null $afterState = null,
+        ?string $resourceId,
+        ?array $beforeState = null,
+        ?array $afterState = null,
     ): void {
+        $request = request();
+        $actorId = Auth::id();
+        $requestId = $request?->attributes->get(AttachRequestId::ATTRIBUTE_KEY);
+
         AuditLog::query()->create([
             'organization_id' => (string) $organization->getKey(),
-            'actor_id' => null,
+            'actor_id' => $actorId !== null ? (string) $actorId : null,
             'operation' => $operation,
             'resource_type' => Credential::class,
             'resource_id' => $resourceId,
             'before_state' => $beforeState,
             'after_state' => $afterState,
-            'ip_address' => null,
-            'user_agent' => null,
-            'request_id' => null,
+            'ip_address' => $request?->ip(),
+            'user_agent' => $request?->userAgent(),
+            'request_id' => is_string($requestId) ? $requestId : null,
             'created_at' => now(),
         ]);
     }
