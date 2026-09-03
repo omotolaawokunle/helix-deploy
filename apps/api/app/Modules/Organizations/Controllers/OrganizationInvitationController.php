@@ -12,6 +12,8 @@ use App\Modules\Organizations\Requests\AcceptInvitationRequest;
 use App\Modules\Organizations\Services\InvitationTokenService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
 class OrganizationInvitationController extends Controller
 {
@@ -20,7 +22,7 @@ class OrganizationInvitationController extends Controller
         AcceptInvitationAction $action,
         InvitationTokenService $invitationTokenService,
     ): JsonResponse {
-        if (! $request->hasValidSignature()) {
+        if (! $this->hasValidInvitationSignature($request)) {
             if ($request->has('expires') && now()->getTimestamp() > (int) $request->query('expires')) {
                 abort(410, 'Invitation link has expired.');
             }
@@ -42,7 +44,7 @@ class OrganizationInvitationController extends Controller
             ->first();
 
         if ($organization === null) {
-            throw (new ModelNotFoundException())->setModel(Organization::class);
+            throw (new ModelNotFoundException)->setModel(Organization::class);
         }
 
         $action->execute(
@@ -59,5 +61,32 @@ class OrganizationInvitationController extends Controller
                 'organizationName' => (string) $organization->name,
             ],
         ]);
+    }
+
+    /**
+     * Laravel signs query params with sorted keys, but validates against the raw
+     * QUERY_STRING order. SPA clients (axios) often reorder params, which would
+     * otherwise fail a valid invitation signature.
+     */
+    private function hasValidInvitationSignature(Request $request): bool
+    {
+        if ($request->hasValidSignature()) {
+            return true;
+        }
+
+        $query = $request->query();
+        $signature = $query['signature'] ?? null;
+        unset($query['signature']);
+        ksort($query);
+
+        $normalized = Arr::query($query);
+
+        if (is_string($signature) && $signature !== '') {
+            $normalized .= '&signature='.$signature;
+        }
+
+        $request->server->set('QUERY_STRING', $normalized);
+
+        return $request->hasValidSignature();
     }
 }

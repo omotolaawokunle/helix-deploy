@@ -385,3 +385,31 @@ it('rejects invite with team outside the organization', function (): void {
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['teamId']);
 });
+
+it('accepts invitation when SPA posts path with signed query params', function (): void {
+    $organization = Organization::query()->create([
+        'name' => 'Spa Style Org',
+        'slug' => 'spa-style-org',
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $invitee = User::factory()->create([
+        'email' => 'spa-style@example.test',
+        'email_verified_at' => now(),
+    ]);
+
+    $acceptUrl = makeInvitationAcceptUrl(
+        organizationId: (string) $organization->getKey(),
+        email: 'spa-style@example.test',
+        role: TeamRole::DEVELOPER,
+    );
+
+    parse_str((string) parse_url($acceptUrl, PHP_URL_QUERY), $query);
+
+    $this->actingAs($invitee)
+        ->postJson('/api/v1/organizations/invitations/accept?'.http_build_query($query))
+        ->assertOk()
+        ->assertJsonPath('data.organizationName', 'Spa Style Org');
+});

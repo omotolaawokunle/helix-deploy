@@ -16,6 +16,7 @@ import {
   type AcceptInvitationParams,
 } from '@/features/organizations/api'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
+import { extractApiErrorMessage } from '@/lib/api-error'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -57,9 +58,12 @@ async function acceptInvitation(): Promise<void> {
     await authStore.resolveCurrentRole()
     status.value = 'success'
     toast.success(`You joined ${result.organizationName}.`)
-  } catch {
+  } catch (error: unknown) {
     status.value = 'error'
-    errorMessage.value = 'Unable to accept invitation. The link may be invalid, expired, or sent to a different email address.'
+    errorMessage.value = extractApiErrorMessage(
+      error,
+      'Unable to accept invitation. The link may be invalid, expired, or sent to a different email address.',
+    )
   }
 }
 
