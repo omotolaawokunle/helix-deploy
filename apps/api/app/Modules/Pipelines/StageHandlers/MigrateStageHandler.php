@@ -38,7 +38,10 @@ class MigrateStageHandler implements PipelineStageHandlerInterface
         $releasePath = $context->deployment->release_path
             ?? app(SiteDeployPathResolver::class)->currentPath($context->site);
 
-        $command = ArtisanMigrateShellCommand::forReleasePath($releasePath);
+        $command = ArtisanMigrateShellCommand::forReleasePath(
+            $releasePath,
+            $context->site->php_version,
+        );
         $result = $ssh->run($command);
 
         if ($result->failed()) {
