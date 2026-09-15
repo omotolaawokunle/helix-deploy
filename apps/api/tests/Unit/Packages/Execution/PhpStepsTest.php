@@ -105,7 +105,7 @@ it('build assets is skippable without package json', function (): void {
     expect((new BuildAssetsStep)->isSkippable($ctx))->toBeTrue();
 });
 
-it('build assets uses a 90 second ssh timeout', function (): void {
+it('build assets uses a 600 second ssh timeout', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
     $ssh = fakeSsh();
     queueSshResponses($ssh, ['*npm run build*' => sshSuccess()]);
@@ -113,10 +113,10 @@ it('build assets uses a 90 second ssh timeout', function (): void {
 
     (new BuildAssetsStep)->run($ctx);
 
-    $ssh->assertCommandTimeout('*npm run build*', 90);
+    $ssh->assertCommandTimeout('*npm run build*', 600);
 });
 
-it('runner build assets uses a 90 second ssh timeout', function (): void {
+it('runner build assets uses a 600 second ssh timeout', function (): void {
     [, , $site, $deployment] = executionFixture(Runtime::PHP);
     $owner = User::query()->findOrFail($deployment->triggered_by);
     $runner = BuildRunner::query()->withoutGlobalScope('owned_by_organization')->create([
@@ -136,7 +136,7 @@ it('runner build assets uses a 90 second ssh timeout', function (): void {
 
     (new BuildAssetsBuildStep)->run($ctx);
 
-    $ssh->assertCommandTimeout('*npm run build*', 90);
+    $ssh->assertCommandTimeout('*npm run build*', 600);
 });
 
 it('run migrations is skippable when site flag is false', function (): void {
