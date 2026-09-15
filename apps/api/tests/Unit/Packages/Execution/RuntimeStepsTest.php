@@ -43,6 +43,22 @@ it('node build assets runs npm run build', function (): void {
     $ssh->assertCommandExecuted('*npm run build*');
 });
 
+it('node install npm is skippable when build assets is disabled', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::NODEJS);
+    $site->forceFill(['build_assets' => false])->save();
+    $ctx = executionContext($site, $deployment, $server, fakeSsh());
+
+    expect((new InstallNpmDepsNodeStep())->isSkippable($ctx))->toBeTrue();
+});
+
+it('node build assets is skippable when build assets is disabled', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::NODEJS);
+    $site->forceFill(['build_assets' => false])->save();
+    $ctx = executionContext($site, $deployment, $server, fakeSsh());
+
+    expect((new BuildNodeAssetsStep())->isSkippable($ctx))->toBeTrue();
+});
+
 it('reload pm2 uses site domain', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::NODEJS);
     $ssh = fakeSsh();

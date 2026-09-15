@@ -44,6 +44,7 @@ final class UpdateSiteRequest extends FormRequest
                 ),
             ],
             'runMigrations' => ['sometimes', 'boolean'],
+            'buildAssets' => ['sometimes', 'boolean'],
             'deployMode' => ['sometimes', 'string', Rule::enum(DeployMode::class)],
             'dockerBuildMode' => [
                 'sometimes',

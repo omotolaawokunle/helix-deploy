@@ -66,6 +66,7 @@ function createSite(overrides: Partial<Site> = {}): Site {
     buildStrategy: 'on_server',
     buildRunnerId: null,
     runMigrations: false,
+    buildAssets: true,
     dockerImage: null,
     dockerRegistry: null,
     dockerComposePath: null,

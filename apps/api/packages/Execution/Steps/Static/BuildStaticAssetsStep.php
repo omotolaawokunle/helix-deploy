@@ -18,19 +18,22 @@ final class BuildStaticAssetsStep extends BaseDeploymentStep
 
     public function run(DeploymentContext $ctx): void
     {
-        $packageJson = $ctx->releasePath.'/package.json';
-        $check = $ctx->ssh->run('test -f '.$this->shellQuote($packageJson));
-
-        if ($check->failed()) {
-            $ctx->log('No package.json found — skipping static asset build.');
-
-            return;
-        }
-
         $this->runCommand(
             $ctx,
             'cd '.$this->shellQuote($ctx->releasePath).' && npm ci && npm run build',
             self::TIMEOUT_SECONDS,
         );
+    }
+
+    public function isSkippable(DeploymentContext $ctx): bool
+    {
+        if (! $ctx->site->build_assets) {
+            return true;
+        }
+
+        $packageJson = $ctx->releasePath.'/package.json';
+        $check = $ctx->ssh->run('test -f '.$this->shellQuote($packageJson));
+
+        return $check->failed();
     }
 }

@@ -128,6 +128,7 @@ export async function updateSite(
     | 'buildStrategy'
     | 'buildRunnerId'
     | 'runMigrations'
+    | 'buildAssets'
     | 'dockerImage'
     | 'dockerRegistry'
     | 'dockerComposePath'

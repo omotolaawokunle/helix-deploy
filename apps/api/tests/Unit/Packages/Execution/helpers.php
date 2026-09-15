@@ -87,6 +87,7 @@ function executionFixture(Runtime $runtime = Runtime::PHP, array $siteOverrides 
         'pre_deploy_script' => null,
         'post_deploy_script' => null,
         'run_migrations' => true,
+        'build_assets' => true,
         'docker_image' => null,
         'docker_registry' => null,
         'docker_compose_path' => 'docker-compose.yml',

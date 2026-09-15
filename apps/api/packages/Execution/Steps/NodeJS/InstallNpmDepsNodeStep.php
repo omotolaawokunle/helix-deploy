@@ -21,4 +21,9 @@ final class InstallNpmDepsNodeStep extends BaseDeploymentStep
             'cd '.$this->shellQuote($ctx->releasePath).' && npm ci',
         );
     }
+
+    public function isSkippable(DeploymentContext $ctx): bool
+    {
+        return ! $ctx->site->build_assets;
+    }
 }

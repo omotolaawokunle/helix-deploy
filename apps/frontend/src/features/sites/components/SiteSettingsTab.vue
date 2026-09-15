@@ -95,6 +95,7 @@ const buildRunners = ref<BuildRunner[]>([])
 const isLoadingBuildRunners = ref(false)
 const hasLoadedBuildRunners = ref(false)
 const runMigrations = ref(false)
+const buildAssets = ref(true)
 const dockerImage = ref('')
 const dockerRegistry = ref('')
 const dockerComposePath = ref('')
@@ -218,6 +219,7 @@ watch(
     buildStrategy.value = site.buildStrategy ?? 'on_server'
     buildRunnerId.value = site.buildRunnerId
     runMigrations.value = site.runMigrations
+    buildAssets.value = site.buildAssets
     dockerImage.value = site.dockerImage ?? ''
     dockerRegistry.value = site.dockerRegistry ?? ''
     dockerComposePath.value = site.dockerComposePath ?? ''
@@ -461,6 +463,7 @@ async function handleSave(): Promise<void> {
       buildStrategy: buildStrategy.value,
       buildRunnerId: buildStrategy.value === 'runner' ? buildRunnerId.value : null,
       runMigrations: runMigrations.value,
+      buildAssets: buildAssets.value,
       dockerImage: dockerImage.value || null,
       dockerRegistry: dockerRegistry.value || null,
       dockerComposePath: dockerComposePath.value || null,
@@ -906,6 +909,13 @@ async function handleDelete(): Promise<void> {
         <input v-model="runMigrations" type="checkbox" class="rounded border-input">
         Run migrations on deploy
       </label>
+      <label class="flex items-center gap-2 text-sm">
+        <input v-model="buildAssets" type="checkbox" class="rounded border-input">
+        Build assets on deploy
+      </label>
+      <p class="text-sm text-muted-foreground">
+        When off, skips npm install and build on the server. Use when assets are built locally and committed.
+      </p>
 
       <div class="space-y-2 pt-2">
         <Label for="site-pipeline">Pipeline</Label>

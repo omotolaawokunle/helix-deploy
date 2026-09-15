@@ -232,6 +232,7 @@ export interface Site {
   buildStrategy: SiteBuildStrategy
   buildRunnerId: string | null
   runMigrations: boolean
+  buildAssets: boolean
   dockerImage: string | null
   dockerRegistry: string | null
   dockerComposePath: string | null

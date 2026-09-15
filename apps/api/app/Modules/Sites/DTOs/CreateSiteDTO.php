@@ -28,6 +28,7 @@ readonly class CreateSiteDTO
         public ?string $preDeployScript,
         public ?string $postDeployScript,
         public bool $runMigrations,
+        public bool $buildAssets,
         public ?string $dockerImage,
         public ?string $dockerRegistry,
         public string $dockerComposePath,

@@ -232,6 +232,7 @@ function createSiteDto(string $domain, Runtime $runtime, ?string $phpVersion = n
         preDeployScript: null,
         postDeployScript: null,
         runMigrations: true,
+        buildAssets: true,
         dockerImage: null,
         dockerRegistry: null,
         dockerComposePath: 'docker-compose.yml',

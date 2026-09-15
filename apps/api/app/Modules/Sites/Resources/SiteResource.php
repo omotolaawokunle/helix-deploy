@@ -50,6 +50,7 @@ class SiteResource extends JsonResource
                 : $this->build_strategy,
             'buildRunnerId' => $this->build_runner_id,
             'runMigrations' => $this->run_migrations,
+            'buildAssets' => $this->build_assets,
             'dockerImage' => $this->docker_image,
             'dockerRegistry' => $this->docker_registry,
             'dockerComposePath' => $this->docker_compose_path,

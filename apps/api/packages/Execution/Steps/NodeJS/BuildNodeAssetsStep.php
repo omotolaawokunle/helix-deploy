@@ -21,4 +21,9 @@ final class BuildNodeAssetsStep extends BaseDeploymentStep
             'cd '.$this->shellQuote($ctx->releasePath).' && npm run build',
         );
     }
+
+    public function isSkippable(DeploymentContext $ctx): bool
+    {
+        return ! $ctx->site->build_assets;
+    }
 }

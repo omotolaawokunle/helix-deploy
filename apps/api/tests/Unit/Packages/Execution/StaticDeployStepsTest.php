@@ -13,10 +13,15 @@ it('skips static asset build when package.json is missing', function (): void {
 
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
-    (new BuildStaticAssetsStep())->run($ctx);
+    expect((new BuildStaticAssetsStep())->isSkippable($ctx))->toBeTrue();
+});
 
-    expect($ssh->getExecutedCommands())->toHaveCount(1)
-        ->and($ssh->getExecutedCommands()[0])->toContain('test -f');
+it('skips static asset build when build assets is disabled', function (): void {
+    [$organization, $server, $site, $deployment] = executionFixture(Runtime::STATIC);
+    $site->forceFill(['build_assets' => false])->save();
+    $ctx = executionContext($site, $deployment, $server, fakeSsh());
+
+    expect((new BuildStaticAssetsStep())->isSkippable($ctx))->toBeTrue();
 });
 
 it('runs npm build when package.json exists', function (): void {

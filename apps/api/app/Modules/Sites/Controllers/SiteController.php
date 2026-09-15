@@ -195,6 +195,10 @@ class SiteController extends Controller
             $siteModel->run_migrations = (bool) $validated['runMigrations'];
         }
 
+        if (array_key_exists('buildAssets', $validated)) {
+            $siteModel->build_assets = (bool) $validated['buildAssets'];
+        }
+
         if (array_key_exists('dockerImage', $validated)) {
             $siteModel->docker_image = $validated['dockerImage'];
         }

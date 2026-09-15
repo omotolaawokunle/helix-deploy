@@ -24,6 +24,10 @@ final class InstallNpmDepsStep extends BaseDeploymentStep
 
     public function isSkippable(DeploymentContext $ctx): bool
     {
+        if (! $ctx->site->build_assets) {
+            return true;
+        }
+
         $result = $ctx->ssh->run('test -f '.$this->shellQuote($ctx->releasePath.'/package.json'));
 
         return $result->exitCode !== 0;

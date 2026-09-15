@@ -15,6 +15,7 @@ use App\Packages\Execution\BuildContext;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
 use App\Packages\Execution\Steps\Build\BuildAssetsBuildStep;
 use App\Packages\Execution\Steps\Build\InstallComposerDepsBuildStep;
+use App\Packages\Execution\Steps\Build\InstallNpmDepsBuildStep;
 use App\Packages\Execution\Steps\PHP\BuildAssetsStep;
 use App\Packages\Execution\Steps\PHP\ClearCacheStep;
 use App\Packages\Execution\Steps\PHP\InstallComposerDepsStep;
@@ -145,6 +146,62 @@ it('run migrations is skippable when site flag is false', function (): void {
     $ctx = executionContext($site, $deployment, $server, fakeSsh());
 
     expect((new RunMigrationsStep)->isSkippable($ctx))->toBeTrue();
+});
+
+it('install npm deps is skippable when build assets is disabled', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $site->forceFill(['build_assets' => false])->save();
+    $ctx = executionContext($site, $deployment, $server, fakeSsh());
+
+    expect((new InstallNpmDepsStep)->isSkippable($ctx))->toBeTrue();
+});
+
+it('build assets is skippable when build assets is disabled', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $site->forceFill(['build_assets' => false])->save();
+    $ctx = executionContext($site, $deployment, $server, fakeSsh());
+
+    expect((new BuildAssetsStep)->isSkippable($ctx))->toBeTrue();
+});
+
+it('runner install npm is skippable when build assets is disabled', function (): void {
+    [, , $site, $deployment] = executionFixture(Runtime::PHP);
+    $site->forceFill(['build_assets' => false])->save();
+    $owner = User::query()->findOrFail($deployment->triggered_by);
+    $runner = BuildRunner::query()->withoutGlobalScope('owned_by_organization')->create([
+        'organization_id' => (string) $deployment->organization_id,
+        'name' => 'skip-runner-'.Str::random(4),
+        'ip_address' => '10.0.0.81',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'status' => BuildRunnerStatus::ONLINE->value,
+        'max_concurrent_builds' => 1,
+        'supported_runtimes' => ['php'],
+        'created_by' => (string) $owner->getKey(),
+    ]);
+    $ctx = BuildContext::forDeployment($deployment, $site, $runner, fakeSsh());
+
+    expect((new InstallNpmDepsBuildStep)->isSkippable($ctx))->toBeTrue();
+});
+
+it('runner build assets is skippable when build assets is disabled', function (): void {
+    [, , $site, $deployment] = executionFixture(Runtime::PHP);
+    $site->forceFill(['build_assets' => false])->save();
+    $owner = User::query()->findOrFail($deployment->triggered_by);
+    $runner = BuildRunner::query()->withoutGlobalScope('owned_by_organization')->create([
+        'organization_id' => (string) $deployment->organization_id,
+        'name' => 'skip-runner-'.Str::random(4),
+        'ip_address' => '10.0.0.82',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'status' => BuildRunnerStatus::ONLINE->value,
+        'max_concurrent_builds' => 1,
+        'supported_runtimes' => ['php'],
+        'created_by' => (string) $owner->getKey(),
+    ]);
+    $ctx = BuildContext::forDeployment($deployment, $site, $runner, fakeSsh());
+
+    expect((new BuildAssetsBuildStep)->isSkippable($ctx))->toBeTrue();
 });
 
 it('run migrations logs production warning and runs artisan migrate', function (): void {

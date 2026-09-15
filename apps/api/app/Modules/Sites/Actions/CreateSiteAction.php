@@ -95,6 +95,7 @@ class CreateSiteAction
             'pre_deploy_script' => $dto->preDeployScript,
             'post_deploy_script' => $dto->postDeployScript,
             'run_migrations' => $dto->runMigrations,
+            'build_assets' => $dto->buildAssets,
             'docker_image' => $dto->dockerImage,
             'docker_registry' => $dto->dockerRegistry,
             'docker_compose_path' => $dto->dockerComposePath,
