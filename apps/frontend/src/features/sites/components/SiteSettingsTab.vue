@@ -973,7 +973,7 @@ async function handleDelete(): Promise<void> {
             </SelectContent>
           </Select>
           <p class="text-sm text-muted-foreground">
-            Must match PHP-FPM on the server (e.g. php8.4-fpm). Re-apply the nginx config after changing so the PHP socket updates.
+            Must match PHP-FPM on the server (e.g. php8.4-fpm). Saving re-applies nginx so the PHP socket updates automatically.
           </p>
         </div>
 

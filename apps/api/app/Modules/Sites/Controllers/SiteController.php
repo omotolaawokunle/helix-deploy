@@ -10,19 +10,22 @@ use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Actions\ClaimSiteAction;
 use App\Modules\Sites\Actions\CreateSiteAction;
 use App\Modules\Sites\Actions\DeleteSiteAction;
+use App\Modules\Sites\Actions\ReapplySiteNginxConfigAction;
 use App\Modules\Sites\Actions\RotateSiteWebhookSecretAction;
 use App\Modules\Sites\Actions\UpdateSiteAutoDeployAction;
 use App\Modules\Sites\DTOs\ClaimSiteDTO;
+use App\Modules\Sites\Enums\DeployMode;
+use App\Modules\Sites\Enums\DockerBuildMode;
+use App\Modules\Sites\Enums\GitProvider;
+use App\Modules\Sites\Enums\Runtime;
 use App\Modules\Sites\Events\SiteProvisioningStarted;
+use App\Modules\Sites\Exceptions\NginxConfigInvalidException;
 use App\Modules\Sites\Jobs\CreateSiteJob;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Sites\Requests\ClaimSiteRequest;
 use App\Modules\Sites\Requests\StoreSiteRequest;
 use App\Modules\Sites\Requests\UpdateSiteRequest;
 use App\Modules\Sites\Resources\SiteResource;
-use App\Modules\Sites\Enums\DeployMode;
-use App\Modules\Sites\Enums\DockerBuildMode;
-use App\Modules\Sites\Enums\GitProvider;
 use App\Modules\Sites\Services\GitProviderService;
 use App\Modules\Sites\Services\SiteTableFilterService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -115,12 +118,14 @@ class SiteController extends Controller
         string $site,
         UpdateSiteRequest $request,
         UpdateSiteAutoDeployAction $updateSiteAutoDeployAction,
-    ): SiteResource {
+        ReapplySiteNginxConfigAction $reapplySiteNginxConfigAction,
+    ): SiteResource|JsonResponse {
         $siteModel = $this->resolveSite($site);
         $this->authorize('update', $siteModel);
 
         $validated = $request->validated();
         $revealedWebhookSecret = null;
+        $previousPhpVersion = $siteModel->php_version;
 
         if (array_key_exists('deployBranch', $validated)) {
             $siteModel->deploy_branch = (string) $validated['deployBranch'];
@@ -233,6 +238,26 @@ class SiteController extends Controller
         }
 
         $siteModel->save();
+        $siteModel = $siteModel->refresh();
+
+        $phpVersionChanged = array_key_exists('phpVersion', $validated)
+            && $siteModel->runtime === Runtime::PHP
+            && $siteModel->php_version !== $previousPhpVersion;
+
+        if ($phpVersionChanged) {
+            $actor = $request->user();
+            abort_unless($actor !== null, 401);
+
+            try {
+                $siteModel = $reapplySiteNginxConfigAction->execute($siteModel, $actor);
+            } catch (NginxConfigInvalidException $exception) {
+                return response()->json([
+                    'message' => 'PHP version saved, but nginx configuration reapply failed.',
+                    'error' => $exception->nginxTestOutput,
+                    'code' => 'NGINX_REAPPLY_FAILED',
+                ], 422);
+            }
+        }
 
         $resource = SiteResource::make($siteModel->refresh());
 
