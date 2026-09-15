@@ -8,6 +8,7 @@ use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Models\Deployment;
 use App\Packages\Execution\DeploymentContext;
 use App\Packages\Execution\Steps\BaseDeploymentStep;
+use App\Packages\Execution\Support\PhpBinary;
 
 final class RestartWorkersStep extends BaseDeploymentStep
 {
@@ -28,14 +29,15 @@ final class RestartWorkersStep extends BaseDeploymentStep
     public function run(DeploymentContext $ctx): void
     {
         $release = $this->shellQuote($ctx->releasePath);
+        $php = PhpBinary::forSite($ctx->site);
 
         if ($this->hasHorizon($ctx)) {
-            $this->runCommand($ctx, 'cd '.$release.' && php artisan horizon:terminate');
+            $this->runCommand($ctx, 'cd '.$release.' && '.$php.' artisan horizon:terminate');
 
             return;
         }
 
-        $this->runCommand($ctx, 'cd '.$release.' && php artisan queue:restart');
+        $this->runCommand($ctx, 'cd '.$release.' && '.$php.' artisan queue:restart');
     }
 
     private function hasHorizon(DeploymentContext $ctx): bool

@@ -23,7 +23,10 @@ final class RunMigrationsStep extends BaseDeploymentStep
             $ctx->log('WARNING: running database migrations on production');
         }
 
-        $this->runCommand($ctx, ArtisanMigrateShellCommand::forReleasePath($ctx->releasePath));
+        $this->runCommand(
+            $ctx,
+            ArtisanMigrateShellCommand::forReleasePath($ctx->releasePath, $ctx->site->php_version),
+        );
     }
 
     public function isSkippable(DeploymentContext $ctx): bool

@@ -6,6 +6,7 @@ namespace App\Packages\Execution\Steps\PHP;
 
 use App\Packages\Execution\DeploymentContext;
 use App\Packages\Execution\Steps\BaseDeploymentStep;
+use App\Packages\Execution\Support\PhpBinary;
 
 final class ClearCacheStep extends BaseDeploymentStep
 {
@@ -17,9 +18,10 @@ final class ClearCacheStep extends BaseDeploymentStep
     public function run(DeploymentContext $ctx): void
     {
         $path = $this->shellQuote($ctx->releasePath);
+        $php = PhpBinary::forSite($ctx->site);
 
-        $this->runCommand($ctx, 'cd '.$path.' && php artisan config:cache');
-        $this->runCommand($ctx, 'cd '.$path.' && php artisan route:cache');
-        $this->runCommand($ctx, 'cd '.$path.' && php artisan view:cache');
+        $this->runCommand($ctx, 'cd '.$path.' && '.$php.' artisan config:cache');
+        $this->runCommand($ctx, 'cd '.$path.' && '.$php.' artisan route:cache');
+        $this->runCommand($ctx, 'cd '.$path.' && '.$php.' artisan view:cache');
     }
 }

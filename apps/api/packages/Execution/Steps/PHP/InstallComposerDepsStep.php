@@ -6,6 +6,7 @@ namespace App\Packages\Execution\Steps\PHP;
 
 use App\Packages\Execution\DeploymentContext;
 use App\Packages\Execution\Steps\BaseDeploymentStep;
+use App\Packages\Execution\Support\PhpBinary;
 
 final class InstallComposerDepsStep extends BaseDeploymentStep
 {
@@ -18,7 +19,7 @@ final class InstallComposerDepsStep extends BaseDeploymentStep
     {
         $this->runCommand(
             $ctx,
-            'cd '.$this->shellQuote($ctx->releasePath).' && composer install --no-dev --optimize-autoloader --no-interaction',
+            'cd '.$this->shellQuote($ctx->releasePath).' && '.PhpBinary::composerInstall($ctx->site),
         );
     }
 }

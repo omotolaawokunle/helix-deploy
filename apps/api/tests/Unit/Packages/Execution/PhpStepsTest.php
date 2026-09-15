@@ -14,6 +14,7 @@ use App\Modules\Sites\Enums\Runtime;
 use App\Packages\Execution\BuildContext;
 use App\Packages\Execution\Exceptions\DeploymentStepFailedException;
 use App\Packages\Execution\Steps\Build\BuildAssetsBuildStep;
+use App\Packages\Execution\Steps\Build\InstallComposerDepsBuildStep;
 use App\Packages\Execution\Steps\PHP\BuildAssetsStep;
 use App\Packages\Execution\Steps\PHP\ClearCacheStep;
 use App\Packages\Execution\Steps\PHP\InstallComposerDepsStep;
@@ -24,15 +25,51 @@ use App\Packages\Execution\Steps\PHP\RunMigrationsStep;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 
-it('install composer deps runs composer install', function (): void {
+it('install composer deps runs composer with the site php binary', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $site->forceFill(['php_version' => '8.4'])->save();
     $ssh = fakeSsh();
     queueSshResponses($ssh, ['*composer install*' => sshSuccess()]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     (new InstallComposerDepsStep)->run($ctx);
 
-    $ssh->assertCommandExecuted('*composer install --no-dev*');
+    $ssh->assertCommandExecuted('*php8.4 /usr/bin/composer install --no-dev*');
+});
+
+it('install composer deps defaults to php8.3 when site php version is unset', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::PHP, ['php_version' => null]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*composer install*' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    (new InstallComposerDepsStep)->run($ctx);
+
+    $ssh->assertCommandExecuted('*php8.3 /usr/bin/composer install --no-dev*');
+});
+
+it('runner install composer deps uses the site php binary', function (): void {
+    [, , $site, $deployment] = executionFixture(Runtime::PHP);
+    $site->forceFill(['php_version' => '8.2'])->save();
+    $owner = User::query()->findOrFail($deployment->triggered_by);
+    $runner = BuildRunner::query()->withoutGlobalScope('owned_by_organization')->create([
+        'organization_id' => (string) $deployment->organization_id,
+        'name' => 'composer-runner-'.Str::random(4),
+        'ip_address' => '10.0.0.81',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'status' => BuildRunnerStatus::ONLINE->value,
+        'max_concurrent_builds' => 1,
+        'supported_runtimes' => ['php'],
+        'created_by' => (string) $owner->getKey(),
+    ]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*composer install*' => sshSuccess()]);
+    $ctx = BuildContext::forDeployment($deployment, $site, $runner, $ssh);
+
+    (new InstallComposerDepsBuildStep)->run($ctx);
+
+    $ssh->assertCommandExecuted('*php8.2 /usr/bin/composer install --no-dev*');
 });
 
 it('install npm deps is skippable without package json', function (): void {
@@ -113,13 +150,14 @@ it('run migrations is skippable when site flag is false', function (): void {
 it('run migrations logs production warning and runs artisan migrate', function (): void {
     Event::fake([DeploymentLogLine::class]);
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $site->forceFill(['php_version' => '8.4'])->save();
     $ssh = fakeSsh();
-    queueSshResponses($ssh, ['*php artisan migrate*' => sshSuccess()]);
+    queueSshResponses($ssh, ['*php8.4 artisan migrate*' => sshSuccess()]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     (new RunMigrationsStep)->run($ctx);
 
-    $ssh->assertCommandExecuted('*php artisan migrate --force --no-interaction*');
+    $ssh->assertCommandExecuted('*php8.4 artisan migrate --force --no-interaction*');
     $ssh->assertCommandExecuted('*create database if not exists*');
     $ssh->assertCommandExecuted('*pg_database*');
     Event::assertDispatched(DeploymentLogLine::class, function ($event): bool {
@@ -129,6 +167,7 @@ it('run migrations logs production warning and runs artisan migrate', function (
 
 it('clear cache runs artisan cache commands', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $site->forceFill(['php_version' => '8.1'])->save();
     $ssh = fakeSsh();
     queueSshResponses($ssh, [
         '*config:cache*' => sshSuccess(),
@@ -140,6 +179,7 @@ it('clear cache runs artisan cache commands', function (): void {
     (new ClearCacheStep)->run($ctx);
 
     expect($ssh->getExecutedCommands())->toHaveCount(3);
+    $ssh->assertCommandExecuted('*php8.1 artisan config:cache*');
 });
 
 it('reload php fpm uses site php version', function (): void {
@@ -198,6 +238,7 @@ it('restart workers is not skippable when a prior successful deploy exists', fun
 
 it('restart workers uses horizon terminate when horizon is installed', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $site->forceFill(['php_version' => '8.4'])->save();
     $ssh = fakeSsh();
     queueSshResponses($ssh, [
         'test -d *vendor/laravel/horizon*' => sshSuccess(),
@@ -207,7 +248,7 @@ it('restart workers uses horizon terminate when horizon is installed', function 
 
     (new RestartWorkersStep)->run($ctx);
 
-    $ssh->assertCommandExecuted('*horizon:terminate*');
+    $ssh->assertCommandExecuted('*php8.4 artisan horizon:terminate*');
     $ssh->assertCommandNotExecuted('*queue:restart*');
 });
 
@@ -222,7 +263,7 @@ it('restart workers falls back to queue restart without horizon', function (): v
 
     (new RestartWorkersStep)->run($ctx);
 
-    $ssh->assertCommandExecuted('*queue:restart*');
+    $ssh->assertCommandExecuted('*php8.3 artisan queue:restart*');
     $ssh->assertCommandNotExecuted('*horizon:terminate*');
 });
 

@@ -15,16 +15,17 @@ it('builds horizon preset from capistrano style webroot', function (): void {
         'domain' => 'app.example.com',
         'webroot' => '/var/www/app.example.com/current/public',
         'runtime' => Runtime::PHP,
+        'php_version' => '8.4',
     ]);
 
     $builder = new LaravelWorkerPresetBuilder(new SiteDeployPathResolver());
     $preset = $builder->build($site, LaravelWorkerType::HORIZON);
 
     expect($preset->daemonName)->toBe('app-example-com-horizon')
-        ->and($preset->daemonCommand)->toBe('php artisan horizon')
+        ->and($preset->daemonCommand)->toBe('php8.4 artisan horizon')
         ->and($preset->daemonDirectory)->toBe('/var/www/app.example.com/current')
         ->and($preset->cronExpression)->toBe('* * * * *')
-        ->and($preset->cronCommand)->toBe('cd /var/www/app.example.com/current && php artisan schedule:run >> /dev/null 2>&1');
+        ->and($preset->cronCommand)->toBe('cd /var/www/app.example.com/current && php8.4 artisan schedule:run >> /dev/null 2>&1');
 });
 
 it('builds queue worker preset from deploy base webroot', function (): void {

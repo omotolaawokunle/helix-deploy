@@ -34,13 +34,13 @@ it('queues horizon daemon and scheduler cron for a php site', function (): void 
         return $job->operation === 'create'
             && $job->dto !== null
             && $job->dto->name === 'example-test-horizon'
-            && $job->dto->command === 'php artisan horizon'
+            && $job->dto->command === 'php8.3 artisan horizon'
             && $job->dto->directory === '/var/www/example.test/current';
     });
 
     Queue::assertPushed(SyncCronJobsJob::class);
 
-    expect(CronJob::query()->where('command', 'cd /var/www/example.test/current && php artisan schedule:run >> /dev/null 2>&1')->exists())
+    expect(CronJob::query()->where('command', 'cd /var/www/example.test/current && php8.3 artisan schedule:run >> /dev/null 2>&1')->exists())
         ->toBeTrue();
 
     expect(AuditLog::query()->where('operation', 'site.laravel_workers_setup')->exists())->toBeTrue();
@@ -74,7 +74,7 @@ it('returns 409 when daemon and scheduler cron already exist', function (): void
         'server_id' => (string) $site->server_id,
         'organization_id' => (string) $site->organization_id,
         'name' => 'example-test-horizon',
-        'command' => 'php artisan horizon',
+        'command' => 'php8.3 artisan horizon',
         'directory' => '/var/www/example.test/current',
         'user' => 'www-data',
         'processes' => 1,
@@ -87,7 +87,7 @@ it('returns 409 when daemon and scheduler cron already exist', function (): void
         'server_id' => (string) $site->server_id,
         'organization_id' => (string) $site->organization_id,
         'expression' => '* * * * *',
-        'command' => 'cd /var/www/example.test/current && php artisan schedule:run >> /dev/null 2>&1',
+        'command' => 'cd /var/www/example.test/current && php8.3 artisan schedule:run >> /dev/null 2>&1',
         'user' => 'www-data',
         'active' => true,
         'created_by' => (string) $owner->getKey(),
@@ -116,7 +116,7 @@ it('creates missing scheduler cron when daemon already exists', function (): voi
         'server_id' => (string) $site->server_id,
         'organization_id' => (string) $site->organization_id,
         'name' => 'example-test-horizon',
-        'command' => 'php artisan horizon',
+        'command' => 'php8.3 artisan horizon',
         'directory' => '/var/www/example.test/current',
         'user' => 'www-data',
         'processes' => 1,
@@ -134,7 +134,7 @@ it('creates missing scheduler cron when daemon already exists', function (): voi
     Queue::assertNotPushed(RunDaemonOperationJob::class);
     Queue::assertPushed(SyncCronJobsJob::class);
 
-    expect(CronJob::query()->where('command', 'cd /var/www/example.test/current && php artisan schedule:run >> /dev/null 2>&1')->exists())
+    expect(CronJob::query()->where('command', 'cd /var/www/example.test/current && php8.3 artisan schedule:run >> /dev/null 2>&1')->exists())
         ->toBeTrue();
 });
 
@@ -147,7 +147,7 @@ it('creates missing daemon when scheduler cron already exists', function (): voi
         'server_id' => (string) $site->server_id,
         'organization_id' => (string) $site->organization_id,
         'expression' => '* * * * *',
-        'command' => 'cd /var/www/example.test/current && php artisan schedule:run >> /dev/null 2>&1',
+        'command' => 'cd /var/www/example.test/current && php8.3 artisan schedule:run >> /dev/null 2>&1',
         'user' => 'www-data',
         'active' => true,
         'created_by' => (string) $owner->getKey(),

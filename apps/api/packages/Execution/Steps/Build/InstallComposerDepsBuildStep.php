@@ -6,6 +6,7 @@ namespace App\Packages\Execution\Steps\Build;
 
 use App\Packages\Execution\BuildContext;
 use App\Packages\Execution\Steps\BaseBuildStep;
+use App\Packages\Execution\Support\PhpBinary;
 
 final class InstallComposerDepsBuildStep extends BaseBuildStep
 {
@@ -18,7 +19,7 @@ final class InstallComposerDepsBuildStep extends BaseBuildStep
     {
         $this->runCommand(
             $ctx,
-            'cd '.$this->shellQuote($this->workPath($ctx)).' && composer install --no-dev --optimize-autoloader --no-interaction',
+            'cd '.$this->shellQuote($this->workPath($ctx)).' && '.PhpBinary::composerInstall($ctx->site),
         );
     }
 }

@@ -7,6 +7,7 @@ namespace App\Modules\Sites\Services;
 use App\Modules\Sites\DTOs\LaravelWorkerPreset;
 use App\Modules\Sites\Enums\LaravelWorkerType;
 use App\Modules\Sites\Models\Site;
+use App\Packages\Execution\Support\PhpBinary;
 
 final class LaravelWorkerPresetBuilder
 {
@@ -25,14 +26,17 @@ final class LaravelWorkerPresetBuilder
             LaravelWorkerType::QUEUE => $slug.'-queue',
         };
 
+        $php = PhpBinary::forSite($site);
+
         $daemonCommand = match ($workerType) {
-            LaravelWorkerType::HORIZON => 'php artisan horizon',
-            LaravelWorkerType::QUEUE => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600',
+            LaravelWorkerType::HORIZON => $php.' artisan horizon',
+            LaravelWorkerType::QUEUE => $php.' artisan queue:work --sleep=3 --tries=3 --max-time=3600',
         };
 
         $cronCommand = sprintf(
-            'cd %s && php artisan schedule:run >> /dev/null 2>&1',
+            'cd %s && %s artisan schedule:run >> /dev/null 2>&1',
             $currentPath,
+            $php,
         );
 
         return new LaravelWorkerPreset(

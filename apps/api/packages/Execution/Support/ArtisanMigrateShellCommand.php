@@ -6,10 +6,12 @@ namespace App\Packages\Execution\Support;
 
 final class ArtisanMigrateShellCommand
 {
-    public static function forReleasePath(string $releasePath): string
+    public static function forReleasePath(string $releasePath, ?string $phpVersion = null): string
     {
-        return 'cd '.escapeshellarg($releasePath).' && php -r '.escapeshellarg(self::ensureDatabaseScript())
-            .' && php artisan migrate --force --no-interaction';
+        $php = PhpBinary::forVersion($phpVersion);
+
+        return 'cd '.escapeshellarg($releasePath).' && '.$php.' -r '.escapeshellarg(self::ensureDatabaseScript())
+            .' && '.$php.' artisan migrate --force --no-interaction';
     }
 
     /**
