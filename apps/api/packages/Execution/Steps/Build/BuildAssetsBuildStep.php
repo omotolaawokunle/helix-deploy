@@ -9,7 +9,7 @@ use App\Packages\Execution\Steps\BaseBuildStep;
 
 final class BuildAssetsBuildStep extends BaseBuildStep
 {
-    private const TIMEOUT_SECONDS = 90;
+    private const TIMEOUT_SECONDS = 600;
 
     public function name(): string
     {

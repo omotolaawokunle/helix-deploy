@@ -9,7 +9,7 @@ use App\Packages\Execution\Steps\BaseDeploymentStep;
 
 final class BuildAssetsStep extends BaseDeploymentStep
 {
-    private const TIMEOUT_SECONDS = 90;
+    private const TIMEOUT_SECONDS = 600;
 
     public function name(): string
     {
