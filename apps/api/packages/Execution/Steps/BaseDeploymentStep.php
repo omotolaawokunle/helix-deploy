@@ -10,9 +10,7 @@ use App\Packages\SSH\SSHResult;
 
 abstract class BaseDeploymentStep implements DeploymentStepInterface
 {
-    public function rollback(DeploymentContext $ctx): void
-    {
-    }
+    public function rollback(DeploymentContext $ctx): void {}
 
     public function isSkippable(DeploymentContext $ctx): bool
     {
@@ -39,5 +37,16 @@ abstract class BaseDeploymentStep implements DeploymentStepInterface
     protected function shellQuote(string $value): string
     {
         return escapeshellarg($value);
+    }
+
+    /**
+     * True when the release already contains a Vite production build.
+     */
+    protected function hasPrebuiltViteManifest(DeploymentContext $ctx, string $appPath): bool
+    {
+        $manifest = rtrim($appPath, '/').'/public/build/manifest.json';
+        $result = $ctx->ssh->run('test -f '.$this->shellQuote($manifest));
+
+        return $result->exitCode === 0;
     }
 }

@@ -156,6 +156,66 @@ it('install npm deps is skippable when build assets is disabled', function (): v
     expect((new InstallNpmDepsStep)->isSkippable($ctx))->toBeTrue();
 });
 
+it('build assets is skippable when vite manifest is prebuilt', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*public/build/manifest.json*' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    expect((new BuildAssetsStep)->isSkippable($ctx))->toBeTrue();
+});
+
+it('install npm deps is skippable when vite manifest is prebuilt', function (): void {
+    [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*public/build/manifest.json*' => sshSuccess()]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    expect((new InstallNpmDepsStep)->isSkippable($ctx))->toBeTrue();
+});
+
+it('runner build assets is skippable when vite manifest is prebuilt', function (): void {
+    [, , $site, $deployment] = executionFixture(Runtime::PHP);
+    $owner = User::query()->findOrFail($deployment->triggered_by);
+    $runner = BuildRunner::query()->withoutGlobalScope('owned_by_organization')->create([
+        'organization_id' => (string) $deployment->organization_id,
+        'name' => 'prebuilt-runner-'.Str::random(4),
+        'ip_address' => '10.0.0.83',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'status' => BuildRunnerStatus::ONLINE->value,
+        'max_concurrent_builds' => 1,
+        'supported_runtimes' => ['php'],
+        'created_by' => (string) $owner->getKey(),
+    ]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*public/build/manifest.json*' => sshSuccess()]);
+    $ctx = BuildContext::forDeployment($deployment, $site, $runner, $ssh);
+
+    expect((new BuildAssetsBuildStep)->isSkippable($ctx))->toBeTrue();
+});
+
+it('runner install npm is skippable when vite manifest is prebuilt', function (): void {
+    [, , $site, $deployment] = executionFixture(Runtime::PHP);
+    $owner = User::query()->findOrFail($deployment->triggered_by);
+    $runner = BuildRunner::query()->withoutGlobalScope('owned_by_organization')->create([
+        'organization_id' => (string) $deployment->organization_id,
+        'name' => 'prebuilt-npm-runner-'.Str::random(4),
+        'ip_address' => '10.0.0.84',
+        'ssh_port' => 22,
+        'ssh_user' => 'deploy',
+        'status' => BuildRunnerStatus::ONLINE->value,
+        'max_concurrent_builds' => 1,
+        'supported_runtimes' => ['php'],
+        'created_by' => (string) $owner->getKey(),
+    ]);
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, ['*public/build/manifest.json*' => sshSuccess()]);
+    $ctx = BuildContext::forDeployment($deployment, $site, $runner, $ssh);
+
+    expect((new InstallNpmDepsBuildStep)->isSkippable($ctx))->toBeTrue();
+});
+
 it('build assets is skippable when build assets is disabled', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
     $site->forceFill(['build_assets' => false])->save();

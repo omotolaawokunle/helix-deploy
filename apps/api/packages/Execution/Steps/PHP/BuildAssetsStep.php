@@ -31,6 +31,10 @@ final class BuildAssetsStep extends BaseDeploymentStep
             return true;
         }
 
+        if ($this->hasPrebuiltViteManifest($ctx, $ctx->releasePath)) {
+            return true;
+        }
+
         $result = $ctx->ssh->run('test -f '.$this->shellQuote($ctx->releasePath.'/package.json'));
 
         return $result->exitCode !== 0;

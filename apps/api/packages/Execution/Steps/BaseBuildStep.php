@@ -10,9 +10,7 @@ use App\Packages\SSH\SSHResult;
 
 abstract class BaseBuildStep implements BuildStepInterface
 {
-    public function rollback(BuildContext $ctx): void
-    {
-    }
+    public function rollback(BuildContext $ctx): void {}
 
     public function isSkippable(BuildContext $ctx): bool
     {
@@ -39,5 +37,16 @@ abstract class BaseBuildStep implements BuildStepInterface
     protected function workPath(BuildContext $ctx): string
     {
         return rtrim($ctx->buildPath, '/');
+    }
+
+    /**
+     * True when the build workspace already contains a Vite production build.
+     */
+    protected function hasPrebuiltViteManifest(BuildContext $ctx, string $appPath): bool
+    {
+        $manifest = rtrim($appPath, '/').'/public/build/manifest.json';
+        $result = $ctx->ssh->run('test -f '.$this->shellQuote($manifest));
+
+        return $result->exitCode === 0;
     }
 }
