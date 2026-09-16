@@ -29,6 +29,17 @@ export interface ChangePasswordPayload {
   passwordConfirmation: string
 }
 
+export interface ForgotPasswordPayload {
+  email: string
+}
+
+export interface ResetPasswordPayload {
+  email: string
+  token: string
+  password: string
+  passwordConfirmation: string
+}
+
 export interface CreateOrganizationPayload {
   name: string
 }

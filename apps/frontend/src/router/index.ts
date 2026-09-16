@@ -9,6 +9,8 @@ import {
 const guestRouteNames = new Set([
   "login",
   "register",
+  "forgot-password",
+  "reset-password",
   "verify-email",
   "accept-invitation",
 ]);
@@ -139,6 +141,18 @@ const routes: RouteRecordRaw[] = [
     path: "/register",
     name: "register",
     component: () => import("@/features/auth/pages/RegisterPage.vue"),
+    meta: { requiresAuth: false },
+  },
+  {
+    path: "/forgot-password",
+    name: "forgot-password",
+    component: () => import("@/features/auth/pages/ForgotPasswordPage.vue"),
+    meta: { requiresAuth: false },
+  },
+  {
+    path: "/reset-password",
+    name: "reset-password",
+    component: () => import("@/features/auth/pages/ResetPasswordPage.vue"),
     meta: { requiresAuth: false },
   },
   {

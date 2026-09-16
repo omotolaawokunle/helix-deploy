@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Modules\Deployments\Models\Deployment;
+use App\Modules\Auth\Notifications\QueuedResetPassword;
 use App\Modules\Auth\Notifications\QueuedVerifyEmail;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Teams\Enums\TeamRole;
@@ -116,5 +117,10 @@ class User extends Authenticatable implements MustVerifyEmail
     public function sendEmailVerificationNotification(): void
     {
         $this->notify(new QueuedVerifyEmail());
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new QueuedResetPassword($token));
     }
 }

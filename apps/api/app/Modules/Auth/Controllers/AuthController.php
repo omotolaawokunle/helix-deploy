@@ -6,16 +6,22 @@ namespace App\Modules\Auth\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Auth\Actions\ChangePasswordAction;
+use App\Modules\Auth\Actions\ResetPasswordAction;
+use App\Modules\Auth\Actions\SendPasswordResetLinkAction;
 use App\Modules\Auth\Actions\UpdateProfileAction;
 use App\Modules\Auth\Contracts\AuthServiceInterface;
 use App\Modules\Auth\DTOs\ChangePasswordDTO;
+use App\Modules\Auth\DTOs\ForgotPasswordDTO;
 use App\Modules\Auth\DTOs\LoginDTO;
 use App\Modules\Auth\DTOs\RegisterDTO;
+use App\Modules\Auth\DTOs\ResetPasswordDTO;
 use App\Modules\Auth\DTOs\UpdateProfileDTO;
 use App\Modules\Auth\Exceptions\InvalidCredentialsException;
 use App\Modules\Auth\Requests\ChangePasswordRequest;
+use App\Modules\Auth\Requests\ForgotPasswordRequest;
 use App\Modules\Auth\Requests\LoginRequest;
 use App\Modules\Auth\Requests\RegisterRequest;
+use App\Modules\Auth\Requests\ResetPasswordRequest;
 use App\Modules\Auth\Requests\UpdateProfileRequest;
 use App\Modules\Auth\Resources\UserResource;
 use App\Modules\Auth\Resources\UserWithOrgResource;
@@ -89,6 +95,24 @@ class AuthController extends Controller
         abort_unless($user !== null, 401);
 
         $action->execute($user, ChangePasswordDTO::fromRequest($request));
+
+        return response()->json(status: 204);
+    }
+
+    public function forgotPassword(
+        ForgotPasswordRequest $request,
+        SendPasswordResetLinkAction $action,
+    ): JsonResponse {
+        $action->execute(ForgotPasswordDTO::fromRequest($request));
+
+        return response()->json(status: 204);
+    }
+
+    public function resetPassword(
+        ResetPasswordRequest $request,
+        ResetPasswordAction $action,
+    ): JsonResponse {
+        $action->execute(ResetPasswordDTO::fromRequest($request));
 
         return response()->json(status: 204);
     }
