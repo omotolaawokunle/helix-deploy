@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import AuthLayout from '@/components/layout/AuthLayout.vue'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,7 +20,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { useLoginForm } from '@/features/auth/composables/useLoginForm'
 
+const route = useRoute()
 const { authStore, apiError, onSubmit } = useLoginForm()
+
+const showResetSuccess = computed((): boolean => route.query.reset === '1')
 </script>
 
 <template>
@@ -31,6 +35,14 @@ const { authStore, apiError, onSubmit } = useLoginForm()
       </CardHeader>
 
       <CardContent>
+        <p
+          v-if="showResetSuccess"
+          class="mb-4 text-sm text-muted-foreground"
+          data-testid="password-reset-success"
+        >
+          Password updated. Sign in with your new password.
+        </p>
+
         <form class="space-y-4" data-testid="login-form" @submit="onSubmit">
           <FormField v-slot="{ componentField }" name="email">
             <FormItem>
@@ -49,7 +61,16 @@ const { authStore, apiError, onSubmit } = useLoginForm()
 
           <FormField v-slot="{ componentField }" name="password">
             <FormItem>
-              <FormLabel>Password</FormLabel>
+              <div class="flex items-center justify-between gap-2">
+                <FormLabel>Password</FormLabel>
+                <RouterLink
+                  to="/forgot-password"
+                  class="text-xs font-medium text-primary hover:underline"
+                  data-testid="forgot-password-link"
+                >
+                  Forgot password?
+                </RouterLink>
+              </div>
               <FormControl>
                 <Input
                   v-bind="componentField"

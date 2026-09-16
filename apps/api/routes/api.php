@@ -56,8 +56,12 @@ Route::post('/v1/hooks/sites/{webhookToken}', [DeployWebhookController::class, '
 Route::prefix('v1/auth')->middleware('web')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])
+        ->middleware('throttle:6,1');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])
+        ->middleware('throttle:6,1');
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', 'auth.session'])->group(function (): void {
         Route::get('/user', [AuthController::class, 'user']);
         Route::patch('/user', [AuthController::class, 'updateProfile']);
         Route::post('/password', [AuthController::class, 'changePassword']);
@@ -78,7 +82,7 @@ Route::get('/v1/organizations/invitations/accept', InvitationAcceptRedirectContr
     ->middleware(['signed', 'throttle:6,1'])
     ->name('organizations.invitations.accept');
 
-Route::middleware(['web', 'auth:sanctum', 'verified', 'api.token.abilities'])->prefix('v1')->group(function (): void {
+Route::middleware(['web', 'auth:sanctum', 'auth.session', 'verified', 'api.token.abilities'])->prefix('v1')->group(function (): void {
     Route::post('/organizations/invitations/accept', [OrganizationInvitationController::class, 'accept']);
     Route::get('/organizations', [OrganizationController::class, 'index']);
     Route::post('/organizations', [OrganizationController::class, 'store']);

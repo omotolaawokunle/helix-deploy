@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { loginRequest } from '@/features/auth/api'
+import { loginRequest, forgotPasswordRequest, resetPasswordRequest } from '@/features/auth/api'
 
 vi.mock('@/lib/axios', () => ({
   api: {
@@ -32,5 +32,35 @@ describe('auth api', () => {
 
     expect(user.id).toBe('user-1')
     expect(user.emailVerifiedAt).toBeNull()
+  })
+
+  it('posts forgot password after fetching csrf cookie', async () => {
+    vi.mocked(api.post).mockResolvedValue({ data: {} })
+
+    await forgotPasswordRequest({ email: 'user@example.test' })
+
+    expect(api.get).toHaveBeenCalledWith('/sanctum/csrf-cookie')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/auth/forgot-password', {
+      email: 'user@example.test',
+    })
+  })
+
+  it('posts reset password after fetching csrf cookie', async () => {
+    vi.mocked(api.post).mockResolvedValue({ data: {} })
+
+    await resetPasswordRequest({
+      email: 'user@example.test',
+      token: 'token',
+      password: 'new-password-456',
+      passwordConfirmation: 'new-password-456',
+    })
+
+    expect(api.get).toHaveBeenCalledWith('/sanctum/csrf-cookie')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/auth/reset-password', {
+      email: 'user@example.test',
+      token: 'token',
+      password: 'new-password-456',
+      passwordConfirmation: 'new-password-456',
+    })
   })
 })

@@ -1,6 +1,6 @@
 import { api } from '@/lib/axios'
 import type { Organization } from '@/types'
-import type { AuthUser, CreateOrganizationPayload, CreateApiTokenPayload, CreateApiTokenResponse, ApiTokenRecord, ChangePasswordPayload, LoginPayload, RegisterPayload, UpdateProfilePayload } from './types'
+import type { AuthUser, CreateOrganizationPayload, CreateApiTokenPayload, CreateApiTokenResponse, ApiTokenRecord, ChangePasswordPayload, ForgotPasswordPayload, LoginPayload, RegisterPayload, ResetPasswordPayload, UpdateProfilePayload } from './types'
 
 interface ApiResource<T> {
   data: T
@@ -24,6 +24,16 @@ export async function updateProfile(payload: UpdateProfilePayload): Promise<Auth
 
 export async function changePassword(payload: ChangePasswordPayload): Promise<void> {
   await api.post('/api/v1/auth/password', payload)
+}
+
+export async function forgotPasswordRequest(payload: ForgotPasswordPayload): Promise<void> {
+  await api.get('/sanctum/csrf-cookie')
+  await api.post('/api/v1/auth/forgot-password', payload)
+}
+
+export async function resetPasswordRequest(payload: ResetPasswordPayload): Promise<void> {
+  await api.get('/sanctum/csrf-cookie')
+  await api.post('/api/v1/auth/reset-password', payload)
 }
 
 export async function loginRequest(payload: LoginPayload): Promise<AuthUser> {
