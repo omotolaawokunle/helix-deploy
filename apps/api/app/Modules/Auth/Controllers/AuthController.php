@@ -27,6 +27,7 @@ use App\Modules\Auth\Resources\UserResource;
 use App\Modules\Auth\Resources\UserWithOrgResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
@@ -58,14 +59,14 @@ class AuthController extends Controller
         return UserWithOrgResource::make($user);
     }
 
-    public function logout(Request $request): JsonResponse
+    public function logout(Request $request): Response
     {
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return response()->json(status: 204);
+        return response()->noContent();
     }
 
     public function user(Request $request): UserWithOrgResource

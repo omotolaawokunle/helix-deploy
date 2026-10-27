@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
   createOrganization,
+  ensureCsrfCookie,
   fetchAuthUser,
   fetchOrganizations,
   loginRequest,
@@ -109,6 +110,13 @@ export const useAuthStore = defineStore('auth', () => {
       isLoading.value = true
 
       try {
+        try {
+          await ensureCsrfCookie()
+        } catch {
+          // A failed cookie refresh must not look like a signed-out session.
+          // The next mutation retries /sanctum/csrf-cookie after a 419.
+        }
+
         const authUser = await fetchAuthUser()
         await hydrateAuthenticatedUser(authUser)
       } catch {
@@ -141,8 +149,9 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       await logoutRequest()
-    } finally {
       clearAuth()
+      window.location.assign('/login')
+    } finally {
       isLoading.value = false
     }
   }

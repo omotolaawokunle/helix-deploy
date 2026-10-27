@@ -5,6 +5,7 @@ import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { pinia } from '@/stores'
 
 vi.mock('@/features/auth/api', () => ({
+  ensureCsrfCookie: vi.fn().mockResolvedValue(undefined),
   fetchAuthUser: vi.fn(),
   fetchOrganizations: vi.fn().mockResolvedValue([]),
 }))

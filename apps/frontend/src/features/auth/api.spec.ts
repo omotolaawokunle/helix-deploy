@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { loginRequest, forgotPasswordRequest, resetPasswordRequest } from '@/features/auth/api'
+import {
+  ensureCsrfCookie,
+  forgotPasswordRequest,
+  loginRequest,
+  logoutRequest,
+  resetPasswordRequest,
+} from '@/features/auth/api'
 
 vi.mock('@/lib/axios', () => ({
   api: {
@@ -32,6 +38,21 @@ describe('auth api', () => {
 
     expect(user.id).toBe('user-1')
     expect(user.emailVerifiedAt).toBeNull()
+  })
+
+  it('fetches the sanctum csrf cookie', async () => {
+    await ensureCsrfCookie()
+
+    expect(api.get).toHaveBeenCalledWith('/sanctum/csrf-cookie')
+  })
+
+  it('posts logout after fetching csrf cookie', async () => {
+    vi.mocked(api.post).mockResolvedValue({ data: {} })
+
+    await logoutRequest()
+
+    expect(api.get).toHaveBeenCalledWith('/sanctum/csrf-cookie')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/auth/logout')
   })
 
   it('posts forgot password after fetching csrf cookie', async () => {

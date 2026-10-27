@@ -1,10 +1,11 @@
 import { AxiosError } from 'axios'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchAuthUser } from '@/features/auth/api'
+import { ensureCsrfCookie, fetchAuthUser } from '@/features/auth/api'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 
 vi.mock('@/features/auth/api', () => ({
+  ensureCsrfCookie: vi.fn().mockResolvedValue(undefined),
   fetchAuthUser: vi.fn(),
   fetchOrganizations: vi.fn(),
 }))
@@ -26,6 +27,8 @@ describe('useAuthStore init', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(fetchAuthUser).mockReset()
+    vi.mocked(ensureCsrfCookie).mockReset()
+    vi.mocked(ensureCsrfCookie).mockResolvedValue(undefined)
   })
 
   it('marks initialized after a failed bootstrap request without resetting on clearAuth', async () => {
@@ -58,5 +61,34 @@ describe('useAuthStore init', () => {
 
     expect(fetchAuthUser).toHaveBeenCalledTimes(1)
     expect(authStore.isInitialized).toBe(true)
+  })
+
+  it('refreshes the csrf cookie before loading the user', async () => {
+    const order: string[] = []
+
+    vi.mocked(ensureCsrfCookie).mockImplementation(async () => {
+      order.push('csrf')
+    })
+    vi.mocked(fetchAuthUser).mockImplementation(async () => {
+      order.push('user')
+
+      throw unauthenticatedError()
+    })
+
+    await useAuthStore().init()
+
+    expect(order).toEqual(['csrf', 'user'])
+  })
+
+  it('still loads the user when the csrf cookie refresh fails', async () => {
+    vi.mocked(ensureCsrfCookie).mockRejectedValue(new Error('network'))
+    vi.mocked(fetchAuthUser).mockRejectedValue(unauthenticatedError())
+
+    const authStore = useAuthStore()
+
+    await authStore.init()
+
+    expect(fetchAuthUser).toHaveBeenCalledTimes(1)
+    expect(authStore.isAuthenticated).toBe(false)
   })
 })

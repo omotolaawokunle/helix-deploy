@@ -32,6 +32,9 @@ api.interceptors.response.use(
     if (status === 419 && config && !config._retriedAfter419) {
       config._retriedAfter419 = true;
       await api.get("/sanctum/csrf-cookie");
+      if (typeof config.headers.delete === "function") {
+        config.headers.delete("X-XSRF-TOKEN");
+      }
       return api(config);
     }
 

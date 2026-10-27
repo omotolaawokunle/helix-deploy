@@ -11,6 +11,13 @@ abstract class TestCase extends BaseTestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withHeader('Origin', 'http://localhost');
+    }
+
     protected function createOrg(User $user): Organization
     {
         return Organization::query()->make([

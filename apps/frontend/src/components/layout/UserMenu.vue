@@ -26,6 +26,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { toast } from 'vue-sonner'
 import { useTheme } from '@/composables/useTheme'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import type { ThemePreference } from '@/lib/theme'
@@ -58,8 +59,11 @@ const themeLabel = computed(() => {
 })
 
 async function handleLogout(): Promise<void> {
-  await authStore.logout()
-  await router.push('/login')
+  try {
+    await authStore.logout()
+  } catch {
+    toast.error('Unable to log out.')
+  }
 }
 
 async function handleShowSetupGuide(): Promise<void> {

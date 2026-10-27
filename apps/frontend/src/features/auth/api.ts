@@ -10,6 +10,10 @@ function unwrapResource<T>(payload: ApiResource<T>): T {
   return payload.data
 }
 
+export async function ensureCsrfCookie(): Promise<void> {
+  await api.get('/sanctum/csrf-cookie')
+}
+
 export async function fetchAuthUser(): Promise<AuthUser> {
   const response = await api.get<ApiResource<AuthUser>>('/api/v1/auth/user')
 
@@ -51,6 +55,7 @@ export async function registerRequest(payload: RegisterPayload): Promise<AuthUse
 }
 
 export async function logoutRequest(): Promise<void> {
+  await api.get('/sanctum/csrf-cookie')
   await api.post('/api/v1/auth/logout')
 }
 

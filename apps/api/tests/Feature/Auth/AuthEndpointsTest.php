@@ -6,8 +6,10 @@ use App\Models\User;
 use App\Modules\Auth\Notifications\QueuedVerifyEmail;
 use App\Modules\Organizations\Models\Organization;
 use App\Modules\Teams\Enums\TeamRole;
+use Illuminate\Http\Request;
 use Illuminate\Notifications\SendQueuedNotifications;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
 it('creates user organization and pivot record on register', function (): void {
@@ -117,6 +119,48 @@ it('returns user with current organization on login', function (): void {
         ->assertOk()
         ->assertJsonPath('data.id', (string) $user->getKey())
         ->assertJsonPath('data.currentOrganization.id', (string) $organization->getKey());
+});
+
+it('ends the session on logout', function (): void {
+    $organization = Organization::query()->create([
+        'name' => 'Logout Org',
+        'slug' => 'logout-org',
+        'master_key_encrypted' => '{}',
+        'settings' => [],
+    ]);
+    $organization->generateAndStoreMasterKey();
+
+    $user = User::factory()->create([
+        'email' => 'logout@example.test',
+        'password' => 'password-123',
+        'current_organization_id' => (string) $organization->getKey(),
+        'email_verified_at' => now(),
+    ]);
+
+    $organization->users()->attach($user->getKey(), [
+        'role' => TeamRole::OWNER->value,
+    ]);
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => 'logout@example.test',
+        'password' => 'password-123',
+    ])->assertOk();
+
+    $this->postJson('/api/v1/auth/logout')->assertNoContent();
+
+    // The test process reuses guard instances. A browser request starts fresh.
+    $this->app['auth']->forgetGuards();
+
+    $this->getJson('/api/v1/auth/user')->assertUnauthorized();
+});
+
+it('does not stack the web session middleware on api routes', function (): void {
+    $middleware = Route::getRoutes()
+        ->match(Request::create('/api/v1/auth/logout', 'POST'))
+        ->gatherMiddleware();
+
+    expect($middleware)->not->toContain('web')
+        ->and($middleware)->toContain('api');
 });
 
 it('returns unauthorized when login password is wrong', function (): void {

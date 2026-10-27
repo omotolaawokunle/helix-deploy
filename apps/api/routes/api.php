@@ -53,7 +53,7 @@ Route::post('/v1/hooks/sites/{webhookToken}', [DeployWebhookController::class, '
     ->middleware('throttle:120,1')
     ->name('hooks.sites.deploy');
 
-Route::prefix('v1/auth')->middleware('web')->group(function (): void {
+Route::prefix('v1/auth')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])
@@ -82,7 +82,7 @@ Route::get('/v1/organizations/invitations/accept', InvitationAcceptRedirectContr
     ->middleware(['signed', 'throttle:6,1'])
     ->name('organizations.invitations.accept');
 
-Route::middleware(['web', 'auth:sanctum', 'auth.session', 'verified', 'api.token.abilities'])->prefix('v1')->group(function (): void {
+Route::middleware(['auth:sanctum', 'auth.session', 'verified', 'api.token.abilities'])->prefix('v1')->group(function (): void {
     Route::post('/organizations/invitations/accept', [OrganizationInvitationController::class, 'accept']);
     Route::get('/organizations', [OrganizationController::class, 'index']);
     Route::post('/organizations', [OrganizationController::class, 'store']);
