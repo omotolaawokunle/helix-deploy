@@ -79,7 +79,7 @@ it('runs full php deployment pipeline with ordered steps and release activation'
     expect(AuditLog::query()->where('operation', 'env_vars.synced')->exists())->toBeTrue();
 
     $commands = $fake->getExecutedCommands();
-    $composerIndex = findCommandIndex($commands, '*composer install*');
+    $composerIndex = findCommandIndex($commands, '*"$(command -v composer)" install*');
     $symlinkIndex = findCommandIndex($commands, 'sudo ln -sfn *');
 
     expect($composerIndex)->toBeGreaterThan(-1)
@@ -153,7 +153,7 @@ it('leaves later steps pending and skips symlink when a step fails', function ()
     $fake->addSequence('git clone *', sshSuccess());
     $fake->addSequence('git -C * rev-parse HEAD', sshSuccess('deadbeef'));
     $fake->addSequence('git -C * log -1 *', sshSuccess('Deploy commit'));
-    $fake->addSequence('*composer install*', sshFailure('composer failed'));
+    $fake->addSequence('*"$(command -v composer)" install*', sshFailure('composer failed'));
     $fake->addSequence('sudo rm -rf *', sshSuccess(), sshSuccess());
     $fake->addSequence('rm -rf *', sshSuccess(), sshSuccess(), sshSuccess());
 
@@ -265,7 +265,7 @@ function stubDeploymentSsh(string $domain, string $deploymentId): FakeSSHConnect
         'git clone *' => $success(),
         'git -C * rev-parse HEAD' => sshSuccess('deadbeef'),
         'git -C * log -1 *' => sshSuccess('Deploy commit'),
-        '*composer install*' => $success(),
+        '*"$(command -v composer)" install*' => $success(),
         'test -f *' => array_fill(0, 10, sshFailure()),
         'sudo chmod 640 *' => $success(),
         'sudo chown *' => array_fill(0, 8, $success()),

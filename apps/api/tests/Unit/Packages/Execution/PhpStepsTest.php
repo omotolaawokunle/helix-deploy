@@ -30,23 +30,23 @@ it('install composer deps runs composer with the site php binary', function (): 
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
     $site->forceFill(['php_version' => '8.4'])->save();
     $ssh = fakeSsh();
-    queueSshResponses($ssh, ['*composer install*' => sshSuccess()]);
+    queueSshResponses($ssh, ['*"$(command -v composer)" install*' => sshSuccess()]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     (new InstallComposerDepsStep)->run($ctx);
 
-    $ssh->assertCommandExecuted('*php8.4 /usr/bin/composer install --no-dev*');
+    $ssh->assertCommandExecuted('*php8.4 "$(command -v composer)" install --no-dev*');
 });
 
 it('install composer deps defaults to php8.3 when site php version is unset', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP, ['php_version' => null]);
     $ssh = fakeSsh();
-    queueSshResponses($ssh, ['*composer install*' => sshSuccess()]);
+    queueSshResponses($ssh, ['*"$(command -v composer)" install*' => sshSuccess()]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     (new InstallComposerDepsStep)->run($ctx);
 
-    $ssh->assertCommandExecuted('*php8.3 /usr/bin/composer install --no-dev*');
+    $ssh->assertCommandExecuted('*php8.3 "$(command -v composer)" install --no-dev*');
 });
 
 it('runner install composer deps uses the site php binary', function (): void {
@@ -65,12 +65,12 @@ it('runner install composer deps uses the site php binary', function (): void {
         'created_by' => (string) $owner->getKey(),
     ]);
     $ssh = fakeSsh();
-    queueSshResponses($ssh, ['*composer install*' => sshSuccess()]);
+    queueSshResponses($ssh, ['*"$(command -v composer)" install*' => sshSuccess()]);
     $ctx = BuildContext::forDeployment($deployment, $site, $runner, $ssh);
 
     (new InstallComposerDepsBuildStep)->run($ctx);
 
-    $ssh->assertCommandExecuted('*php8.2 /usr/bin/composer install --no-dev*');
+    $ssh->assertCommandExecuted('*php8.2 "$(command -v composer)" install --no-dev*');
 });
 
 it('install npm deps is skippable without package json', function (): void {
@@ -387,7 +387,7 @@ it('restart workers falls back to queue restart without horizon', function (): v
 it('php step failure throws deployment step failed with ssh result', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
     $ssh = fakeSsh();
-    queueSshResponses($ssh, ['*composer install*' => sshFailure('composer error')]);
+    queueSshResponses($ssh, ['*"$(command -v composer)" install*' => sshFailure('composer error')]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     try {

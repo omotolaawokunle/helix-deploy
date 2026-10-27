@@ -24,6 +24,6 @@ final class PhpBinary
 
     public static function composerInstall(Site $site): string
     {
-        return self::forSite($site).' /usr/bin/composer install --no-dev --optimize-autoloader --no-interaction';
+        return self::forSite($site).' "$(command -v composer)" install --no-dev --optimize-autoloader --no-interaction';
     }
 }

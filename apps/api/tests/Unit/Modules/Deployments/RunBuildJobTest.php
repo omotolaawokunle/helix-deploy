@@ -236,7 +236,7 @@ function stubRunnerBuildSsh(string $deploymentId): FakeSSHConnection
     $fake->addSequence('git -C * rev-parse HEAD', sshSuccess('deadbeef'));
     $fake->addSequence('git -C * log -1 *', sshSuccess('Build commit'));
     $fake->addSequence('chmod 600 *', $success());
-    $fake->addSequence('*composer install*', $success());
+    $fake->addSequence('*"$(command -v composer)" install*', $success());
     $fake->addSequence('test -f *', sshFailure());
     $fake->addSequence('test -f *', sshFailure());
     $fake->addSequence('test -f *', $success());
