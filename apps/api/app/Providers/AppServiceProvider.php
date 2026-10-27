@@ -18,10 +18,16 @@ use App\Modules\Sites\Actions\ImportDiscoveredSitesAction;
 use App\Modules\Sites\Services\NginxConfigGenerator;
 use App\Packages\Execution\Contracts\ExecutionRunnerInterface;
 use App\Packages\Execution\DeploymentRunner;
-use App\Modules\Daemons\Contracts\DaemonCreatorInterface;
-use App\Modules\Daemons\Services\DaemonCreator;
+use App\Modules\CronJobs\Actions\AdoptDiscoveredCronJobsAction;
 use App\Modules\CronJobs\Contracts\CronJobCreatorInterface;
+use App\Modules\CronJobs\Contracts\DiscoveredCronImporterInterface;
 use App\Modules\CronJobs\Services\CronJobCreator;
+use App\Modules\Daemons\Actions\AdoptDiscoveredDaemonsAction;
+use App\Modules\Daemons\Contracts\DaemonCreatorInterface;
+use App\Modules\Daemons\Contracts\DiscoveredDaemonImporterInterface;
+use App\Modules\Daemons\Services\DaemonCreator;
+use App\Modules\Sites\Contracts\SiteCurrentPathIndexInterface;
+use App\Modules\Sites\Services\SiteCurrentPathIndex;
 use App\Modules\Daemons\Models\SupervisorProcess;
 use App\Modules\Daemons\Policies\DaemonPolicy;
 use App\Modules\Pipelines\Contracts\PipelineStageHandlerInterface;
@@ -105,6 +111,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(SiteSslProvisionerInterface::class, SiteSslProvisioner::class);
         $this->app->singleton(DaemonCreatorInterface::class, DaemonCreator::class);
         $this->app->singleton(CronJobCreatorInterface::class, CronJobCreator::class);
+        $this->app->singleton(DiscoveredDaemonImporterInterface::class, AdoptDiscoveredDaemonsAction::class);
+        $this->app->singleton(DiscoveredCronImporterInterface::class, AdoptDiscoveredCronJobsAction::class);
+        $this->app->singleton(SiteCurrentPathIndexInterface::class, SiteCurrentPathIndex::class);
         $this->app->singleton(PipelineStageHandlerRegistry::class, function (): PipelineStageHandlerRegistry {
             /** @var list<PipelineStageHandlerInterface> $handlers */
             $handlers = [

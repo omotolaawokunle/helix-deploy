@@ -119,6 +119,7 @@ function mapDaemonSnapshot(
     user: snapshot.user,
     processes: snapshot.processes,
     status: snapshot.status,
+    siteId: snapshot.siteId ?? null,
     createdAt: snapshot.createdAt ?? '',
     updatedAt: snapshot.updatedAt ?? '',
   }
@@ -354,6 +355,7 @@ void loadDaemons()
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Command</TableHead>
+            <TableHead>Directory</TableHead>
             <TableHead>Processes</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>User</TableHead>
@@ -364,7 +366,7 @@ void loadDaemons()
         </TableHeader>
         <TableBody>
           <TableRow v-if="isLoading">
-            <TableCell colspan="6" class="text-muted-foreground">
+            <TableCell colspan="7" class="text-muted-foreground">
               Loading…
             </TableCell>
           </TableRow>
@@ -385,6 +387,9 @@ void loadDaemons()
             </TableCell>
             <TableCell class="font-mono text-xs text-muted-foreground">
               {{ truncateCommand(daemon.command) }}
+            </TableCell>
+            <TableCell class="max-w-48 truncate font-mono text-xs text-muted-foreground">
+              {{ daemon.directory }}
             </TableCell>
             <TableCell>{{ daemon.processes }}</TableCell>
             <TableCell>

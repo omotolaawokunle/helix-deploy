@@ -310,6 +310,8 @@ export interface CronJobRecord {
   command: string
   user: string
   active: boolean
+  external: boolean
+  siteId: string | null
   description: string
   lastRunAt: string | null
   createdAt: string
@@ -326,6 +328,7 @@ export interface DaemonRecord {
   user: string
   processes: number
   status: DaemonStatus | string
+  siteId: string | null
   createdAt: string
   updatedAt: string
 }

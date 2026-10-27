@@ -20,4 +20,6 @@ interface CronJobCreatorInterface
     ): CronJob;
 
     public function existsByCommand(string $serverId, string $organizationId, string $command): bool;
+
+    public function matchesScheduler(string $serverId, string $organizationId, string $directory): bool;
 }

@@ -40,9 +40,12 @@ it('runs the expected ssh command sequence when creating a daemon', function ():
     $ssh = new FakeSSHConnection();
     $ssh->addResponse('sudo cp */tmp/helix-supervisor-worker.conf*', new SSHResult('sudo cp', 0, '', '', 0.0));
     $ssh->addResponse('sudo supervisorctl reread && sudo supervisorctl update', new SSHResult('sudo supervisorctl reread && sudo supervisorctl update', 0, '', '', 0.0));
-    $ssh->addResponse("sudo supervisorctl start 'worker:*'", new SSHResult('sudo supervisorctl start', 0, '', '', 0.0));
     $ssh->addResponse(
-        "sudo supervisorctl status 'worker:*'",
+        "sudo supervisorctl start 'worker:*' || sudo supervisorctl start 'worker'",
+        new SSHResult('sudo supervisorctl start', 0, '', '', 0.0),
+    );
+    $ssh->addResponse(
+        "sudo supervisorctl status 'worker:*' || sudo supervisorctl status 'worker'",
         new SSHResult('sudo supervisorctl status', 0, 'worker:worker_00 RUNNING pid 1, uptime 0:00:01', '', 0.0),
     );
 
@@ -66,8 +69,8 @@ it('runs the expected ssh command sequence when creating a daemon', function ():
 
     $ssh->assertCommandExecuted('sudo cp */tmp/helix-supervisor-worker.conf*');
     $ssh->assertCommandExecuted('sudo supervisorctl reread && sudo supervisorctl update');
-    $ssh->assertCommandExecuted("sudo supervisorctl start 'worker:*'");
-    $ssh->assertCommandExecuted("sudo supervisorctl status 'worker:*'");
+    $ssh->assertCommandExecuted("sudo supervisorctl start 'worker:*' || sudo supervisorctl start 'worker'");
+    $ssh->assertCommandExecuted("sudo supervisorctl status 'worker:*' || sudo supervisorctl status 'worker'");
 });
 
 it('marks daemon running when start output is empty but status reports RUNNING', function (): void {
@@ -108,9 +111,12 @@ it('marks daemon running when start output is empty but status reports RUNNING',
     ]);
 
     $ssh = new FakeSSHConnection();
-    $ssh->addResponse("sudo supervisorctl start 'horizon:*'", new SSHResult('start', 0, '', '', 0.0));
     $ssh->addResponse(
-        "sudo supervisorctl status 'horizon:*'",
+        "sudo supervisorctl start 'horizon:*' || sudo supervisorctl start 'horizon'",
+        new SSHResult('start', 0, '', '', 0.0),
+    );
+    $ssh->addResponse(
+        "sudo supervisorctl status 'horizon:*' || sudo supervisorctl status 'horizon'",
         new SSHResult('status', 0, 'horizon:horizon_00   RUNNING   pid 9, uptime 0:01:00', '', 0.0),
     );
 

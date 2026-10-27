@@ -30,6 +30,8 @@ class CronJob extends Model
         'command',
         'user',
         'active',
+        'external',
+        'site_id',
         'last_run_at',
         'created_by',
     ];
@@ -41,6 +43,7 @@ class CronJob extends Model
     {
         return [
             'active' => 'boolean',
+            'external' => 'boolean',
             'last_run_at' => 'datetime',
         ];
     }

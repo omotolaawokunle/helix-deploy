@@ -105,6 +105,7 @@ class DaemonChanged implements ShouldBroadcastNow
             'user' => $daemon->user,
             'processes' => $daemon->processes,
             'status' => $daemon->status->value,
+            'siteId' => $daemon->site_id,
             'createdAt' => $daemon->created_at?->toIso8601String(),
             'updatedAt' => $daemon->updated_at?->toIso8601String(),
         ];

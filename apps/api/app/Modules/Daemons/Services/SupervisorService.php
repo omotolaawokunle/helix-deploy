@@ -43,7 +43,7 @@ class SupervisorService
             $this->installConfig($ssh, $config, $configPath, $dto->name);
             $ssh->run('sudo supervisorctl reread && sudo supervisorctl update')->throw();
             // autostart may already have started it; ignore start output and read real status
-            $ssh->run('sudo supervisorctl start '.$this->programTarget($dto->name));
+            $ssh->run($this->supervisorCommand('start', $dto->name));
             $this->syncStatus($daemon, $ssh);
         } catch (\Throwable $e) {
             $daemon->delete();
@@ -65,7 +65,7 @@ class SupervisorService
 
     public function restart(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $ssh->run('sudo supervisorctl restart '.$this->programTarget($daemon->name));
+        $ssh->run($this->supervisorCommand('restart', $daemon->name));
         $this->syncStatus($daemon, $ssh);
 
         AuditLog::record(
@@ -79,7 +79,7 @@ class SupervisorService
 
     public function start(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $ssh->run('sudo supervisorctl start '.$this->programTarget($daemon->name));
+        $ssh->run($this->supervisorCommand('start', $daemon->name));
         $this->syncStatus($daemon, $ssh);
 
         AuditLog::record(
@@ -93,7 +93,7 @@ class SupervisorService
 
     public function stop(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $ssh->run('sudo supervisorctl stop '.$this->programTarget($daemon->name));
+        $ssh->run($this->supervisorCommand('stop', $daemon->name));
         $this->syncStatus($daemon, $ssh);
 
         AuditLog::record(
@@ -116,7 +116,7 @@ class SupervisorService
 
     public function delete(SupervisorProcess $daemon, SSHConnectionInterface $ssh): void
     {
-        $ssh->run('sudo supervisorctl stop '.$this->programTarget($daemon->name));
+        $ssh->run($this->supervisorCommand('stop', $daemon->name));
         $configPath = $daemon->config_path ?? '/etc/supervisor/conf.d/'.$daemon->name.'.conf';
         $ssh->run('sudo rm -f '.escapeshellarg($configPath));
         $ssh->run('sudo supervisorctl reread && sudo supervisorctl update')->throw();
@@ -135,7 +135,7 @@ class SupervisorService
 
     public function syncStatus(SupervisorProcess $daemon, SSHConnectionInterface $ssh): SupervisorProcess
     {
-        $result = $ssh->run('sudo supervisorctl status '.$this->programTarget($daemon->name));
+        $result = $ssh->run($this->supervisorCommand('status', $daemon->name));
         $daemon->forceFill(['status' => $this->parseStatus($result)])->save();
 
         return $daemon->refresh();
@@ -161,9 +161,18 @@ class SupervisorService
         ))->throw();
     }
 
-    private function programTarget(string $name): string
+    private function supervisorCommand(string $action, string $name): string
     {
-        return escapeshellarg($name.':*');
+        $group = escapeshellarg($name.':*');
+        $process = escapeshellarg($name);
+
+        return sprintf(
+            'sudo supervisorctl %s %s || sudo supervisorctl %s %s',
+            $action,
+            $group,
+            $action,
+            $process,
+        );
     }
 
     private function parseStatus(SSHResult $result): DaemonStatus

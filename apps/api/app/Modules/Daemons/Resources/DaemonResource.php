@@ -29,6 +29,7 @@ class DaemonResource extends JsonResource
             'processes' => $this->processes,
             'status' => $this->status->value,
             'configPath' => $this->config_path,
+            'siteId' => $this->site_id,
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];

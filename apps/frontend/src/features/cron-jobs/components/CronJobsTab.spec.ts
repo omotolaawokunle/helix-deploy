@@ -84,3 +84,35 @@ describe('CronJobsTab expression description', () => {
     expect(document.body.querySelector('[data-testid="cron-preset-select"]')).not.toBeNull()
   })
 })
+
+describe('CronJobsTab discovered jobs', () => {
+  it('shows server crontab jobs without edit controls', async () => {
+    const { fetchCronJobs } = await import('@/features/cron-jobs/api')
+    vi.mocked(fetchCronJobs).mockResolvedValueOnce([{
+      id: 'cron-1',
+      serverId: 'server-1',
+      organizationId: 'org-1',
+      expression: '* * * * *',
+      command: 'cd /var/www/live/current && php artisan schedule:run',
+      user: 'root',
+      active: true,
+      external: true,
+      siteId: 'site-1',
+      description: 'Scheduled as `* * * * *`',
+      lastRunAt: null,
+      createdAt: '2026-10-27T00:00:00Z',
+      updatedAt: '2026-10-27T00:00:00Z',
+    }])
+
+    mount(CronJobsTab, {
+      props: { serverId: 'server-1' },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(document.body.textContent).toContain('Server crontab')
+    const expression = document.body.querySelector('[data-testid="cron-expression-input"]') as HTMLInputElement
+    expect(expression.disabled).toBe(true)
+  })
+})

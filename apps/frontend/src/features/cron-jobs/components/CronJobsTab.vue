@@ -265,17 +265,30 @@ void loadCronJobs()
                 v-model="editingRows[job.id].expression"
                 class="font-mono text-xs"
                 data-testid="cron-expression-input"
+                :disabled="job.external"
               />
             </TableCell>
             <TableCell class="text-sm text-muted-foreground">
               {{ job.description }}
             </TableCell>
             <TableCell>
-              <Input v-model="editingRows[job.id].command" class="font-mono text-xs" />
+              <Input
+                v-model="editingRows[job.id].command"
+                class="font-mono text-xs"
+                :disabled="job.external"
+              />
             </TableCell>
             <TableCell>{{ job.user }}</TableCell>
             <TableCell>
+              <span
+                v-if="job.external"
+                class="text-xs text-muted-foreground"
+                data-testid="cron-server-crontab"
+              >
+                Server crontab
+              </span>
               <Button
+                v-else
                 type="button"
                 size="sm"
                 :variant="job.active ? 'default' : 'outline'"
@@ -285,7 +298,13 @@ void loadCronJobs()
               </Button>
             </TableCell>
             <TableCell class="text-right">
-              <Button type="button" size="sm" variant="ghost" @click="saveInline(job.id)">
+              <Button
+                v-if="!job.external"
+                type="button"
+                size="sm"
+                variant="ghost"
+                @click="saveInline(job.id)"
+              >
                 Save
               </Button>
             </TableCell>

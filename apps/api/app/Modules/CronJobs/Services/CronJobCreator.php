@@ -44,4 +44,33 @@ final class CronJobCreator implements CronJobCreatorInterface
             ->where('command', $command)
             ->exists();
     }
+
+    public function matchesScheduler(string $serverId, string $organizationId, string $directory): bool
+    {
+        $directory = rtrim($directory, '/');
+
+        if ($directory === '') {
+            return false;
+        }
+
+        $jobs = CronJob::query()
+            ->withoutGlobalScope('owned_by_organization')
+            ->where('server_id', $serverId)
+            ->where('organization_id', $organizationId)
+            ->get();
+
+        foreach ($jobs as $job) {
+            $command = (string) $job->command;
+
+            if (! str_contains($command, 'schedule:run')) {
+                continue;
+            }
+
+            if (str_contains($command, $directory.'/') || str_contains($command, $directory.' ')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

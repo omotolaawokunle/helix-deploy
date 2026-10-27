@@ -48,7 +48,7 @@ class CronService
         ];
 
         foreach ($jobs as $job) {
-            if (! $job->active) {
+            if (! $job->active || $job->external) {
                 continue;
             }
 
@@ -75,6 +75,7 @@ class CronService
             ->where('server_id', (string) $server->getKey())
             ->where('organization_id', (string) $server->organization_id)
             ->where('active', true)
+            ->where('external', false)
             ->count();
 
         $remotePath = $this->cronFilePath($server);

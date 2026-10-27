@@ -11,4 +11,12 @@ interface DaemonCreatorInterface
     public function queueCreate(string $serverId, string $actorId, CreateDaemonDTO $dto): void;
 
     public function existsByName(string $serverId, string $organizationId, string $name): bool;
+
+    public function matchingDaemonName(
+        string $serverId,
+        string $organizationId,
+        string $name,
+        string $directory,
+        string $commandFragment,
+    ): ?string;
 }

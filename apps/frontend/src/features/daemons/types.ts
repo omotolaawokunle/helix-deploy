@@ -25,6 +25,7 @@ export interface DaemonChangedPayload {
     user: string
     processes: number
     status: string
+    siteId?: string | null
     createdAt: string | null
     updatedAt: string | null
   } | null

@@ -50,9 +50,21 @@ class ServerInventoryIntrospector implements ServerInventoryIntrospectorInterfac
 
         $serviceKeys = [];
         $sites = [];
+        $processLines = [];
 
         for ($index = $startIndex + 1; $index < $endIndex; $index++) {
             $line = $lines[$index];
+
+            if (
+                str_starts_with($line, 'DAEMON:')
+                || str_starts_with($line, 'DSTAT:')
+                || str_starts_with($line, 'CRON:')
+                || str_starts_with($line, 'CROND:')
+            ) {
+                $processLines[] = $line;
+
+                continue;
+            }
 
             if (str_starts_with($line, 'SVC:')) {
                 $binary = substr($line, 4);
@@ -99,9 +111,13 @@ class ServerInventoryIntrospector implements ServerInventoryIntrospectorInterfac
             );
         }
 
+        $processes = (new ServerProcessInventoryParser())->parse($processLines);
+
         return new ServerInventorySnapshot(
             serviceKeys: $serviceKeys,
             sites: $this->deduplicateSites($sites),
+            daemons: $processes['daemons'],
+            crons: $processes['crons'],
         );
     }
 
@@ -130,6 +146,66 @@ if [ -d /etc/nginx/sites-enabled ]; then
     [ -z "$domain" ] && domain="$base"
     [ -z "$root_dir" ] && root_dir="/var/www/$domain"
     echo "SITE:$domain|$root_dir|$runtime"
+  done
+fi
+if [ -d /etc/supervisor/conf.d ]; then
+  for conf in /etc/supervisor/conf.d/*.conf; do
+    [ -f "$conf" ] || continue
+    sudo cat "$conf" 2>/dev/null | {
+      d_name=""
+      d_command=""
+      d_directory=""
+      d_user="www-data"
+      d_numprocs="1"
+      d_file="$conf"
+      emit_daemon() {
+        [ -n "$d_name" ] || return 0
+        echo "DAEMON:$(printf '%s' "$d_name" | base64 | tr -d '\n')|$(printf '%s' "$d_command" | base64 | tr -d '\n')|$(printf '%s' "$d_directory" | base64 | tr -d '\n')|$(printf '%s' "$d_user" | base64 | tr -d '\n')|$(printf '%s' "$d_numprocs" | base64 | tr -d '\n')|$(printf '%s' "$d_file" | base64 | tr -d '\n')"
+      }
+      while IFS= read -r line || [ -n "$line" ]; do
+        line=$(printf '%s' "$line" | sed -E 's/^[[:space:]]+//;s/[[:space:]]+$//')
+        case "$line" in
+          \[program:*)
+            emit_daemon
+            d_name=$(printf '%s' "$line" | sed -E 's/^\[program:([^]]+)\].*/\1/')
+            d_command=""
+            d_directory=""
+            d_user="www-data"
+            d_numprocs="1"
+            ;;
+          command=*) d_command=${line#command=} ;;
+          directory=*) d_directory=${line#directory=} ;;
+          user=*) d_user=${line#user=} ;;
+          numprocs=*) d_numprocs=${line#numprocs=} ;;
+        esac
+      done
+      emit_daemon
+    }
+  done
+fi
+sudo supervisorctl status 2>/dev/null | while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  echo "DSTAT:$(printf '%s' "$line" | base64 | tr -d '\n')"
+done
+dump_user_cron() {
+  cuser="$1"
+  sudo crontab -l -u "$cuser" 2>/dev/null | while IFS= read -r line; do
+    echo "CRON:$(printf '%s' "$cuser" | base64 | tr -d '\n')|$(printf '%s' "$line" | base64 | tr -d '\n')"
+  done || true
+}
+dump_user_cron root
+dump_user_cron www-data
+dump_user_cron deploy
+if [ -d /etc/cron.d ]; then
+  for cronfile in /etc/cron.d/*; do
+    [ -f "$cronfile" ] || continue
+    base=$(basename "$cronfile")
+    case "$base" in
+      helix-*) continue ;;
+    esac
+    sudo cat "$cronfile" 2>/dev/null | while IFS= read -r line; do
+      echo "CROND:$(printf '%s' "$line" | base64 | tr -d '\n')"
+    done || true
   done
 fi
 echo "__HELIX_END__"

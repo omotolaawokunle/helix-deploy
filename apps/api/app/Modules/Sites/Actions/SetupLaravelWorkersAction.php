@@ -42,19 +42,25 @@ final class SetupLaravelWorkersAction
         $serverId = (string) $server->getKey();
         $organizationId = (string) $server->organization_id;
 
-        $daemonExists = $this->daemonCreator->existsByName(
+        $daemonName = $this->daemonCreator->matchingDaemonName(
             $serverId,
             $organizationId,
             $preset->daemonName,
+            $preset->daemonDirectory,
+            $this->commandFragment($workerType),
         );
 
         $cronExists = $this->cronJobCreator->existsByCommand(
             $serverId,
             $organizationId,
             $preset->cronCommand,
+        ) || $this->cronJobCreator->matchesScheduler(
+            $serverId,
+            $organizationId,
+            $preset->daemonDirectory,
         );
 
-        if ($daemonExists && $cronExists) {
+        if ($daemonName !== null && $cronExists) {
             // Heal cases where the DB row exists but the on-server crontab sync failed.
             SyncCronJobsJob::dispatch($serverId);
 
@@ -62,12 +68,12 @@ final class SetupLaravelWorkersAction
                 siteId: (string) $site->getKey(),
                 reason: sprintf(
                     'Laravel workers are already configured (daemon [%s] and scheduler cron). Check the server Daemons and Cron tabs.',
-                    $preset->daemonName,
+                    $daemonName,
                 ),
             );
         }
 
-        if (! $daemonExists) {
+        if ($daemonName === null) {
             $this->daemonCreator->queueCreate(
                 serverId: $serverId,
                 actorId: (string) $actor->getKey(),
@@ -101,11 +107,19 @@ final class SetupLaravelWorkersAction
                 'site_id' => (string) $site->getKey(),
                 'server_id' => $serverId,
                 'worker_type' => $workerType->value,
-                'daemon_name' => $preset->daemonName,
+                'daemon_name' => $daemonName ?? $preset->daemonName,
                 'cron_command' => $preset->cronCommand,
-                'daemon_created' => ! $daemonExists,
+                'daemon_created' => $daemonName === null,
                 'cron_created' => ! $cronExists,
             ],
         );
+    }
+
+    private function commandFragment(LaravelWorkerType $workerType): string
+    {
+        return match ($workerType) {
+            LaravelWorkerType::HORIZON => 'horizon',
+            LaravelWorkerType::QUEUE => 'queue:work',
+        };
     }
 }

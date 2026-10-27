@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\Servers\Actions;
 
 use App\Modules\Audit\Models\AuditLog;
+use App\Modules\CronJobs\Contracts\DiscoveredCronImporterInterface;
+use App\Modules\Daemons\Contracts\DiscoveredDaemonImporterInterface;
 use App\Modules\Servers\Contracts\ServerInventoryIntrospectorInterface;
 use App\Modules\Servers\Contracts\ServerServiceManagerInterface;
 use App\Modules\Servers\DTOs\ServerInventorySnapshot;
 use App\Modules\Servers\Events\ServerInventoryDiscovered;
 use App\Modules\Servers\Models\Server;
-use App\Modules\Sites\Contracts\DiscoveredSiteImporterInterface;
 use App\Modules\Servers\Services\InstalledServiceRegistry;
+use App\Modules\Sites\Contracts\DiscoveredSiteImporterInterface;
+use App\Modules\Sites\Contracts\SiteCurrentPathIndexInterface;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
 
 class SyncServerInventoryAction
@@ -19,6 +22,9 @@ class SyncServerInventoryAction
     public function __construct(
         private readonly ServerInventoryIntrospectorInterface $introspector,
         private readonly DiscoveredSiteImporterInterface $discoveredSiteImporter,
+        private readonly SiteCurrentPathIndexInterface $siteCurrentPaths,
+        private readonly DiscoveredDaemonImporterInterface $discoveredDaemonImporter,
+        private readonly DiscoveredCronImporterInterface $discoveredCronImporter,
         private readonly InstalledServiceRegistry $serviceRegistry,
         private readonly ServerServiceManagerInterface $serviceManager,
     ) {
@@ -38,6 +44,12 @@ class SyncServerInventoryAction
         $installedServices = $this->buildInstalledServices($server, $snapshot);
         $installedServices = $this->attachServiceStatuses($server, $installedServices, $connection);
         $siteImport = $this->discoveredSiteImporter->import($server, $snapshot->sites);
+        $sitePaths = $this->siteCurrentPaths->forServer(
+            (string) $server->getKey(),
+            (string) $server->organization_id,
+        );
+        $daemonImport = $this->discoveredDaemonImporter->import($server, $snapshot->daemons, $sitePaths);
+        $cronImport = $this->discoveredCronImporter->import($server, $snapshot->crons, $sitePaths);
 
         $beforeServices = (array) $server->installed_services;
 
@@ -60,6 +72,8 @@ class SyncServerInventoryAction
                 'sitesCreated' => $siteImport['created'],
                 'sitesUpdated' => $siteImport['updated'],
                 'discoveredSiteCount' => count($snapshot->sites),
+                'daemonsCreated' => $daemonImport['created'],
+                'cronsCreated' => $cronImport['created'],
             ],
         );
 

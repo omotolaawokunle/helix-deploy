@@ -26,6 +26,8 @@ class CronJobResource extends JsonResource
             'command' => $this->command,
             'user' => $this->user,
             'active' => $this->active,
+            'external' => (bool) $this->external,
+            'siteId' => $this->site_id,
             'description' => app(\App\Modules\CronJobs\Services\CronService::class)->describe($this->expression),
             'lastRunAt' => $this->last_run_at?->toIso8601String(),
             'createdAt' => $this->created_at?->toIso8601String(),

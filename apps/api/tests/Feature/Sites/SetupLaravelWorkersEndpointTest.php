@@ -107,6 +107,50 @@ it('returns 409 when daemon and scheduler cron already exist', function (): void
     Queue::assertNotPushed(RunDaemonOperationJob::class);
 });
 
+it('treats an adopted horizon daemon and server crontab as already configured', function (): void {
+    Queue::fake();
+
+    [$site, $owner] = laravelWorkersEndpointFixture();
+
+    SupervisorProcess::query()->withoutGlobalScope('owned_by_organization')->create([
+        'server_id' => (string) $site->server_id,
+        'organization_id' => (string) $site->organization_id,
+        'site_id' => (string) $site->getKey(),
+        'name' => 'laravel_horizon',
+        'command' => '/usr/bin/php /var/www/example.test/current/artisan horizon --no-interaction',
+        'directory' => '/var/www/example.test/current',
+        'user' => 'deploy',
+        'processes' => 1,
+        'status' => 'running',
+        'config_path' => '/etc/supervisor/conf.d/horizon.conf',
+        'created_by' => (string) $owner->getKey(),
+    ]);
+
+    CronJob::query()->create([
+        'server_id' => (string) $site->server_id,
+        'organization_id' => (string) $site->organization_id,
+        'site_id' => (string) $site->getKey(),
+        'expression' => '* * * * *',
+        'command' => 'cd /var/www/example.test/current && php artisan schedule:run >> /dev/null 2>&1',
+        'user' => 'root',
+        'active' => true,
+        'external' => true,
+        'created_by' => (string) $owner->getKey(),
+    ]);
+
+    $this->actingAs($owner)
+        ->postJson("/api/v1/sites/{$site->id}/laravel-workers", [
+            'workerType' => 'horizon',
+        ])
+        ->assertStatus(409)
+        ->assertJsonPath(
+            'message',
+            'Laravel workers are already configured (daemon [laravel_horizon] and scheduler cron). Check the server Daemons and Cron tabs.',
+        );
+
+    Queue::assertNotPushed(RunDaemonOperationJob::class);
+});
+
 it('creates missing scheduler cron when daemon already exists', function (): void {
     Queue::fake();
 

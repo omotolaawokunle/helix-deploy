@@ -34,6 +34,7 @@ class SupervisorProcess extends Model
         'processes',
         'status',
         'config_path',
+        'site_id',
         'created_by',
     ];
 
