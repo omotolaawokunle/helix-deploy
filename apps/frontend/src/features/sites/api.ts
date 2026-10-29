@@ -191,7 +191,7 @@ export async function deleteSite(siteId: string): Promise<void> {
   await api.delete(`/api/v1/sites/${siteId}`)
 }
 
-export type LaravelWorkerType = 'horizon' | 'queue'
+export type LaravelWorkerType = 'horizon' | 'queue' | 'reverb'
 
 export async function setupLaravelWorkers(
   siteId: string,

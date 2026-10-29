@@ -4,6 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import ConfirmDestructiveDialog from '@/components/common/ConfirmDestructiveDialog.vue'
 import ProductionWarningBanner from '@/components/common/ProductionWarningBanner.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,6 +29,7 @@ import {
 import { useActiveOrg } from '@/composables/useActiveOrg'
 import { useAuthStore } from '@/features/auth/stores/useAuthStore'
 import { fetchBuildRunners } from '@/features/build-runners/api'
+import { fetchDaemons, restartDaemon } from '@/features/daemons/api'
 import BuildRunnerRuntimeWarningAlert from '@/features/build-runners/components/BuildRunnerRuntimeWarningAlert.vue'
 import { evaluateBuildRunnerRuntimeCompatibility } from '@/features/build-runners/lib/buildRunnerRuntimeCompatibility'
 import type { BuildRunner } from '@/features/build-runners/types'
@@ -51,8 +53,9 @@ import {
   EXTERNAL_BUILD_STRATEGY_V2_MESSAGE,
   SELECTABLE_SITE_BUILD_STRATEGY_OPTIONS,
 } from '@/features/sites/constants'
+import { currentPathFromWebroot } from '@/features/laravel-presets/presets'
 import { PHP_VERSIONS } from '@/features/servers/types'
-import type { DockerBuildMode, GitProviderType, Site, SiteBuildStrategy, SiteDeployMode } from '@/types'
+import type { DaemonRecord, DockerBuildMode, GitProviderType, Site, SiteBuildStrategy, SiteDeployMode } from '@/types'
 
 interface Props {
   site: Site
@@ -114,6 +117,8 @@ const isRotateSecretDialogOpen = ref(false)
 const isWorkersSetupOpen = ref(false)
 const isSettingUpWorkers = ref(false)
 const workerType = ref<LaravelWorkerType>('horizon')
+const siteDaemons = ref<DaemonRecord[]>([])
+const restartingDaemonIds = ref<string[]>([])
 
 const providerOptions: Array<{ value: GitProviderType; label: string }> = [
   { value: 'github', label: 'GitHub' },
@@ -251,12 +256,66 @@ watch(
   { immediate: true },
 )
 
+const siteWorkers = computed(() => {
+  const currentPath = currentPathFromWebroot(props.site.webroot)
+
+  return siteDaemons.value.filter((daemon) => {
+    if (!isLaravelWorkerCommand(daemon.command)) {
+      return false
+    }
+
+    if (daemon.siteId === props.site.id) {
+      return true
+    }
+
+    const directory = daemon.directory ?? ''
+
+    return directory === currentPath || daemon.command.includes(currentPath)
+  })
+})
+
 onMounted(() => {
   void Promise.all([
     loadPipelines(),
     refreshGitMetadata(),
+    loadSiteWorkers(),
   ])
 })
+
+function isLaravelWorkerCommand(command: string): boolean {
+  return /artisan\s+(horizon|queue:work|reverb:start)(?:\s|$)/.test(command)
+}
+
+async function loadSiteWorkers(): Promise<void> {
+  if (!isPhpRuntimeSite.value) {
+    siteDaemons.value = []
+
+    return
+  }
+
+  try {
+    siteDaemons.value = await fetchDaemons(props.site.serverId)
+  } catch {
+    siteDaemons.value = []
+  }
+}
+
+async function handleRestartWorker(daemon: DaemonRecord): Promise<void> {
+  if (restartingDaemonIds.value.includes(daemon.id)) {
+    return
+  }
+
+  restartingDaemonIds.value = [...restartingDaemonIds.value, daemon.id]
+
+  try {
+    await restartDaemon(props.site.serverId, daemon.id)
+    toast.success(`Restart queued for ${daemon.name}.`)
+  } catch {
+    toast.error(`Unable to restart ${daemon.name}.`)
+  } finally {
+    restartingDaemonIds.value = restartingDaemonIds.value.filter(id => id !== daemon.id)
+  }
+}
 
 async function loadBuildRunners(): Promise<void> {
   const activeOrgId = orgId.value
@@ -983,9 +1042,45 @@ async function handleDelete(): Promise<void> {
               Laravel workers
             </h3>
             <p class="text-sm text-muted-foreground">
-              Create a supervised queue process and the scheduler cron for this site on its server.
+              Restart Horizon, queue, and Reverb processes already running for this site, or add one that is missing.
             </p>
           </div>
+          <ul
+            v-if="siteWorkers.length > 0"
+            class="divide-y divide-border rounded-md border border-border"
+            data-testid="site-workers-list"
+          >
+            <li
+              v-for="daemon in siteWorkers"
+              :key="daemon.id"
+              class="flex items-center justify-between gap-3 px-3 py-2"
+            >
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium">
+                  {{ daemon.name }}
+                </p>
+                <p class="truncate font-mono text-xs text-muted-foreground">
+                  {{ daemon.command }}
+                </p>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <StatusBadge :status="daemon.status" type="daemon" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  :disabled="restartingDaemonIds.includes(daemon.id)"
+                  :data-testid="`restart-worker-${daemon.id}`"
+                  @click="handleRestartWorker(daemon)"
+                >
+                  Restart
+                </Button>
+              </div>
+            </li>
+          </ul>
+          <p v-else class="text-sm text-muted-foreground" data-testid="site-workers-empty">
+            No Horizon, queue, or Reverb workers are linked to this site yet.
+          </p>
           <div class="flex flex-wrap items-center gap-3">
             <Button
               type="button"
@@ -1138,7 +1233,7 @@ async function handleDelete(): Promise<void> {
         <SheetHeader>
           <SheetTitle>Set up Laravel workers</SheetTitle>
           <SheetDescription>
-            Creates a supervised queue process and the Laravel scheduler cron on this site's server.
+            Creates a supervised Horizon, queue, or Reverb process and the Laravel scheduler cron on this site's server.
           </SheetDescription>
         </SheetHeader>
         <SheetBody class="space-y-4">
@@ -1155,11 +1250,15 @@ async function handleDelete(): Promise<void> {
                 <SelectItem value="queue">
                   Queue worker
                 </SelectItem>
+                <SelectItem value="reverb">
+                  Reverb
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <p class="text-sm text-muted-foreground">
-            Horizon and queue workers should not run together for the same app. The scheduler cron runs every minute via
+            Horizon and a queue worker should not run together. Reverb can run alongside either one.
+            The scheduler cron runs every minute via
             <code class="text-xs">schedule:run</code>.
           </p>
         </SheetBody>

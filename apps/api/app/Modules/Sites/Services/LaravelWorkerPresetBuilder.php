@@ -24,6 +24,7 @@ final class LaravelWorkerPresetBuilder
         $daemonName = match ($workerType) {
             LaravelWorkerType::HORIZON => $slug.'-horizon',
             LaravelWorkerType::QUEUE => $slug.'-queue',
+            LaravelWorkerType::REVERB => $slug.'-reverb',
         };
 
         $php = PhpBinary::forSite($site);
@@ -31,6 +32,7 @@ final class LaravelWorkerPresetBuilder
         $daemonCommand = match ($workerType) {
             LaravelWorkerType::HORIZON => $php.' artisan horizon',
             LaravelWorkerType::QUEUE => $php.' artisan queue:work --sleep=3 --tries=3 --max-time=3600',
+            LaravelWorkerType::REVERB => $php.' artisan reverb:start',
         };
 
         $cronCommand = sprintf(

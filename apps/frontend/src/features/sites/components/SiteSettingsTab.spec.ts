@@ -5,6 +5,8 @@ import { Runtime, type Site } from '@/types'
 
 const updateSiteMock = vi.fn()
 const setupLaravelWorkersMock = vi.fn()
+const fetchDaemonsMock = vi.fn().mockResolvedValue([])
+const restartDaemonMock = vi.fn().mockResolvedValue(undefined)
 
 vi.mock('vue-sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
@@ -21,6 +23,11 @@ vi.mock('@/composables/useActiveOrg', () => ({
 
 vi.mock('@/features/auth/stores/useAuthStore', () => ({
   useAuthStore: () => ({ isAdmin: true }),
+}))
+
+vi.mock('@/features/daemons/api', () => ({
+  fetchDaemons: (...args: unknown[]) => fetchDaemonsMock(...args),
+  restartDaemon: (...args: unknown[]) => restartDaemonMock(...args),
 }))
 
 vi.mock('@/features/sites/api', () => ({
@@ -240,6 +247,8 @@ describe('SiteSettingsTab auto deploy', () => {
 describe('SiteSettingsTab Laravel workers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    fetchDaemonsMock.mockResolvedValue([])
+    restartDaemonMock.mockResolvedValue(undefined)
     setupLaravelWorkersMock.mockResolvedValue({ message: 'Laravel worker setup has been queued.' })
   })
 
@@ -294,5 +303,61 @@ describe('SiteSettingsTab Laravel workers', () => {
     await flushPromises()
 
     expect(setupLaravelWorkersMock).toHaveBeenCalledWith('site-1', 'horizon')
+  })
+
+  it('restarts a discovered worker linked to the site', async () => {
+    fetchDaemonsMock.mockResolvedValueOnce([
+      {
+        id: 'daemon-reverb',
+        serverId: 'server-1',
+        organizationId: 'org-1',
+        name: 'reverb',
+        command: '/usr/bin/php /var/www/app.example.test/current/artisan reverb:start --no-interaction',
+        directory: '/var/www/app.example.test/current',
+        user: 'deploy',
+        processes: 1,
+        status: 'running',
+        siteId: 'site-1',
+        createdAt: '2026-10-29T00:00:00Z',
+        updatedAt: '2026-10-29T00:00:00Z',
+      },
+      {
+        id: 'daemon-other',
+        serverId: 'server-1',
+        organizationId: 'org-1',
+        name: 'other-site-horizon',
+        command: 'php artisan horizon',
+        directory: '/var/www/other.test/current',
+        user: 'www-data',
+        processes: 1,
+        status: 'running',
+        siteId: 'site-2',
+        createdAt: '2026-10-29T00:00:00Z',
+        updatedAt: '2026-10-29T00:00:00Z',
+      },
+    ])
+
+    mount(SiteSettingsTab, {
+      props: {
+        site: createSite({
+          runtime: 'php' as Site['runtime'],
+          phpVersion: '8.3',
+          webroot: '/var/www/app.example.test/current/public',
+        }),
+        isProduction: false,
+      },
+      attachTo: document.body,
+    })
+
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="site-workers-list"]')?.textContent).toContain('reverb')
+    expect(document.body.textContent).not.toContain('other-site-horizon')
+
+    const restartButton = document.body.querySelector('[data-testid="restart-worker-daemon-reverb"]') as HTMLButtonElement
+    restartButton.click()
+    await flushPromises()
+
+    expect(restartDaemonMock).toHaveBeenCalledWith('server-1', 'daemon-reverb')
   })
 })

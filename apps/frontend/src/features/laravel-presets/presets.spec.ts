@@ -32,6 +32,18 @@ describe('laravel presets', () => {
     expect(preset.command).toContain('/var/www/app.example.com/current')
   })
 
+  it('builds reverb daemon preset', () => {
+    const preset = buildDaemonPreset(
+      'reverb',
+      '/var/www/app.example.com/current/public',
+      'app.example.com',
+    )
+
+    expect(preset?.name).toBe('app-example-com-reverb')
+    expect(preset?.command).toBe('php artisan reverb:start')
+    expect(preset?.directory).toBe('/var/www/app.example.com/current')
+  })
+
   it('builds daemon preset via switch helper', () => {
     const preset = buildDaemonPreset(
       'queue',

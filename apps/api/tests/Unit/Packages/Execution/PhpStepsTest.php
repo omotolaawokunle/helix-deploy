@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 use App\Modules\BuildRunners\Enums\BuildRunnerStatus;
 use App\Modules\BuildRunners\Models\BuildRunner;
+use App\Modules\Daemons\Models\SupervisorProcess;
 use App\Modules\Deployments\Enums\DeploymentStatus;
 use App\Modules\Deployments\Enums\DeploymentType;
 use App\Modules\Deployments\Enums\TriggerType;
@@ -76,7 +77,7 @@ it('runner install composer deps uses the site php binary', function (): void {
 it('install npm deps is skippable without package json', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
     $ssh = fakeSsh();
-    queueSshResponses($ssh, ['test -f *' => sshFailure()]);
+    queueSshResponses($ssh, ['test -f *' => [sshFailure(), sshFailure()]]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
     $step = new InstallNpmDepsStep;
 
@@ -100,7 +101,7 @@ it('install npm deps runs npm ci when package json exists', function (): void {
 it('build assets is skippable without package json', function (): void {
     [, $server, $site, $deployment] = executionFixture(Runtime::PHP);
     $ssh = fakeSsh();
-    queueSshResponses($ssh, ['test -f *' => sshFailure()]);
+    queueSshResponses($ssh, ['test -f *' => [sshFailure(), sshFailure()]]);
     $ctx = executionContext($site, $deployment, $server, $ssh);
 
     expect((new BuildAssetsStep)->isSkippable($ctx))->toBeTrue();
@@ -367,6 +368,54 @@ it('restart workers uses horizon terminate when horizon is installed', function 
 
     $ssh->assertCommandExecuted('*php8.4 artisan horizon:terminate*');
     $ssh->assertCommandNotExecuted('*queue:restart*');
+});
+
+it('restarts discovered reverb workers on the first deploy', function (): void {
+    [$organization, $server, $site, $deployment] = executionFixture(Runtime::PHP);
+
+    SupervisorProcess::query()->withoutGlobalScope('owned_by_organization')->create([
+        'server_id' => (string) $server->getKey(),
+        'organization_id' => (string) $organization->getKey(),
+        'site_id' => (string) $site->getKey(),
+        'name' => 'reverb',
+        'command' => '/usr/bin/php /var/www/app.example.test/current/artisan reverb:start --no-interaction',
+        'directory' => '/var/www/app.example.test/current',
+        'user' => 'deploy',
+        'processes' => 1,
+        'status' => 'running',
+        'config_path' => '/etc/supervisor/conf.d/reverb.conf',
+        'created_by' => (string) $deployment->triggered_by,
+    ]);
+
+    SupervisorProcess::query()->withoutGlobalScope('owned_by_organization')->create([
+        'server_id' => (string) $server->getKey(),
+        'organization_id' => (string) $organization->getKey(),
+        'site_id' => (string) $site->getKey(),
+        'name' => 'nginx',
+        'command' => 'nginx',
+        'directory' => '/var/www/app.example.test/current',
+        'user' => 'www-data',
+        'processes' => 1,
+        'status' => 'running',
+        'config_path' => '/etc/supervisor/conf.d/nginx.conf',
+        'created_by' => (string) $deployment->triggered_by,
+    ]);
+
+    $ssh = fakeSsh();
+    queueSshResponses($ssh, [
+        'test -d *vendor/laravel/horizon*' => sshFailure(),
+        '*queue:restart*' => sshSuccess(),
+        "*supervisorctl restart 'reverb:*'*" => sshSuccess(),
+    ]);
+    $ctx = executionContext($site, $deployment, $server, $ssh);
+
+    expect((new RestartWorkersStep)->isSkippable($ctx))->toBeFalse();
+
+    (new RestartWorkersStep)->run($ctx);
+
+    $ssh->assertCommandExecuted('*php8.3 artisan queue:restart*');
+    $ssh->assertCommandExecuted("*sudo supervisorctl restart 'reverb:*' || sudo supervisorctl restart 'reverb'");
+    $ssh->assertCommandNotExecuted("*supervisorctl restart 'nginx:*'*");
 });
 
 it('restart workers falls back to queue restart without horizon', function (): void {

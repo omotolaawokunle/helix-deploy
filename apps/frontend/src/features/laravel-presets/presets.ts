@@ -1,8 +1,8 @@
-export type LaravelDaemonPresetType = 'custom' | 'horizon' | 'queue'
+export type LaravelDaemonPresetType = 'custom' | 'horizon' | 'queue' | 'reverb'
 
 export type LaravelCronPresetType = 'custom' | 'scheduler'
 
-export type LaravelWorkerType = 'horizon' | 'queue'
+export type LaravelWorkerType = 'horizon' | 'queue' | 'reverb'
 
 export interface LaravelDaemonPresetValues {
   name: string
@@ -60,6 +60,22 @@ export function buildHorizonDaemonPreset(
   }
 }
 
+export function buildReverbDaemonPreset(
+  webroot: string,
+  domain: string,
+  siteId?: string,
+): LaravelDaemonPresetValues {
+  const currentPath = currentPathFromWebroot(webroot)
+  const slug = slugFromDomain(domain, siteId)
+
+  return {
+    name: `${slug}-reverb`,
+    command: 'php artisan reverb:start',
+    directory: currentPath,
+    processes: 1,
+  }
+}
+
 export function buildQueueDaemonPreset(
   webroot: string,
   domain: string,
@@ -96,6 +112,8 @@ export function buildDaemonPreset(
       return buildHorizonDaemonPreset(webroot, domain, siteId)
     case 'queue':
       return buildQueueDaemonPreset(webroot, domain, siteId)
+    case 'reverb':
+      return buildReverbDaemonPreset(webroot, domain, siteId)
     case 'custom':
       return null
     default: {

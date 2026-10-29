@@ -469,6 +469,9 @@ void loadDaemons()
                 <SelectItem value="queue">
                   Laravel queue worker
                 </SelectItem>
+                <SelectItem value="reverb">
+                  Laravel Reverb
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>

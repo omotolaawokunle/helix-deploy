@@ -8,4 +8,5 @@ enum LaravelWorkerType: string
 {
     case HORIZON = 'horizon';
     case QUEUE = 'queue';
+    case REVERB = 'reverb';
 }

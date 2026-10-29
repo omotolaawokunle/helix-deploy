@@ -120,6 +120,7 @@ final class SetupLaravelWorkersAction
         return match ($workerType) {
             LaravelWorkerType::HORIZON => 'horizon',
             LaravelWorkerType::QUEUE => 'queue:work',
+            LaravelWorkerType::REVERB => 'reverb:start',
         };
     }
 }

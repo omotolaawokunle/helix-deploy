@@ -43,6 +43,22 @@ it('builds queue worker preset from deploy base webroot', function (): void {
         ->and($preset->daemonDirectory)->toBe('/home/deploy/worker.example.test/current');
 });
 
+it('builds reverb preset from capistrano style webroot', function (): void {
+    $site = new Site([
+        'domain' => 'app.example.com',
+        'webroot' => '/var/www/app.example.com/current/public',
+        'runtime' => Runtime::PHP,
+        'php_version' => '8.4',
+    ]);
+
+    $builder = new LaravelWorkerPresetBuilder(new SiteDeployPathResolver());
+    $preset = $builder->build($site, LaravelWorkerType::REVERB);
+
+    expect($preset->daemonName)->toBe('app-example-com-reverb')
+        ->and($preset->daemonCommand)->toBe('php8.4 artisan reverb:start')
+        ->and($preset->daemonDirectory)->toBe('/var/www/app.example.com/current');
+});
+
 it('sanitizes domain into supervisor slug', function (): void {
     $site = new Site([
         'id' => '00000000-0000-0000-0000-000000000001',
