@@ -337,9 +337,17 @@ export async function fetchSiteDatabaseRows(
   return response.data.data
 }
 
-export async function fetchNginxConfig(siteId: string): Promise<NginxConfig> {
+export async function fetchNginxConfig(
+  siteId: string,
+  options?: { refresh?: boolean },
+): Promise<NginxConfig> {
   const response = await api.get<ResourceResponse<NginxConfig>>(
     `/api/v1/sites/${siteId}/nginx-config`,
+    {
+      params: {
+        refresh: refreshQueryParam(options?.refresh),
+      },
+    },
   )
 
   return response.data.data

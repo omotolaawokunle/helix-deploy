@@ -295,10 +295,14 @@ export interface EnvVarPullPreview {
   message?: string | null
 }
 
+export type NginxConfigStatus = 'loading' | 'ready' | 'failed'
+
 export interface NginxConfig {
   siteId: string
   domain: string
+  status: NginxConfigStatus
   config: string
+  message?: string | null
   updatedAt: string | null
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -21,20 +21,79 @@ const isSaving = ref(false)
 const saveMessage = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 
-async function loadConfig(): Promise<void> {
-  isLoading.value = true
-  saveMessage.value = null
-  saveError.value = null
+const POLL_INTERVAL_MS = 2000
+const MAX_POLL_ATTEMPTS = 30
+
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+let pollAttempts = 0
+
+function stopPolling(): void {
+  if (pollTimer !== null) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+}
+
+function schedulePoll(): void {
+  stopPolling()
+  pollTimer = setTimeout(() => {
+    void loadConfig(false)
+  }, POLL_INTERVAL_MS)
+}
+
+async function loadConfig(refresh: boolean): Promise<void> {
+  if (refresh) {
+    isLoading.value = true
+    pollAttempts = 0
+    stopPolling()
+    saveMessage.value = null
+    saveError.value = null
+  }
 
   try {
-    const response = await fetchNginxConfig(props.siteId)
-    config.value = response.config
-    savedConfig.value = response.config
-    updatedAt.value = response.updatedAt
+    const response = await fetchNginxConfig(props.siteId, { refresh })
+
+    switch (response.status) {
+      case 'loading':
+        isLoading.value = true
+        pollAttempts += 1
+
+        if (pollAttempts >= MAX_POLL_ATTEMPTS) {
+          stopPolling()
+          isLoading.value = false
+          toast.error('Unable to load nginx configuration.')
+
+          return
+        }
+
+        schedulePoll()
+
+        return
+      case 'failed':
+        stopPolling()
+        isLoading.value = false
+        toast.error(response.message ?? 'Unable to load nginx configuration.')
+
+        return
+      case 'ready':
+        stopPolling()
+        isLoading.value = false
+        config.value = response.config
+        savedConfig.value = response.config
+        updatedAt.value = response.updatedAt
+
+        return
+      default: {
+        const unexpected: never = response.status
+        stopPolling()
+        isLoading.value = false
+        toast.error(`Unexpected nginx config status: ${String(unexpected)}`)
+      }
+    }
   } catch {
-    toast.error('Unable to load nginx configuration.')
-  } finally {
+    stopPolling()
     isLoading.value = false
+    toast.error('Unable to load nginx configuration.')
   }
 }
 
@@ -75,7 +134,11 @@ async function handleSave(): Promise<void> {
 }
 
 onMounted(() => {
-  void loadConfig()
+  void loadConfig(true)
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 </script>
 

@@ -5,27 +5,62 @@ declare(strict_types=1);
 namespace App\Modules\Sites\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Sites\Actions\UpdateNginxConfigAction;
-use App\Modules\Sites\Contracts\NginxConfigGeneratorInterface;
 use App\Modules\Sites\Exceptions\NginxConfigInvalidException;
+use App\Modules\Sites\Jobs\FetchSiteNginxConfigJob;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Sites\Requests\FetchNginxConfigRequest;
 use App\Modules\Sites\Requests\UpdateNginxConfigRequest;
 use App\Modules\Sites\Resources\NginxConfigResource;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 class NginxConfigController extends Controller
 {
-    public function show(string $site, NginxConfigGeneratorInterface $generator): NginxConfigResource
+    public function show(string $site, FetchNginxConfigRequest $request): NginxConfigResource
     {
         $siteModel = $this->resolveSite($site);
         $this->authorize('view', $siteModel);
 
+        $cacheKey = FetchSiteNginxConfigJob::cacheKey((string) $siteModel->getKey());
+
+        if ($request->shouldRefresh()) {
+            Cache::forget($cacheKey);
+        }
+
+        /** @var array{status: string, config: string, message?: string}|null $cached */
+        $cached = Cache::get($cacheKey);
+
+        if ($cached === null) {
+            Cache::put($cacheKey, [
+                'status' => 'loading',
+                'config' => '',
+            ], now()->addMinutes(2));
+
+            FetchSiteNginxConfigJob::dispatch((string) $siteModel->getKey());
+
+            AuditLog::record(
+                operation: 'site.nginx_config.viewed',
+                resource: $siteModel,
+                afterState: ['domain' => $siteModel->domain],
+            );
+
+            return NginxConfigResource::make([
+                'siteId' => (string) $siteModel->getKey(),
+                'domain' => $siteModel->domain,
+                'status' => 'loading',
+                'config' => '',
+            ]);
+        }
+
         return NginxConfigResource::make([
             'siteId' => (string) $siteModel->getKey(),
             'domain' => $siteModel->domain,
-            'config' => $generator->generate($siteModel),
-            'updatedAt' => $siteModel->updated_at?->toIso8601String(),
+            'status' => $cached['status'],
+            'config' => $cached['config'] ?? '',
+            'message' => $cached['message'] ?? null,
         ]);
     }
 
@@ -52,6 +87,7 @@ class NginxConfigController extends Controller
         return NginxConfigResource::make([
             'siteId' => (string) $siteModel->getKey(),
             'domain' => $siteModel->domain,
+            'status' => 'ready',
             'config' => $request->config(),
             'updatedAt' => $siteModel->updated_at?->toIso8601String(),
         ]);
@@ -65,7 +101,7 @@ class NginxConfigController extends Controller
             ->first();
 
         if ($site === null) {
-            throw (new ModelNotFoundException())->setModel(Site::class, [$siteId]);
+            throw (new ModelNotFoundException)->setModel(Site::class, [$siteId]);
         }
 
         return $site;

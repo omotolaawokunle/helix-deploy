@@ -8,16 +8,36 @@ use App\Modules\Credentials\CredentialVault;
 use App\Modules\Servers\Models\Server;
 use App\Modules\Sites\Exceptions\NginxConfigInvalidException;
 use App\Modules\Sites\Models\Site;
-use App\Modules\Sites\Services\SharedStorageBootstrap;
 use App\Packages\SSH\Contracts\SSHConnectionInterface;
 use App\Packages\SSH\SSHManager;
+use RuntimeException;
 
 class SiteNginxProvisioner
 {
     public function __construct(
         private readonly SSHManager $sshManager,
         private readonly CredentialVault $credentialVault,
-    ) {
+    ) {}
+
+    public function readInstalledConfig(Server $server, Site $site): string
+    {
+        $path = $this->sitesAvailablePath($site->domain);
+
+        $config = $this->withConnection($server, function (SSHConnectionInterface $connection) use ($path): string {
+            $result = $connection->run('sudo cat '.escapeshellarg($path));
+
+            if ($result->failed()) {
+                throw new RuntimeException('Nginx configuration file was not found on the server.');
+            }
+
+            return $result->stdout;
+        });
+
+        if (! is_string($config)) {
+            throw new RuntimeException('Unable to read the nginx configuration from the server.');
+        }
+
+        return $config;
     }
 
     public function apply(Server $server, Site $site, string $config): void
@@ -106,12 +126,12 @@ class SiteNginxProvisioner
         });
     }
 
-    private function withConnection(Server $server, callable $callback): void
+    private function withConnection(Server $server, callable $callback): mixed
     {
         $connection = $this->sshManager->connect($server, $this->credentialVault)->connect();
 
         try {
-            $callback($connection);
+            return $callback($connection);
         } finally {
             $connection->disconnect();
         }

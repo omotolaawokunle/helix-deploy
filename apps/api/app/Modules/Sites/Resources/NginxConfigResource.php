@@ -14,13 +14,15 @@ class NginxConfigResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        /** @var array{siteId: string, domain: string, config: string} $payload */
+        /** @var array{siteId: string, domain: string, config: string, status?: string, message?: string|null, updatedAt?: string|null} $payload */
         $payload = $this->resource;
 
         return [
             'siteId' => $payload['siteId'],
             'domain' => $payload['domain'],
+            'status' => $payload['status'] ?? 'ready',
             'config' => $payload['config'],
+            'message' => $payload['message'] ?? null,
             'updatedAt' => $payload['updatedAt'] ?? null,
         ];
     }
